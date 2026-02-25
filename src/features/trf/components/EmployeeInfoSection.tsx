@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/select';
 import { User, Briefcase, Building, MapPin, Calendar, Phone, Mail, Shield } from 'lucide-react';
 import { useTRFStore } from '@/store';
-// Employee type imported from types
 
 interface EmployeeInfoSectionProps {
   selectedEmployeeId: string;
@@ -65,15 +64,20 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
         <div className="space-y-2">
           <Label htmlFor="employee">Select Employee / Visitor <span className="text-red-500">*</span></Label>
           <Select
-            value={selectedEmployeeId}
-            onValueChange={onEmployeeChange}
+            value={selectedEmployeeId || 'placeholder'}  // ✅ FIX: Gunakan 'placeholder' jika kosong
+            onValueChange={(value) => {
+              if (value !== 'placeholder') {
+                onEmployeeChange(value);
+              }
+            }}
             disabled={disabled}
           >
             <SelectTrigger id="employee" className="w-full">
               <SelectValue placeholder="Select an employee" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="" disabled>Select an employee</SelectItem>
+              {/* ✅ FIX: Value 'placeholder' bukan '' (empty string) */}
+              <SelectItem value="placeholder" disabled>Select an employee</SelectItem>
               {employees.map((employee) => (
                 <SelectItem key={employee.id} value={employee.id}>
                   <div className="flex items-center gap-2">

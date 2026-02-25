@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import StatusBadge from '@/components/common/StatusBadge';
+import { useAuthStore } from '@/store';
 import type { TRF } from '@/types';
 import {
   User,
@@ -20,7 +21,12 @@ import {
   Building,
   Phone,
   Mail,
-  Shield
+  Shield,
+  Ticket,
+  Car,
+  FileText,
+  MessageSquare,
+  Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,9 +42,12 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
   onDelete
 }) => {
   const navigate = useNavigate();
+  const { currentUser } = useAuthStore();
 
-  const canEdit = trf.status === 'DRAFT' || trf.status === 'REVISED';
+  const canEdit = trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
   const canDelete = trf.status === 'DRAFT';
+  const isEmployee = currentUser?.role === 'EMPLOYEE';
+  const canSeeVoucher = trf.status === 'GA_PROCESSED' || (trf.gaProcess?.processed && isEmployee);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -98,6 +107,100 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
     </Card>
   );
 
+  // Render approval timeline
+  const renderApprovalTimeline = () => {
+    const steps = [
+      { 
+        label: 'Submitted', 
+        date: trf.submittedAt,
+        done: true,
+        icon: Clock
+      },
+      { 
+        label: 'Admin Dept Verified', 
+        date: trf.adminDeptVerify?.verifiedAt,
+        done: !!trf.adminDeptVerify?.verified,
+        icon: CheckCircle,
+        by: trf.adminDeptVerify?.verifierName,
+        remarks: trf.adminDeptVerify?.remarks
+      },
+      { 
+        label: 'HoD Approved', 
+        date: trf.parallelApproval?.hod?.actionAt,
+        done: trf.parallelApproval?.hod?.status === 'APPROVED',
+        icon: Briefcase,
+        by: trf.parallelApproval?.hod?.actionByName,
+        remarks: trf.parallelApproval?.hod?.remarks
+      },
+      { 
+        label: 'HR Approved', 
+        date: trf.parallelApproval?.hr?.actionAt,
+        done: trf.parallelApproval?.hr?.status === 'APPROVED',
+        icon: User,
+        by: trf.parallelApproval?.hr?.actionByName,
+        remarks: trf.parallelApproval?.hr?.remarks
+      },
+      { 
+        label: 'PM Approved', 
+        date: trf.pmApproval?.approvedAt,
+        done: trf.pmApproval?.approved,
+        icon: Shield,
+        by: trf.pmApproval?.approverName,
+        remarks: trf.pmApproval?.remarks
+      },
+      { 
+        label: 'GA Processed', 
+        date: trf.gaProcess?.processedAt,
+        done: trf.gaProcess?.processed,
+        icon: Plane,
+        by: trf.gaProcess?.processorName
+      },
+    ];
+
+    return (
+      <div className="space-y-4">
+        <h3 className="font-semibold text-gray-900">Approval Timeline</h3>
+        <div className="relative">
+          {steps.map((step, index) => (
+            <div key={index} className="flex gap-4 pb-4 last:pb-0">
+              <div className="flex flex-col items-center">
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center",
+                  step.done ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"
+                )}>
+                  <step.icon className="w-4 h-4" />
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={cn(
+                    "w-0.5 flex-1 my-1",
+                    step.done ? "bg-green-300" : "bg-gray-200"
+                  )} />
+                )}
+              </div>
+              <div className="flex-1 pb-4">
+                <p className={cn(
+                  "font-medium",
+                  step.done ? "text-gray-900" : "text-gray-500"
+                )}>
+                  {step.label}
+                </p>
+                {step.done && step.date && (
+                  <p className="text-sm text-gray-500">{formatDateTime(step.date)}</p>
+                )}
+                {step.by && (
+                  <p className="text-sm text-gray-600">by {step.by}</p>
+                )}
+                {step.remarks && (
+                  <p className="text-sm text-gray-500 mt-1 italic">"{step.remarks}"</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -136,43 +239,12 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Status Timeline */}
-      {(trf.submittedAt || trf.approvedAt) && (
-        <Card className="border shadow-sm bg-gray-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">
-                  Created: {formatDateTime(trf.createdAt)}
-                </span>
-              </div>
-              {trf.submittedAt && (
-                <>
-                  <div className="w-1 h-1 bg-gray-300 rounded-full" />
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-gray-600">
-                      Submitted: {formatDateTime(trf.submittedAt)}
-                    </span>
-                  </div>
-                </>
-              )}
-              {trf.approvedAt && (
-                <>
-                  <div className="w-1 h-1 bg-gray-300 rounded-full" />
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-600">
-                      {trf.status === 'APPROVED' ? 'Approved' : 'Processed'}: {formatDateTime(trf.approvedAt)}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Approval Timeline */}
+      <Card className="border shadow-sm">
+        <CardContent className="p-6">
+          {renderApprovalTimeline()}
+        </CardContent>
+      </Card>
 
       {/* Employee Information */}
       <SectionCard
@@ -361,8 +433,99 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         </SectionCard>
       )}
 
-      {/* Approval Info */}
-      {trf.approverName && (
+      {/* VOUCHER SECTION - Only visible when GA_PROCESSED */}
+      {canSeeVoucher && trf.gaProcess && (
+        <SectionCard
+          title="Travel Voucher & Tickets"
+          icon={Ticket}
+          iconBg="bg-green-50"
+          iconColor="text-green-600"
+        >
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-semibold text-green-900">Processed by GA</span>
+              </div>
+              <p className="text-sm text-green-700">
+                {formatDateTime(trf.gaProcess.processedAt)} by {trf.gaProcess.processorName}
+              </p>
+            </div>
+
+            {trf.gaProcess.voucherDetails?.hotelVoucher && (
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Hotel className="w-5 h-5 text-blue-600" />
+                  <span className="font-medium text-blue-900">Hotel Voucher</span>
+                </div>
+                <p className="text-sm text-blue-800">{trf.gaProcess.voucherDetails.hotelVoucher}</p>
+              </div>
+            )}
+
+            {trf.gaProcess.voucherDetails?.flightTicket && (
+              <div className="p-4 bg-indigo-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Plane className="w-5 h-5 text-indigo-600" />
+                  <span className="font-medium text-indigo-900">Flight Ticket</span>
+                </div>
+                <p className="text-sm text-indigo-800">{trf.gaProcess.voucherDetails.flightTicket}</p>
+              </div>
+            )}
+
+            {trf.gaProcess.voucherDetails?.transportation && (
+              <div className="p-4 bg-orange-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Car className="w-5 h-5 text-orange-600" />
+                  <span className="font-medium text-orange-900">Ground Transportation</span>
+                </div>
+                <p className="text-sm text-orange-800">{trf.gaProcess.voucherDetails.transportation}</p>
+              </div>
+            )}
+
+            {trf.gaProcess.voucherDetails?.other && (
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-5 h-5 text-gray-600" />
+                  <span className="font-medium text-gray-900">Other Details</span>
+                </div>
+                <p className="text-sm text-gray-700">{trf.gaProcess.voucherDetails.other}</p>
+              </div>
+            )}
+
+            {/* Files */}
+            {trf.gaProcess.files && trf.gaProcess.files.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Attachments
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {trf.gaProcess.files.map((file, idx) => (
+                    <Button key={idx} variant="outline" size="sm" className="text-xs">
+                      <FileText className="w-3 h-3 mr-1" />
+                      {file}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message from GA */}
+            {trf.gaProcess.remarksToEmployee && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="w-5 h-5 text-amber-600" />
+                  <span className="font-medium text-amber-900">Message from GA</span>
+                </div>
+                <p className="text-sm text-amber-800 italic">"{trf.gaProcess.remarksToEmployee}"</p>
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Legacy Approval Info (for backward compatibility) */}
+      {trf.approverName && !trf.pmApproval && (
         <Card className="border shadow-sm bg-gray-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">

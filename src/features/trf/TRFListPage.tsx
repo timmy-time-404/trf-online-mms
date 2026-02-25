@@ -13,26 +13,24 @@ import TRFListTable from './components/TRFListTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
 import type { TRFStatus } from '@/types';
-import { Plus, Search, FileText } from 'lucide-react';
+import { Plus, Search, FileText, Eye, Shield } from 'lucide-react';
 
 const TRFListPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { trfs, deleteTRF, getTRFsByEmployee } = useTRFStore();
+  const { deleteTRF, getVisibleTRFs } = useTRFStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TRFStatus | 'ALL'>('ALL');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [trfToDelete, setTrfToDelete] = useState<string | null>(null);
 
-  // Filter TRFs based on user role
-  const getFilteredTRFs = () => {
-    let filtered = trfs;
+  // Get TRFs based on user role visibility
+  const visibleTRFs = currentUser ? getVisibleTRFs(currentUser) : [];
 
-    // Role-based filtering
-    if (currentUser?.role === 'EMPLOYEE' && currentUser.employeeId) {
-      filtered = getTRFsByEmployee(currentUser.employeeId);
-    }
+  // Filter TRFs
+  const getFilteredTRFs = () => {
+    let filtered = [...visibleTRFs];
 
     // Status filter
     if (statusFilter !== 'ALL') {
@@ -45,7 +43,8 @@ const TRFListPage: React.FC = () => {
       filtered = filtered.filter(trf =>
         trf.trfNumber.toLowerCase().includes(query) ||
         trf.employee?.employeeName.toLowerCase().includes(query) ||
-        trf.travelPurpose.toLowerCase().includes(query)
+        trf.travelPurpose.toLowerCase().includes(query) ||
+        trf.department?.toLowerCase().includes(query)
       );
     }
 
@@ -69,14 +68,35 @@ const TRFListPage: React.FC = () => {
 
   const filteredTRFs = getFilteredTRFs();
 
+  // Get visibility info text
+  const getVisibilityInfo = () => {
+    if (!currentUser) return '';
+    
+    switch (currentUser.role) {
+      case 'EMPLOYEE':
+        return 'Showing your TRFs only';
+      case 'ADMIN_DEPT':
+      case 'HOD':
+        return `Showing ${currentUser.department} department TRFs`;
+      case 'HR':
+      case 'PM':
+      case 'GA':
+      case 'SUPER_ADMIN':
+        return 'Showing all TRFs';
+      default:
+        return '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Travel Request Forms</h1>
-          <p className="text-gray-500 mt-1">
-            Manage and track travel requests
+          <p className="text-gray-500 mt-1 flex items-center gap-2">
+            <Eye className="w-4 h-4" />
+            {getVisibilityInfo()}
           </p>
         </div>
         {currentUser?.role === 'EMPLOYEE' && (
@@ -92,7 +112,7 @@ const TRFListPage: React.FC = () => {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Search by TRF number, employee, or purpose..."
+            placeholder="Search by TRF number, employee, purpose..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -102,38 +122,52 @@ const TRFListPage: React.FC = () => {
           value={statusFilter}
           onValueChange={(value) => setStatusFilter(value as TRFStatus | 'ALL')}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-48">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All Status</SelectItem>
             <SelectItem value="DRAFT">Draft</SelectItem>
             <SelectItem value="SUBMITTED">Submitted</SelectItem>
-            <SelectItem value="APPROVED">Approved</SelectItem>
-            <SelectItem value="REVISED">Revised</SelectItem>
+            <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
+            <SelectItem value="HOD_APPROVED">HoD Approved</SelectItem>
+            <SelectItem value="HR_APPROVED">HR Approved</SelectItem>
+            <SelectItem value="PARALLEL_APPROVED">Parallel Approved</SelectItem>
+            <SelectItem value="PM_APPROVED">PM Approved</SelectItem>
+            <SelectItem value="GA_PROCESSED">GA Processed</SelectItem>
             <SelectItem value="REJECTED">Rejected</SelectItem>
+            <SelectItem value="NEEDS_REVISION">Needs Revision</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Stats Summary */}
       <div className="flex flex-wrap gap-4">
-        {(['DRAFT', 'SUBMITTED', 'APPROVED', 'REVISED', 'REJECTED'] as TRFStatus[]).map((status) => {
-          const count = filteredTRFs.filter(t => t.status === status).length;
-          if (count === 0) return null;
-          return (
-            <div
-              key={status}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-sm"
-            >
-              <span className="font-medium text-gray-700">{status}:</span>
-              <span className="text-gray-900">{count}</span>
+        {currentUser?.role !== 'EMPLOYEE' && (
+          <>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full text-sm">
+              <Shield className="w-4 h-4 text-blue-600" />
+              <span className="text-blue-700">
+                {filteredTRFs.filter(t => t.status === 'SUBMITTED').length} Need Verification
+              </span>
             </div>
-          );
-        })}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full text-sm">
-          <FileText className="w-4 h-4 text-blue-600" />
-          <span className="font-medium text-blue-700">Total: {filteredTRFs.length}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-full text-sm">
+              <Shield className="w-4 h-4 text-purple-600" />
+              <span className="text-purple-700">
+                {filteredTRFs.filter(t => t.status === 'PENDING_APPROVAL').length} Need Approval
+              </span>
+            </div>
+          </>
+        )}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full text-sm">
+          <FileText className="w-4 h-4 text-green-600" />
+          <span className="text-green-700">
+            {filteredTRFs.filter(t => t.status === 'GA_PROCESSED').length} Completed
+          </span>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-sm">
+          <FileText className="w-4 h-4 text-gray-600" />
+          <span className="text-gray-700">Total: {filteredTRFs.length}</span>
         </div>
       </div>
 

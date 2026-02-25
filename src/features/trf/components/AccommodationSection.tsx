@@ -58,7 +58,7 @@ const AccommodationSection: React.FC<AccommodationSectionProps> = ({
               <SelectValue placeholder="Select a hotel" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Select a hotel</SelectItem>
+              <SelectItem value="placeholder" disabled>Select a hotel</SelectItem>
               {referenceData.hotels.map((hotel) => (
                 <SelectItem key={hotel.code} value={hotel.name}>
                   <div className="flex items-center justify-between w-full">

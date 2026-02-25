@@ -2,12 +2,24 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, UserRole, TRF, TRFStatus, Employee, StatusHistory } from '@/types';
+import type { 
+  User, 
+  UserRole, 
+  TRF, 
+  TRFStatus, 
+  Employee, 
+  StatusHistory,
+  ParallelApproval,
+  AdminDeptVerification,
+  PMApproval,
+  GAProcess
+} from '@/types';
 import { 
   mockEmployees, 
   mockTRFs, 
   mockStatusHistory,
-  referenceData 
+  referenceData,
+  mockUsers
 } from '@/mock/data';
 
 // ============================================
@@ -47,18 +59,40 @@ interface TRFState {
   trfs: TRF[];
   statusHistory: StatusHistory[];
   employees: Employee[];
+  users: User[];
   referenceData: typeof referenceData;
   
   // CRUD Operations
   getTRFById: (id: string) => TRF | undefined;
   getTRFsByEmployee: (employeeId: string) => TRF[];
   getTRFsByStatus: (status: TRFStatus) => TRF[];
-  getPendingApprovals: () => TRF[];
+  getTRFsByDepartment: (department: string) => TRF[];
   createTRF: (trf: Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>) => TRF;
   updateTRF: (id: string, updates: Partial<TRF>) => void;
   deleteTRF: (id: string) => void;
   
-  // Status Operations
+  // NEW: Role-based visibility
+  getVisibleTRFs: (user: User) => TRF[];
+  
+  // NEW: Admin Dept Verification
+  getTRFsForVerification: (department: string) => TRF[];
+  verifyTRF: (id: string, verifierId: string, verifierName: string, verified: boolean, remarks?: string) => void;
+  
+  // NEW: Parallel Approval (HoD & HR)
+  getTRFsForApproval: (user: User) => TRF[];
+  hodApproveTRF: (id: string, hodId: string, hodName: string, approved: boolean, remarks?: string) => void;
+  hrApproveTRF: (id: string, hrId: string, hrName: string, approved: boolean, remarks?: string) => void;
+  
+  // NEW: PM Final Approval
+  getTRFsForPMApproval: () => TRF[];
+  pmApproveTRF: (id: string, pmId: string, pmName: string, approved: boolean, remarks?: string) => void;
+  
+  // NEW: GA Process
+  getTRFsForProcessing: () => TRF[];
+  gaProcessTRF: (id: string, gaId: string, gaName: string, voucherDetails: GAProcess['voucherDetails'], remarksToEmployee?: string, files?: string[]) => void;
+  
+  // Legacy (for backward compatibility)
+  getPendingApprovals: () => TRF[];
   submitTRF: (id: string) => void;
   approveTRF: (id: string, approverId: string, approverName: string, remarks?: string) => void;
   rejectTRF: (id: string, approverId: string, approverName: string, remarks?: string) => void;
@@ -66,10 +100,12 @@ interface TRFState {
   
   // Status History
   getStatusHistory: (trfId: string) => StatusHistory[];
+  addStatusHistory: (entry: Omit<StatusHistory, 'id' | 'changedAt'>) => void;
   
   // Reference Data
   getEmployeeById: (id: string) => Employee | undefined;
   getEmployeesByType: (type: 'EMPLOYEE' | 'VISITOR') => Employee[];
+  getUserById: (id: string) => User | undefined;
 }
 
 const generateTRFNumber = () => {
@@ -84,12 +120,16 @@ export const useTRFStore = create<TRFState>()(
       trfs: mockTRFs,
       statusHistory: mockStatusHistory,
       employees: mockEmployees,
+      users: mockUsers,
       referenceData,
+
+      // ============================================
+      // BASIC CRUD
+      // ============================================
 
       getTRFById: (id) => {
         const trf = get().trfs.find((t) => t.id === id);
         if (trf) {
-          // Attach employee data
           const employee = get().employees.find((e) => e.id === trf.employeeId);
           return { ...trf, employee };
         }
@@ -115,14 +155,13 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      getPendingApprovals: () => {
+      getTRFsByDepartment: (department) => {
         return get().trfs
-          .filter((t) => t.status === 'SUBMITTED')
+          .filter((t) => t.department === department)
           .map((trf) => {
             const employee = get().employees.find((e) => e.id === trf.employeeId);
             return { ...trf, employee };
-          })
-          .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime());
+          });
       },
 
       createTRF: (trfData) => {
@@ -141,18 +180,12 @@ export const useTRFStore = create<TRFState>()(
         }));
 
         // Add status history
-        const historyEntry: StatusHistory = {
-          id: `sh-${Date.now()}`,
+        get().addStatusHistory({
           trfId: newTRF.id,
           changedBy: trfData.employeeId,
           changedByName: newTRF.employee?.employeeName || 'Unknown',
-          newStatus: 'DRAFT',
-          changedAt: now
-        };
-
-        set((state) => ({
-          statusHistory: [historyEntry, ...state.statusHistory]
-        }));
+          newStatus: 'DRAFT'
+        });
 
         return newTRF;
       },
@@ -173,6 +206,442 @@ export const useTRFStore = create<TRFState>()(
         }));
       },
 
+      // ============================================
+      // ROLE-BASED VISIBILITY
+      // ============================================
+
+      getVisibleTRFs: (user) => {
+        let filtered = get().trfs;
+
+        switch (user.role) {
+          case 'EMPLOYEE':
+            // Employee hanya lihat TRF sendiri
+            if (user.employeeId) {
+              filtered = get().getTRFsByEmployee(user.employeeId);
+            }
+            break;
+
+          case 'ADMIN_DEPT':
+          case 'HOD':
+            // Admin Dept & HoD hanya lihat TRF department mereka
+            if (user.department) {
+              filtered = get().getTRFsByDepartment(user.department);
+            }
+            break;
+
+          case 'HR':
+          case 'PM':
+          case 'GA':
+          case 'SUPER_ADMIN':
+            // HR, PM, GA, Super Admin lihat semua
+            break;
+
+          default:
+            filtered = [];
+        }
+
+        return filtered.map((trf) => {
+          const employee = get().employees.find((e) => e.id === trf.employeeId);
+          return { ...trf, employee };
+        }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      },
+
+      // ============================================
+      // ADMIN DEPT VERIFICATION
+      // ============================================
+
+      getTRFsForVerification: (department) => {
+        return get().trfs
+          .filter((t) => 
+            t.department === department && 
+            t.status === 'SUBMITTED'
+          )
+          .map((trf) => {
+            const employee = get().employees.find((e) => e.id === trf.employeeId);
+            return { ...trf, employee };
+          });
+      },
+
+      verifyTRF: (id, verifierId, verifierName, verified, remarks) => {
+        const now = new Date().toISOString();
+        const trf = get().trfs.find((t) => t.id === id);
+        
+        if (!trf || trf.status !== 'SUBMITTED') return;
+
+        const verification: AdminDeptVerification = {
+          verified,
+          verifiedAt: now,
+          verifiedBy: verifierId,
+          verifierName,
+          remarks
+        };
+
+        if (verified) {
+          // Verified = lanjut ke parallel approval
+          const newStatus: TRFStatus = 'PENDING_APPROVAL';
+          
+          set((state) => ({
+            trfs: state.trfs.map((t) =>
+              t.id === id
+                ? { 
+                    ...t, 
+                    status: newStatus,
+                    adminDeptVerify: verification,
+                    parallelApproval: {
+                      hod: { status: 'PENDING' },
+                      hr: { status: 'PENDING' }
+                    },
+                    updatedAt: now 
+                  }
+                : t
+            )
+          }));
+
+          get().addStatusHistory({
+            trfId: id,
+            changedBy: verifierId,
+            changedByName: verifierName,
+            oldStatus: 'SUBMITTED',
+            newStatus,
+            remarks: `Verified: ${remarks || 'OK'}`
+          });
+        } else {
+          // Not verified = kembali ke employee
+          set((state) => ({
+            trfs: state.trfs.map((t) =>
+              t.id === id
+                ? { 
+                    ...t, 
+                    status: 'NEEDS_REVISION',
+                    adminDeptVerify: verification,
+                    updatedAt: now 
+                  }
+                : t
+            )
+          }));
+
+          get().addStatusHistory({
+            trfId: id,
+            changedBy: verifierId,
+            changedByName: verifierName,
+            oldStatus: 'SUBMITTED',
+            newStatus: 'NEEDS_REVISION',
+            remarks: `Not verified: ${remarks || 'Does not meet requirements'}`
+          });
+        }
+      },
+
+      // ============================================
+      // PARALLEL APPROVAL (HoD & HR)
+      // ============================================
+
+      getTRFsForApproval: (user) => {
+        const { trfs } = get();
+        
+        return trfs.filter((t) => {
+          // HoD: lihat TRF dari department mereka yang pending HoD approval
+          if (user.role === 'HOD' && user.department) {
+            return (
+              t.department === user.department &&
+              (t.status === 'PENDING_APPROVAL' || t.status === 'HR_APPROVED') &&
+              t.parallelApproval?.hod?.status !== 'APPROVED'
+            );
+          }
+          
+          // HR: lihat semua TRF yang pending HR approval
+          if (user.role === 'HR') {
+            return (
+              (t.status === 'PENDING_APPROVAL' || t.status === 'HOD_APPROVED') &&
+              t.parallelApproval?.hr?.status !== 'APPROVED'
+            );
+          }
+          
+          return false;
+        }).map((trf) => {
+          const employee = get().employees.find((e) => e.id === trf.employeeId);
+          return { ...trf, employee };
+        });
+      },
+
+      hodApproveTRF: (id, hodId, hodName, approved, remarks) => {
+        const now = new Date().toISOString();
+        const trf = get().trfs.find((t) => t.id === id);
+        
+        if (!trf || !trf.parallelApproval) return;
+
+        const hodApproval = {
+          status: approved ? 'APPROVED' as const : 'REJECTED' as const,
+          actionAt: now,
+          actionBy: hodId,
+          actionByName: hodName,
+          remarks
+        };
+
+        if (!approved) {
+          // HoD reject = TRF rejected
+          set((state) => ({
+            trfs: state.trfs.map((t) =>
+              t.id === id
+                ? { 
+                    ...t, 
+                    status: 'REJECTED',
+                    parallelApproval: {
+                      ...t.parallelApproval,
+                      hod: hodApproval
+                    },
+                    updatedAt: now 
+                  }
+                : t
+            )
+          }));
+
+          get().addStatusHistory({
+            trfId: id,
+            changedBy: hodId,
+            changedByName: hodName,
+            oldStatus: trf.status,
+            newStatus: 'REJECTED',
+            remarks: `Rejected by HoD: ${remarks}`
+          });
+          return;
+        }
+
+        // HoD approved - check if HR also approved
+        const hrStatus = trf.parallelApproval.hr?.status;
+        let newStatus: TRFStatus;
+
+        if (hrStatus === 'APPROVED') {
+          newStatus = 'PARALLEL_APPROVED';
+        } else {
+          newStatus = 'HOD_APPROVED';
+        }
+
+        set((state) => ({
+          trfs: state.trfs.map((t) =>
+            t.id === id
+              ? { 
+                  ...t, 
+                  status: newStatus,
+                  parallelApproval: {
+                    ...t.parallelApproval,
+                    hod: hodApproval
+                  },
+                  updatedAt: now 
+                }
+              : t
+          )
+        }));
+
+        get().addStatusHistory({
+          trfId: id,
+          changedBy: hodId,
+          changedByName: hodName,
+          oldStatus: trf.status,
+          newStatus,
+          remarks: remarks || 'Approved by HoD'
+        });
+      },
+
+      hrApproveTRF: (id, hrId, hrName, approved, remarks) => {
+        const now = new Date().toISOString();
+        const trf = get().trfs.find((t) => t.id === id);
+        
+        if (!trf || !trf.parallelApproval) return;
+
+        const hrApproval = {
+          status: approved ? 'APPROVED' as const : 'REJECTED' as const,
+          actionAt: now,
+          actionBy: hrId,
+          actionByName: hrName,
+          remarks
+        };
+
+        if (!approved) {
+          // HR reject = TRF needs revision (bisa diperbaiki)
+          set((state) => ({
+            trfs: state.trfs.map((t) =>
+              t.id === id
+                ? { 
+                    ...t, 
+                    status: 'NEEDS_REVISION',
+                    parallelApproval: {
+                      ...t.parallelApproval,
+                      hr: hrApproval
+                    },
+                    updatedAt: now 
+                  }
+                : t
+            )
+          }));
+
+          get().addStatusHistory({
+            trfId: id,
+            changedBy: hrId,
+            changedByName: hrName,
+            oldStatus: trf.status,
+            newStatus: 'NEEDS_REVISION',
+            remarks: `Revision required by HR: ${remarks}`
+          });
+          return;
+        }
+
+        // HR approved - check if HoD also approved
+        const hodStatus = trf.parallelApproval.hod?.status;
+        let newStatus: TRFStatus;
+
+        if (hodStatus === 'APPROVED') {
+          newStatus = 'PARALLEL_APPROVED';
+        } else {
+          newStatus = 'HR_APPROVED';
+        }
+
+        set((state) => ({
+          trfs: state.trfs.map((t) =>
+            t.id === id
+              ? { 
+                  ...t, 
+                  status: newStatus,
+                  parallelApproval: {
+                    ...t.parallelApproval,
+                    hr: hrApproval
+                  },
+                  updatedAt: now 
+                }
+              : t
+          )
+        }));
+
+        get().addStatusHistory({
+          trfId: id,
+          changedBy: hrId,
+          changedByName: hrName,
+          oldStatus: trf.status,
+          newStatus,
+          remarks: remarks || 'Approved by HR'
+        });
+      },
+
+      // ============================================
+      // PM FINAL APPROVAL
+      // ============================================
+
+      getTRFsForPMApproval: () => {
+        return get().trfs
+          .filter((t) => t.status === 'PARALLEL_APPROVED')
+          .map((trf) => {
+            const employee = get().employees.find((e) => e.id === trf.employeeId);
+            return { ...trf, employee };
+          });
+      },
+
+      pmApproveTRF: (id, pmId, pmName, approved, remarks) => {
+        const now = new Date().toISOString();
+        const trf = get().trfs.find((t) => t.id === id);
+        
+        if (!trf || trf.status !== 'PARALLEL_APPROVED') return;
+
+        const pmApproval: PMApproval = {
+          approved,
+          approvedAt: now,
+          approvedBy: pmId,
+          approverName: pmName,
+          remarks
+        };
+
+        const newStatus: TRFStatus = approved ? 'PM_APPROVED' : 'REJECTED';
+
+        set((state) => ({
+          trfs: state.trfs.map((t) =>
+            t.id === id
+              ? { 
+                  ...t, 
+                  status: newStatus,
+                  pmApproval,
+                  approvedAt: approved ? now : undefined,
+                  approvedBy: approved ? pmId : undefined,
+                  approverName: approved ? pmName : undefined,
+                  updatedAt: now 
+                }
+              : t
+          )
+        }));
+
+        get().addStatusHistory({
+          trfId: id,
+          changedBy: pmId,
+          changedByName: pmName,
+          oldStatus: 'PARALLEL_APPROVED',
+          newStatus,
+          remarks: remarks || (approved ? 'Final approval by PM' : 'Rejected by PM')
+        });
+      },
+
+      // ============================================
+      // GA PROCESS
+      // ============================================
+
+      getTRFsForProcessing: () => {
+        return get().trfs
+          .filter((t) => t.status === 'PM_APPROVED')
+          .map((trf) => {
+            const employee = get().employees.find((e) => e.id === trf.employeeId);
+            return { ...trf, employee };
+          });
+      },
+
+      gaProcessTRF: (id, gaId, gaName, voucherDetails, remarksToEmployee, files) => {
+        const now = new Date().toISOString();
+        const trf = get().trfs.find((t) => t.id === id);
+        
+        if (!trf || trf.status !== 'PM_APPROVED') return;
+
+        const gaProcess: GAProcess = {
+          processed: true,
+          processedAt: now,
+          processedBy: gaId,
+          processorName: gaName,
+          voucherDetails,
+          files,
+          remarksToEmployee
+        };
+
+        set((state) => ({
+          trfs: state.trfs.map((t) =>
+            t.id === id
+              ? { 
+                  ...t, 
+                  status: 'GA_PROCESSED',
+                  gaProcess,
+                  updatedAt: now 
+                }
+              : t
+          )
+        }));
+
+        get().addStatusHistory({
+          trfId: id,
+          changedBy: gaId,
+          changedByName: gaName,
+          oldStatus: 'PM_APPROVED',
+          newStatus: 'GA_PROCESSED',
+          remarks: `Processed: ${remarksToEmployee || 'Voucher issued'}`
+        });
+      },
+
+      // ============================================
+      // LEGACY METHODS (Backward Compatibility)
+      // ============================================
+
+      getPendingApprovals: () => {
+        // Legacy: return SUBMITTED TRFs
+        return get().trfs
+          .filter((t) => t.status === 'SUBMITTED')
+          .map((trf) => {
+            const employee = get().employees.find((e) => e.id === trf.employeeId);
+            return { ...trf, employee };
+          });
+      },
+
       submitTRF: (id) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
@@ -182,70 +651,35 @@ export const useTRFStore = create<TRFState>()(
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
-              ? { ...t, status: 'SUBMITTED' as TRFStatus, submittedAt: now, updatedAt: now }
-              : t
-          )
-        }));
-
-        // Add status history
-        const historyEntry: StatusHistory = {
-          id: `sh-${Date.now()}`,
-          trfId: id,
-          changedBy: trf.employeeId,
-          changedByName: trf.employee?.employeeName || 'Unknown',
-          oldStatus: 'DRAFT',
-          newStatus: 'SUBMITTED',
-          changedAt: now
-        };
-
-        set((state) => ({
-          statusHistory: [historyEntry, ...state.statusHistory]
-        }));
-      },
-
-      approveTRF: (id, approverId, approverName, remarks) => {
-        const now = new Date().toISOString();
-        const trf = get().trfs.find((t) => t.id === id);
-        
-        if (!trf || trf.status !== 'SUBMITTED') return;
-
-        set((state) => ({
-          trfs: state.trfs.map((t) =>
-            t.id === id
               ? { 
                   ...t, 
-                  status: 'APPROVED' as TRFStatus, 
-                  approvedAt: now, 
-                  approvedBy: approverId,
-                  approverName,
+                  status: 'SUBMITTED' as TRFStatus, 
+                  submittedAt: now, 
                   updatedAt: now 
                 }
               : t
           )
         }));
 
-        // Add status history
-        const historyEntry: StatusHistory = {
-          id: `sh-${Date.now()}`,
+        get().addStatusHistory({
           trfId: id,
-          changedBy: approverId,
-          changedByName: approverName,
-          oldStatus: 'SUBMITTED',
-          newStatus: 'APPROVED',
-          remarks,
-          changedAt: now
-        };
+          changedBy: trf.employeeId,
+          changedByName: trf.employee?.employeeName || 'Unknown',
+          oldStatus: 'DRAFT',
+          newStatus: 'SUBMITTED'
+        });
+      },
 
-        set((state) => ({
-          statusHistory: [historyEntry, ...state.statusHistory]
-        }));
+      approveTRF: (id, approverId, approverName, remarks) => {
+        // Legacy method - redirect to pmApproveTRF for new flow
+        get().pmApproveTRF(id, approverId, approverName, true, remarks);
       },
 
       rejectTRF: (id, approverId, approverName, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'SUBMITTED') return;
+        if (!trf) return;
 
         set((state) => ({
           trfs: state.trfs.map((t) =>
@@ -261,35 +695,28 @@ export const useTRFStore = create<TRFState>()(
           )
         }));
 
-        // Add status history
-        const historyEntry: StatusHistory = {
-          id: `sh-${Date.now()}`,
+        get().addStatusHistory({
           trfId: id,
           changedBy: approverId,
           changedByName: approverName,
-          oldStatus: 'SUBMITTED',
+          oldStatus: trf.status,
           newStatus: 'REJECTED',
-          remarks,
-          changedAt: now
-        };
-
-        set((state) => ({
-          statusHistory: [historyEntry, ...state.statusHistory]
-        }));
+          remarks
+        });
       },
 
       reviseTRF: (id, approverId, approverName, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'SUBMITTED') return;
+        if (!trf) return;
 
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
               ? { 
                   ...t, 
-                  status: 'REVISED' as TRFStatus,
+                  status: 'NEEDS_REVISION' as TRFStatus,
                   approvedBy: approverId,
                   approverName,
                   updatedAt: now 
@@ -298,22 +725,19 @@ export const useTRFStore = create<TRFState>()(
           )
         }));
 
-        // Add status history
-        const historyEntry: StatusHistory = {
-          id: `sh-${Date.now()}`,
+        get().addStatusHistory({
           trfId: id,
           changedBy: approverId,
           changedByName: approverName,
-          oldStatus: 'SUBMITTED',
-          newStatus: 'REVISED',
-          remarks,
-          changedAt: now
-        };
-
-        set((state) => ({
-          statusHistory: [historyEntry, ...state.statusHistory]
-        }));
+          oldStatus: trf.status,
+          newStatus: 'NEEDS_REVISION',
+          remarks
+        });
       },
+
+      // ============================================
+      // STATUS HISTORY
+      // ============================================
 
       getStatusHistory: (trfId) => {
         return get().statusHistory
@@ -321,12 +745,33 @@ export const useTRFStore = create<TRFState>()(
           .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
       },
 
+      addStatusHistory: (entry) => {
+        const now = new Date().toISOString();
+        const newEntry: StatusHistory = {
+          ...entry,
+          id: `sh-${Date.now()}`,
+          changedAt: now
+        };
+
+        set((state) => ({
+          statusHistory: [newEntry, ...state.statusHistory]
+        }));
+      },
+
+      // ============================================
+      // REFERENCE DATA
+      // ============================================
+
       getEmployeeById: (id) => {
         return get().employees.find((e) => e.id === id);
       },
 
       getEmployeesByType: (type) => {
         return get().employees.filter((e) => e.employeeType === type);
+      },
+
+      getUserById: (id) => {
+        return get().users.find((u) => u.id === id);
       }
     }),
     {

@@ -12,7 +12,16 @@ import {
 import { useAuthStore } from '@/store';
 import { mockUsers } from '@/mock/data';
 import type { UserRole } from '@/types';
-import { User, Users, Shield, Building2, ArrowRight } from 'lucide-react';
+import { 
+  User, 
+  Users, 
+  Shield, 
+  Building2, 
+  ArrowRight, 
+  CheckSquare,
+  Briefcase,
+  Crown
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const LoginPage: React.FC = () => {
@@ -27,51 +36,95 @@ const LoginPage: React.FC = () => {
 
     if (user) {
       login(user);
-      toast.success(`Logged in as ${selectedRole}`);
+      toast.success(`Logged in as ${getRoleLabel(selectedRole)}`);
       navigate('/');
     } else {
-      toast.error('User not found');
+      toast.error('User not found for this role');
     }
   };
 
-  const roleConfig = {
+  const getRoleLabel = (role: UserRole): string => {
+    const labels: Record<UserRole, string> = {
+      'EMPLOYEE': 'Employee',
+      'ADMIN_DEPT': 'Admin Dept',
+      'HOD': 'Head of Department',
+      'HR': 'HR',
+      'PM': 'Project Manager',
+      'GA': 'General Affairs',
+      'SUPER_ADMIN': 'Super Admin'
+    };
+    return labels[role];
+  };
+
+  const roleConfig: Record<UserRole, { 
+    icon: any; 
+    title: string; 
+    description: string;
+    color: string;
+    bgColor: string;
+  }> = {
     EMPLOYEE: {
       icon: User,
       title: 'Employee',
-      description: 'Create and manage travel requests',
-      color: 'bg-blue-50 text-blue-600'
+      description: 'Create and manage your travel requests',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50'
     },
-    APPROVER: {
-      icon: Shield,
-      title: 'Approver',
-      description: 'Review and approve travel requests',
-      color: 'bg-green-50 text-green-600'
+    ADMIN_DEPT: {
+      icon: CheckSquare,
+      title: 'Admin Dept',
+      description: 'Verify TRFs for compliance',
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50'
+    },
+    HOD: {
+      icon: Briefcase,
+      title: 'Head of Dept',
+      description: 'Approve TRFs for your department',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50'
     },
     HR: {
       icon: Users,
       title: 'HR',
-      description: 'View reports and manage employees',
-      color: 'bg-purple-50 text-purple-600'
+      description: 'Approve TRFs & manage employees',
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-50'
+    },
+    PM: {
+      icon: Shield,
+      title: 'Project Manager',
+      description: 'Final approval for all TRFs',
+      color: 'text-green-600',
+      bgColor: 'bg-green-50'
     },
     GA: {
       icon: Building2,
       title: 'GA',
-      description: 'Manage hotels and accommodations',
-      color: 'bg-orange-50 text-orange-600'
+      description: 'Process TRFs & manage hotels',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50'
+    },
+    SUPER_ADMIN: {
+      icon: Crown,
+      title: 'Super Admin',
+      description: 'Full system access',
+      color: 'text-red-600',
+      bgColor: 'bg-red-50'
     }
   };
 
   return (
-    <Card className="w-full shadow-lg">
+    <Card className="w-full shadow-lg max-w-2xl">
       <CardHeader className="text-center pb-6">
-        <CardTitle className="text-xl">Select Your Role</CardTitle>
+        <CardTitle className="text-2xl">Select Your Role</CardTitle>
         <p className="text-sm text-gray-500 mt-1">
           Choose a role to simulate different user views
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Role Cards */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Role Cards Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {(Object.keys(roleConfig) as UserRole[]).map((role) => {
             const config = roleConfig[role];
             const Icon = config.icon;
@@ -87,11 +140,11 @@ const LoginPage: React.FC = () => {
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${config.color}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${config.bgColor}`}>
+                  <Icon className={`w-5 h-5 ${config.color}`} />
                 </div>
-                <h3 className="font-semibold text-gray-900">{config.title}</h3>
-                <p className="text-xs text-gray-500 mt-1">{config.description}</p>
+                <h3 className="font-semibold text-gray-900 text-sm">{config.title}</h3>
+                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{config.description}</p>
               </button>
             );
           })}
@@ -106,11 +159,27 @@ const LoginPage: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="EMPLOYEE">Employee - Create TRF</SelectItem>
-              <SelectItem value="APPROVER">Approver - Review & Approve</SelectItem>
-              <SelectItem value="HR">HR - View Reports</SelectItem>
-              <SelectItem value="GA">GA - Manage Hotels</SelectItem>
+              <SelectItem value="ADMIN_DEPT">Admin Dept - Verify TRFs</SelectItem>
+              <SelectItem value="HOD">Head of Department - Approve Dept TRFs</SelectItem>
+              <SelectItem value="HR">HR - Approve All & Manage Employees</SelectItem>
+              <SelectItem value="PM">Project Manager - Final Approval</SelectItem>
+              <SelectItem value="GA">GA - Process & Manage Hotels</SelectItem>
+              <SelectItem value="SUPER_ADMIN">Super Admin - Full Access</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Selected Role Info */}
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-3">
+            {React.createElement(roleConfig[selectedRole].icon, {
+              className: `w-5 h-5 ${roleConfig[selectedRole].color}`
+            })}
+            <div>
+              <p className="font-medium text-gray-900">{roleConfig[selectedRole].title}</p>
+              <p className="text-sm text-gray-500">{roleConfig[selectedRole].description}</p>
+            </div>
+          </div>
         </div>
 
         {/* Login Button */}

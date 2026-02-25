@@ -1,10 +1,10 @@
 import React from 'react';
 import { useDashboardStore } from '@/store';
 import StatCard from './components/StatCard';
-import RoomAvailabilityChart from './components/RoomAvailabilityChart';
+// import RoomAvailabilityChart from './components/RoomAvailabilityChart';
 import WeeklyTravelChart from './components/WeeklyTravelChart';
 import RecentActivityTable from './components/RecentActivityTable';
-import { Plane, PlaneTakeoff, Building2, Users } from 'lucide-react';
+import { Plane, PlaneTakeoff,Users } from 'lucide-react';
 
 const DashboardPage: React.FC = () => {
   const { stats } = useDashboardStore();
@@ -18,7 +18,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           title="Total Travel In"
           value={stats.totalTravelIn}
@@ -34,13 +34,6 @@ const DashboardPage: React.FC = () => {
           color="green"
         />
         <StatCard
-          title="Site Entry"
-          value={stats.siteEntry}
-          icon={Building2}
-          description="Today's site entries"
-          color="orange"
-        />
-        <StatCard
           title="On Site Active"
           value={stats.onSiteActive}
           icon={Users}
@@ -50,8 +43,8 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Charts */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <RoomAvailabilityChart />
+      <div className="w-full">
+        {/* <RoomAvailabilityChart /> */}
         <WeeklyTravelChart />
       </div>
 

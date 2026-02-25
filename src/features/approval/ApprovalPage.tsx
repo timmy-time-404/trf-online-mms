@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import StatusBadge from '@/components/common/StatusBadge';
 import { useTRFStore, useAuthStore } from '@/store';
-import type { TRF } from '@/types';
+import type { TRF, UserRole } from '@/types';
 import {
   CheckSquare,
   Eye,
@@ -23,21 +24,43 @@ import {
   FileText,
   User,
   Calendar,
-  MapPin
+  MapPin,
+  Clock,
+  AlertCircle,
+  Users,
+  Shield,
+  Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const ApprovalPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { getPendingApprovals, approveTRF, rejectTRF, reviseTRF } = useTRFStore();
+  const { 
+    getTRFsForApproval, 
+    getTRFsForPMApproval,
+    hodApproveTRF,
+    hrApproveTRF,
+    pmApproveTRF
+  } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [actionType, setActionType] = useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
   const [remarks, setRemarks] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const pendingTRFs = getPendingApprovals();
+  const userRole = currentUser?.role as UserRole;
+  
+  // Get TRFs based on role
+  const getPendingTRFs = () => {
+    if (userRole === 'PM') {
+      return getTRFsForPMApproval();
+    }
+    return getTRFsForApproval(currentUser!);
+  };
+
+  const pendingTRFs = getPendingTRFs();
 
   const handleAction = (trf: TRF, action: 'APPROVE' | 'REJECT' | 'REVISE') => {
     setSelectedTRF(trf);
@@ -49,23 +72,30 @@ const ApprovalPage: React.FC = () => {
   const confirmAction = () => {
     if (!selectedTRF || !currentUser || !actionType) return;
 
-    const approverName = currentUser.username;
+    const { id } = selectedTRF;
+    const userId = currentUser.id;
+    const userName = currentUser.username;
 
     try {
-      switch (actionType) {
-        case 'APPROVE':
-          approveTRF(selectedTRF.id, currentUser.id, approverName, remarks);
-          toast.success(`TRF ${selectedTRF.trfNumber} approved successfully`);
+      switch (userRole) {
+        case 'HOD':
+          hodApproveTRF(id, userId, userName, actionType === 'APPROVE', remarks);
           break;
-        case 'REJECT':
-          rejectTRF(selectedTRF.id, currentUser.id, approverName, remarks);
-          toast.success(`TRF ${selectedTRF.trfNumber} rejected`);
+        case 'HR':
+          hrApproveTRF(id, userId, userName, actionType === 'APPROVE', remarks);
           break;
-        case 'REVISE':
-          reviseTRF(selectedTRF.id, currentUser.id, approverName, remarks);
-          toast.success(`TRF ${selectedTRF.trfNumber} returned for revision`);
+        case 'PM':
+          pmApproveTRF(id, userId, userName, actionType === 'APPROVE', remarks);
           break;
       }
+
+      const actionLabels = {
+        'APPROVE': 'approved',
+        'REJECT': 'rejected',
+        'REVISE': 'returned for revision'
+      };
+
+      toast.success(`TRF ${selectedTRF.trfNumber} ${actionLabels[actionType]}`);
       setDialogOpen(false);
       setSelectedTRF(null);
       setActionType(null);
@@ -82,6 +112,33 @@ const ApprovalPage: React.FC = () => {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const getRoleIcon = () => {
+    switch (userRole) {
+      case 'HOD': return Briefcase;
+      case 'HR': return Users;
+      case 'PM': return Shield;
+      default: return CheckSquare;
+    }
+  };
+
+  const getRoleTitle = () => {
+    switch (userRole) {
+      case 'HOD': return 'Head of Department Approval';
+      case 'HR': return 'HR Approval';
+      case 'PM': return 'Final Approval (PM)';
+      default: return 'Approvals';
+    }
+  };
+
+  const getRoleDescription = () => {
+    switch (userRole) {
+      case 'HOD': return 'Approve TRFs for your department';
+      case 'HR': return 'Approve TRFs from all departments';
+      case 'PM': return 'Final approval for all TRFs';
+      default: return 'Review and approve travel requests';
+    }
   };
 
   const getActionConfig = () => {
@@ -118,16 +175,49 @@ const ApprovalPage: React.FC = () => {
     }
   };
 
+  const getParallelStatus = (trf: TRF) => {
+    if (!trf.parallelApproval) return null;
+
+    const hodStatus = trf.parallelApproval.hod?.status;
+    const hrStatus = trf.parallelApproval.hr?.status;
+
+    return (
+      <div className="flex gap-2 mt-2">
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "text-xs",
+            hodStatus === 'APPROVED' ? "bg-green-50 text-green-700 border-green-300" :
+            hodStatus === 'REJECTED' ? "bg-red-50 text-red-700 border-red-300" :
+            "bg-gray-50 text-gray-600 border-gray-300"
+          )}
+        >
+          HoD: {hodStatus || 'PENDING'}
+        </Badge>
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "text-xs",
+            hrStatus === 'APPROVED' ? "bg-green-50 text-green-700 border-green-300" :
+            hrStatus === 'REJECTED' ? "bg-red-50 text-red-700 border-red-300" :
+            "bg-gray-50 text-gray-600 border-gray-300"
+          )}
+        >
+          HR: {hrStatus || 'PENDING'}
+        </Badge>
+      </div>
+    );
+  };
+
   const actionConfig = getActionConfig();
+  const RoleIcon = getRoleIcon();
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Pending Approvals</h1>
-        <p className="text-gray-500 mt-1">
-          Review and approve travel request forms
-        </p>
+        <h1 className="text-2xl font-bold text-gray-900">{getRoleTitle()}</h1>
+        <p className="text-gray-500 mt-1">{getRoleDescription()}</p>
       </div>
 
       {/* Stats */}
@@ -135,14 +225,31 @@ const ApprovalPage: React.FC = () => {
         <Card className="flex-1 bg-blue-50 border-blue-200">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <CheckSquare className="w-6 h-6 text-blue-600" />
+              <RoleIcon className="w-6 h-6 text-blue-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-blue-900">{pendingTRFs.length}</p>
-              <p className="text-sm text-blue-700">Pending Approvals</p>
+              <p className="text-sm text-blue-700">Pending Approval</p>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Role Info */}
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-medium text-amber-900">
+            {userRole === 'HOD' && `Department: ${currentUser?.department}`}
+            {userRole === 'HR' && 'HR: Approve all TRFs (can request revision)'}
+            {userRole === 'PM' && 'PM: Final approval after HoD & HR'}
+          </p>
+          <p className="text-sm text-amber-700 mt-1">
+            {userRole === 'HOD' && 'You can only approve TRFs from your department.'}
+            {userRole === 'HR' && 'Both HoD and you must approve before PM.'}
+            {userRole === 'PM' && 'TRF will be sent to GA after your approval.'}
+          </p>
+        </div>
       </div>
 
       {/* Pending TRF List */}
@@ -164,7 +271,9 @@ const ApprovalPage: React.FC = () => {
                     <div className="flex items-center gap-3 mb-3">
                       <FileText className="w-5 h-5 text-gray-400" />
                       <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}</h3>
-                      <StatusBadge status="SUBMITTED" size="sm" />
+                      <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                        {trf.status === 'PARALLEL_APPROVED' ? 'PM APPROVAL' : trf.status}
+                      </Badge>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -173,6 +282,7 @@ const ApprovalPage: React.FC = () => {
                         <div>
                           <p className="text-xs text-gray-500">Requestor</p>
                           <p className="text-sm font-medium text-gray-900">{trf.employee?.employeeName}</p>
+                          <p className="text-xs text-gray-400">{trf.department}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -193,9 +303,20 @@ const ApprovalPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600">
-                      Submitted on {formatDate(trf.submittedAt)}
-                    </p>
+                    {/* Show parallel approval status for HoD and HR */}
+                    {(userRole === 'HOD' || userRole === 'HR') && getParallelStatus(trf)}
+
+                    {/* Show verification info */}
+                    {trf.adminDeptVerify && (
+                      <div className="p-3 bg-green-50 rounded-lg mt-3">
+                        <p className="text-xs text-green-700 font-medium">
+                          ✓ Verified by {trf.adminDeptVerify.verifierName}
+                        </p>
+                        {trf.adminDeptVerify.remarks && (
+                          <p className="text-sm text-green-600 mt-1">{trf.adminDeptVerify.remarks}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
@@ -216,15 +337,17 @@ const ApprovalPage: React.FC = () => {
                       <CheckCircle className="w-4 h-4 mr-1" />
                       Approve
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                      onClick={() => handleAction(trf, 'REVISE')}
-                    >
-                      <RotateCcw className="w-4 h-4 mr-1" />
-                      Revise
-                    </Button>
+                    {userRole !== 'PM' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                        onClick={() => handleAction(trf, 'REVISE')}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-1" />
+                        Revise
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -258,13 +381,16 @@ const ApprovalPage: React.FC = () => {
               </DialogHeader>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Remarks (Optional)</label>
+                <label className="text-sm font-medium">
+                  Remarks {actionType === 'REJECT' && <span className="text-red-500">*</span>}
+                </label>
                 <Textarea
                   placeholder="Add any comments or notes..."
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   rows={3}
                   className="resize-none"
+                  required={actionType === 'REJECT'}
                 />
               </div>
 
@@ -279,6 +405,7 @@ const ApprovalPage: React.FC = () => {
                 <Button
                   onClick={confirmAction}
                   className={`flex-1 ${actionConfig.confirmClass}`}
+                  disabled={actionType === 'REJECT' && !remarks.trim()}
                 >
                   {actionConfig.confirmText}
                 </Button>

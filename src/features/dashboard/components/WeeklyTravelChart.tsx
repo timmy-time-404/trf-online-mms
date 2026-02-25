@@ -33,7 +33,8 @@ const WeeklyTravelChart: React.FC = () => {
   const totalTravelOut = weeklyTravel.reduce((sum, day) => sum + day.travelOut, 0);
 
   return (
-    <Card className="border shadow-sm">
+    // Tambahkan w-full di sini agar Card selalu mencoba memenuhi ruang
+    <Card className="w-full border shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -46,7 +47,8 @@ const WeeklyTravelChart: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
+        {/* Tinggi dinaikkan menjadi h-80 agar proporsional saat full-width */}
+        <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeklyTravel} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />

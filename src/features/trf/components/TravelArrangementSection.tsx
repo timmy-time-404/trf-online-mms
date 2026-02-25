@@ -31,11 +31,11 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
 }) => {
   const { referenceData } = useTRFStore();
 
-  const travelInCount = arrangements.filter(a => a.travelType === 'TRAVEL_IN').length;
-  const travelOutCount = arrangements.filter(a => a.travelType === 'TRAVEL_OUT').length;
-
-  const canAddTravelIn = travelInCount < 1;
-  const canAddTravelOut = travelOutCount < 1;
+  // ✅ HAPUS: Logic pembatasan untuk unlimited
+  // const travelInCount = arrangements.filter(a => a.travelType === 'TRAVEL_IN').length;
+  // const travelOutCount = arrangements.filter(a => a.travelType === 'TRAVEL_OUT').length;
+  // const canAddTravelIn = travelInCount < 1;
+  // const canAddTravelOut = travelOutCount < 1;
 
   const addArrangement = (travelType: TravelType) => {
     const newArrangement: TravelArrangement = {
@@ -88,7 +88,8 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!disabled && canAddTravelIn && (
+            {/* ✅ HAPUS: Kondisi canAddTravelIn */}
+            {!disabled && (
               <Button
                 type="button"
                 variant="outline"
@@ -100,7 +101,8 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
                 Add Travel In
               </Button>
             )}
-            {!disabled && canAddTravelOut && (
+            {/* ✅ HAPUS: Kondisi canAddTravelOut */}
+            {!disabled && (
               <Button
                 type="button"
                 variant="outline"
@@ -115,15 +117,14 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
           </div>
         </div>
 
-        {/* Rules Info */}
-        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-amber-800">
-            <p className="font-medium">Travel Arrangement Rules:</p>
+        {/* ✅ UPDATE: Info text untuk unlimited */}
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-blue-800">
+            <p className="font-medium">Travel Arrangement:</p>
             <ul className="mt-1 space-y-0.5 list-disc list-inside">
-              <li>Maximum 1 Travel In arrangement</li>
-              <li>Maximum 1 Travel Out arrangement</li>
-              <li>You can use multiple transportation modes</li>
+              <li>You can add multiple Travel In and Travel Out arrangements</li>
+              <li>Each arrangement can use different transportation modes</li>
             </ul>
           </div>
         </div>
@@ -164,11 +165,12 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
                           isTravelIn ? 'text-blue-600' : 'text-green-600'
                         )} />
                       </div>
+                      {/* ✅ TAMBAH: Nomor urut untuk membedakan multiple arrangements */}
                       <span className={cn(
                         'font-medium',
                         isTravelIn ? 'text-blue-700' : 'text-green-700'
                       )}>
-                        {isTravelIn ? 'Travel In' : 'Travel Out'}
+                        {isTravelIn ? 'Travel In' : 'Travel Out'} #{index + 1}
                       </span>
                     </div>
                     {!disabled && (
@@ -253,14 +255,19 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
                     <div className="space-y-2">
                       <Label>From</Label>
                       <Select
-                        value={arrangement.fromLocation}
-                        onValueChange={(value) => updateArrangement(index, { fromLocation: value })}
+                        value={arrangement.fromLocation || 'placeholder'}
+                        onValueChange={(value) => {
+                          if (value !== 'placeholder') {
+                            updateArrangement(index, { fromLocation: value });
+                          }
+                        }}
                         disabled={disabled}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select origin" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="placeholder" disabled>Select origin</SelectItem>
                           {referenceData.locations.map((loc) => (
                             <SelectItem key={loc.code} value={loc.name}>
                               {loc.name}
@@ -273,14 +280,19 @@ const TravelArrangementSection: React.FC<TravelArrangementSectionProps> = ({
                     <div className="space-y-2">
                       <Label>To</Label>
                       <Select
-                        value={arrangement.toLocation}
-                        onValueChange={(value) => updateArrangement(index, { toLocation: value })}
+                        value={arrangement.toLocation || 'placeholder'}
+                        onValueChange={(value) => {
+                          if (value !== 'placeholder') {
+                            updateArrangement(index, { toLocation: value });
+                          }
+                        }}
                         disabled={disabled}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select destination" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="placeholder" disabled>Select destination</SelectItem>
                           {referenceData.locations.map((loc) => (
                             <SelectItem key={loc.code} value={loc.name}>
                               {loc.name}

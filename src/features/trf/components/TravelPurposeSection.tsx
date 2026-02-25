@@ -60,7 +60,7 @@ const TravelPurposeSection: React.FC<TravelPurposeSectionProps> = ({
               <SelectValue placeholder="Select travel purpose" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="" disabled>Select travel purpose</SelectItem>
+              <SelectItem value="placeholder" disabled>Select travel purpose</SelectItem>
               {referenceData.purposes.map((p) => (
                 <SelectItem key={p.code} value={p.name}>
                   {p.name}

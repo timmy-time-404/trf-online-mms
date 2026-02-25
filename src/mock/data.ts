@@ -13,10 +13,23 @@ import type {
 } from '@/types';
 
 // ============================================
-// USERS & EMPLOYEES
+// DEPARTMENTS
 // ============================================
+export const departments = [
+  { code: 'OPS', name: 'Operations' },
+  { code: 'ENG', name: 'Engineering' },
+  { code: 'HSE', name: 'HSE' },
+  { code: 'EXP', name: 'Exploration' },
+  { code: 'HR', name: 'HR' },
+  { code: 'FIN', name: 'Finance' },
+  { code: 'GA', name: 'General Affairs' }
+];
 
+// ============================================
+// USERS (7 Roles)
+// ============================================
 export const mockUsers: User[] = [
+  // 1. EMPLOYEE
   {
     id: 'usr-001',
     username: 'john.doe',
@@ -31,27 +44,55 @@ export const mockUsers: User[] = [
     role: 'EMPLOYEE',
     employeeId: 'emp-002'
   },
+  // 2. ADMIN_DEPT (Operations)
   {
     id: 'usr-003',
-    username: 'manager.wilson',
-    email: 'manager.wilson@mining.com',
-    role: 'APPROVER',
-    employeeId: 'emp-003'
+    username: 'admin.ops',
+    email: 'admin.ops@mining.com',
+    role: 'ADMIN_DEPT',
+    department: 'Operations'
   },
+  // 3. HOD (Head of Operations)
   {
     id: 'usr-004',
+    username: 'hod.ops',
+    email: 'hod.ops@mining.com',
+    role: 'HOD',
+    department: 'Operations'
+  },
+  // 4. HR
+  {
+    id: 'usr-005',
     username: 'hr.admin',
     email: 'hr@mining.com',
     role: 'HR'
   },
+  // 5. PM (Project Manager - all departments)
   {
-    id: 'usr-005',
+    id: 'usr-006',
+    username: 'pm.manager',
+    email: 'pm@mining.com',
+    role: 'PM'
+  },
+  // 6. GA
+  {
+    id: 'usr-007',
     username: 'ga.admin',
     email: 'ga@mining.com',
     role: 'GA'
+  },
+  // 7. SUPER_ADMIN
+  {
+    id: 'usr-008',
+    username: 'super.admin',
+    email: 'superadmin@mining.com',
+    role: 'SUPER_ADMIN'
   }
 ];
 
+// ============================================
+// EMPLOYEES
+// ============================================
 export const mockEmployees: Employee[] = [
   {
     id: 'emp-001',
@@ -87,22 +128,6 @@ export const mockEmployees: Employee[] = [
   },
   {
     id: 'emp-003',
-    userId: 'usr-003',
-    employeeType: 'EMPLOYEE',
-    employeeName: 'Robert Wilson',
-    jobTitle: 'Operations Manager',
-    department: 'Operations',
-    tenant: 'Main Contractor',
-    section: 'Management',
-    email: 'manager.wilson@mining.com',
-    phone: '+62 811-2233-4455',
-    dateOfHire: '2018-01-10',
-    mcuStatus: 'VALID',
-    pointOfHire: 'Jakarta',
-    validUntil: '2025-01-10'
-  },
-  {
-    id: 'emp-004',
     employeeType: 'VISITOR',
     employeeName: 'Michael Chen',
     jobTitle: 'External Auditor',
@@ -116,7 +141,7 @@ export const mockEmployees: Employee[] = [
     validUntil: '2024-12-31'
   },
   {
-    id: 'emp-005',
+    id: 'emp-004',
     employeeType: 'EMPLOYEE',
     employeeName: 'Sarah Johnson',
     jobTitle: 'Geologist',
@@ -135,7 +160,6 @@ export const mockEmployees: Employee[] = [
 // ============================================
 // REFERENCE DATA
 // ============================================
-
 export const referenceData: ReferenceData = {
   hotels: [
     { code: 'HTL001', name: 'Grand Mining Hotel', location: 'Site A' },
@@ -181,20 +205,21 @@ export const referenceData: ReferenceData = {
 };
 
 // ============================================
-// TRF DATA
+// TRF DATA (dengan Parallel Approval)
 // ============================================
-
 export const mockTRFs: TRF[] = [
+  // 1. TRF DRAFT (Employee baru buat)
   {
     id: 'trf-001',
     trfNumber: 'TRF-20240224-001',
     employeeId: 'emp-001',
     employee: mockEmployees[0],
+    department: 'Operations',
     travelPurpose: 'Site Inspection',
     startDate: '2024-03-01',
     endDate: '2024-03-05',
     purposeRemarks: 'Monthly site inspection for Q1 evaluation',
-    status: 'APPROVED',
+    status: 'DRAFT',
     accommodation: {
       hotelName: 'Grand Mining Hotel',
       checkInDate: '2024-03-01',
@@ -212,31 +237,19 @@ export const mockTRFs: TRF[] = [
         toLocation: 'Site A',
         specialArrangement: false,
         remarks: 'Morning flight preferred'
-      },
-      {
-        id: 'ta-002',
-        travelType: 'TRAVEL_OUT',
-        arrangementType: 'BY_SITE_SERVICE',
-        transportation: 'FLIGHT',
-        travelDate: '2024-03-05',
-        fromLocation: 'Site A',
-        toLocation: 'Jakarta',
-        specialArrangement: false,
-        remarks: 'Afternoon flight'
       }
     ],
-    submittedAt: '2024-02-20T08:30:00Z',
-    approvedAt: '2024-02-21T10:15:00Z',
-    approvedBy: 'usr-003',
-    approverName: 'Robert Wilson',
     createdAt: '2024-02-20T08:00:00Z',
-    updatedAt: '2024-02-21T10:15:00Z'
+    updatedAt: '2024-02-20T08:00:00Z'
   },
+
+  // 2. TRF SUBMITTED (Menunggu Admin Dept verify)
   {
     id: 'trf-002',
     trfNumber: 'TRF-20240224-002',
     employeeId: 'emp-002',
     employee: mockEmployees[1],
+    department: 'HSE',
     travelPurpose: 'Training',
     startDate: '2024-03-10',
     endDate: '2024-03-12',
@@ -250,7 +263,7 @@ export const mockTRFs: TRF[] = [
     },
     travelArrangements: [
       {
-        id: 'ta-003',
+        id: 'ta-002',
         travelType: 'TRAVEL_IN',
         arrangementType: 'BY_SITE_SERVICE',
         transportation: 'FLIGHT',
@@ -265,89 +278,213 @@ export const mockTRFs: TRF[] = [
     createdAt: '2024-02-22T14:00:00Z',
     updatedAt: '2024-02-22T14:20:00Z'
   },
+
+  // 3. TRF PENDING_APPROVAL (Sudah diverifikasi Admin Dept, tunggu HoD & HR parallel)
   {
     id: 'trf-003',
     trfNumber: 'TRF-20240224-003',
+    employeeId: 'emp-001',
+    employee: mockEmployees[0],
+    department: 'Operations',
+    travelPurpose: 'Business Meeting',
+    startDate: '2024-03-15',
+    endDate: '2024-03-17',
+    purposeRemarks: 'Coordination with subcontractors',
+    status: 'PENDING_APPROVAL',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-23T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Dates confirmed, budget available'
+    },
+    parallelApproval: {
+      hod: { status: 'PENDING' },
+      hr: { status: 'PENDING' }
+    },
+    accommodation: {
+      hotelName: 'Grand Mining Hotel',
+      checkInDate: '2024-03-15',
+      checkOutDate: '2024-03-17',
+      remarks: ''
+    },
+    travelArrangements: [
+      {
+        id: 'ta-003',
+        travelType: 'TRAVEL_IN',
+        arrangementType: 'BY_SITE_SERVICE',
+        transportation: 'CAR',
+        travelDate: '2024-03-15',
+        fromLocation: 'Jakarta',
+        toLocation: 'Site A',
+        specialArrangement: false,
+        remarks: ''
+      }
+    ],
+    submittedAt: '2024-02-23T09:00:00Z',
+    createdAt: '2024-02-23T08:00:00Z',
+    updatedAt: '2024-02-23T10:00:00Z'
+  },
+
+  // 4. TRF HOD_APPROVED (HoD approved, tunggu HR)
+  {
+    id: 'trf-004',
+    trfNumber: 'TRF-20240224-004',
     employeeId: 'emp-004',
     employee: mockEmployees[3],
-    travelPurpose: 'Audit',
-    startDate: '2024-02-25',
-    endDate: '2024-02-28',
-    purposeRemarks: 'Quarterly compliance audit',
-    status: 'DRAFT',
+    department: 'Exploration',
+    travelPurpose: 'Project Assignment',
+    startDate: '2024-03-20',
+    endDate: '2024-03-30',
+    purposeRemarks: 'New exploration site survey',
+    status: 'HOD_APPROVED',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-21T09:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Project approved'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-21T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved for site survey'
+      },
+      hr: { status: 'PENDING' }
+    },
     accommodation: {
-      hotelName: 'Camp Residence',
-      checkInDate: '2024-02-25',
-      checkOutDate: '2024-02-28',
-      remarks: ''
+      hotelName: 'Site C Camp',
+      checkInDate: '2024-03-20',
+      checkOutDate: '2024-03-30',
+      remarks: 'Extended stay'
     },
     travelArrangements: [
       {
         id: 'ta-004',
         travelType: 'TRAVEL_IN',
         arrangementType: 'BY_SITE_SERVICE',
-        transportation: 'FLIGHT',
-        travelDate: '2024-02-25',
-        fromLocation: 'Singapore',
-        toLocation: 'Site B',
-        specialArrangement: true,
-        justification: 'VIP visitor - expedited processing required',
-        remarks: 'Airport pickup arranged'
-      }
-    ],
-    createdAt: '2024-02-23T09:00:00Z',
-    updatedAt: '2024-02-23T09:00:00Z'
-  },
-  {
-    id: 'trf-004',
-    trfNumber: 'TRF-20240224-004',
-    employeeId: 'emp-005',
-    employee: mockEmployees[4],
-    travelPurpose: 'Project Assignment',
-    startDate: '2024-03-15',
-    endDate: '2024-03-30',
-    purposeRemarks: 'New exploration site survey',
-    status: 'REJECTED',
-    accommodation: {
-      hotelName: 'Site C Camp',
-      checkInDate: '2024-03-15',
-      checkOutDate: '2024-03-30',
-      remarks: 'Extended stay'
-    },
-    travelArrangements: [
-      {
-        id: 'ta-005',
-        travelType: 'TRAVEL_IN',
-        arrangementType: 'BY_SITE_SERVICE',
         transportation: 'CAR',
-        travelDate: '2024-03-15',
+        travelDate: '2024-03-20',
         fromLocation: 'Balikpapan',
         toLocation: 'Site C',
         specialArrangement: false,
         remarks: ''
       }
     ],
-    submittedAt: '2024-02-18T11:00:00Z',
-    approvedAt: '2024-02-19T16:30:00Z',
-    approvedBy: 'usr-003',
-    approverName: 'Robert Wilson',
-    createdAt: '2024-02-18T10:30:00Z',
-    updatedAt: '2024-02-19T16:30:00Z'
+    submittedAt: '2024-02-21T08:00:00Z',
+    createdAt: '2024-02-21T07:30:00Z',
+    updatedAt: '2024-02-21T14:00:00Z'
   },
+
+  // 5. TRF PARALLEL_APPROVED (HoD & HR approved, tunggu PM)
   {
     id: 'trf-005',
     trfNumber: 'TRF-20240224-005',
+    employeeId: 'emp-002',
+    employee: mockEmployees[1],
+    department: 'HSE',
+    travelPurpose: 'Emergency Response',
+    startDate: '2024-02-25',
+    endDate: '2024-02-28',
+    purposeRemarks: 'Emergency drill coordination',
+    status: 'PARALLEL_APPROVED',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-20T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Urgent - emergency response'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-20T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved for emergency'
+      },
+      hr: {
+        status: 'APPROVED',
+        actionAt: '2024-02-20T16:00:00Z',
+        actionBy: 'usr-005',
+        actionByName: 'HR Admin',
+        remarks: 'Employee eligible'
+      }
+    },
+    accommodation: {
+      hotelName: 'Camp Residence',
+      checkInDate: '2024-02-25',
+      checkOutDate: '2024-02-28',
+      remarks: 'Emergency booking'
+    },
+    travelArrangements: [
+      {
+        id: 'ta-005',
+        travelType: 'TRAVEL_IN',
+        arrangementType: 'BY_SITE_SERVICE',
+        transportation: 'FLIGHT',
+        travelDate: '2024-02-25',
+        fromLocation: 'Jakarta',
+        toLocation: 'Site B',
+        specialArrangement: true,
+        justification: 'Emergency response - immediate departure',
+        remarks: 'First flight available'
+      }
+    ],
+    submittedAt: '2024-02-20T09:00:00Z',
+    createdAt: '2024-02-20T08:30:00Z',
+    updatedAt: '2024-02-20T16:00:00Z'
+  },
+
+  // 6. TRF PM_APPROVED (Approved, tunggu GA process)
+  {
+    id: 'trf-006',
+    trfNumber: 'TRF-20240224-006',
     employeeId: 'emp-001',
     employee: mockEmployees[0],
-    travelPurpose: 'Business Meeting',
-    startDate: '2024-03-20',
-    endDate: '2024-03-22',
-    purposeRemarks: 'Coordination meeting with subcontractors',
-    status: 'REVISED',
+    department: 'Operations',
+    travelPurpose: 'Audit',
+    startDate: '2024-04-01',
+    endDate: '2024-04-03',
+    purposeRemarks: 'Quarterly compliance audit',
+    status: 'PM_APPROVED',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-18T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Audit scheduled'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-18T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved'
+      },
+      hr: {
+        status: 'APPROVED',
+        actionAt: '2024-02-18T16:00:00Z',
+        actionBy: 'usr-005',
+        actionByName: 'HR Admin',
+        remarks: 'Valid'
+      }
+    },
+    pmApproval: {
+      approved: true,
+      approvedAt: '2024-02-19T10:00:00Z',
+      approvedBy: 'usr-006',
+      approverName: 'PM Manager',
+      remarks: 'Final approval granted'
+    },
     accommodation: {
       hotelName: 'Grand Mining Hotel',
-      checkInDate: '2024-03-20',
-      checkOutDate: '2024-03-22',
+      checkInDate: '2024-04-01',
+      checkOutDate: '2024-04-03',
       remarks: ''
     },
     travelArrangements: [
@@ -355,24 +492,210 @@ export const mockTRFs: TRF[] = [
         id: 'ta-006',
         travelType: 'TRAVEL_IN',
         arrangementType: 'BY_SITE_SERVICE',
-        transportation: 'CAR',
-        travelDate: '2024-03-20',
+        transportation: 'FLIGHT',
+        travelDate: '2024-04-01',
         fromLocation: 'Jakarta',
         toLocation: 'Site A',
         specialArrangement: false,
         remarks: ''
       }
     ],
-    submittedAt: '2024-02-21T13:00:00Z',
-    createdAt: '2024-02-21T12:00:00Z',
-    updatedAt: '2024-02-22T09:00:00Z'
+    submittedAt: '2024-02-18T09:00:00Z',
+    createdAt: '2024-02-18T08:00:00Z',
+    updatedAt: '2024-02-19T10:00:00Z'
+  },
+
+  // 7. TRF GA_PROCESSED (Completed dengan voucher)
+  {
+    id: 'trf-007',
+    trfNumber: 'TRF-20240224-007',
+    employeeId: 'emp-002',
+    employee: mockEmployees[1],
+    department: 'HSE',
+    travelPurpose: 'Training',
+    startDate: '2024-02-10',
+    endDate: '2024-02-12',
+    purposeRemarks: 'Safety certification',
+    status: 'GA_PROCESSED',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-05T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Training approved'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-05T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved'
+      },
+      hr: {
+        status: 'APPROVED',
+        actionAt: '2024-02-05T16:00:00Z',
+        actionBy: 'usr-005',
+        actionByName: 'HR Admin',
+        remarks: 'Eligible'
+      }
+    },
+    pmApproval: {
+      approved: true,
+      approvedAt: '2024-02-06T09:00:00Z',
+      approvedBy: 'usr-006',
+      approverName: 'PM Manager',
+      remarks: 'Approved'
+    },
+    gaProcess: {
+      processed: true,
+      processedAt: '2024-02-07T10:00:00Z',
+      processedBy: 'usr-007',
+      processorName: 'GA Admin',
+      voucherDetails: {
+        hotelVoucher: 'VCH-2024-001: Grand Mining Hotel, 2 nights',
+        flightTicket: 'TKT-2024-001: GA-123 Jakarta-Site A, 10 Feb 08:00',
+        transportation: 'Airport pickup arranged',
+        other: 'Breakfast included'
+      },
+      files: ['ticket.pdf', 'voucher.pdf'],
+      remarksToEmployee: 'Please collect tickets at GA office. Flight at 08:00, arrive 2 hours early.'
+    },
+    accommodation: {
+      hotelName: 'Grand Mining Hotel',
+      checkInDate: '2024-02-10',
+      checkOutDate: '2024-02-12',
+      remarks: ''
+    },
+    travelArrangements: [
+      {
+        id: 'ta-007',
+        travelType: 'TRAVEL_IN',
+        arrangementType: 'BY_SITE_SERVICE',
+        transportation: 'FLIGHT',
+        travelDate: '2024-02-10',
+        fromLocation: 'Jakarta',
+        toLocation: 'Site A',
+        specialArrangement: false,
+        remarks: ''
+      }
+    ],
+    submittedAt: '2024-02-05T08:00:00Z',
+    approvedAt: '2024-02-06T09:00:00Z',
+    approvedBy: 'usr-006',
+    approverName: 'PM Manager',
+    createdAt: '2024-02-05T07:00:00Z',
+    updatedAt: '2024-02-07T10:00:00Z'
+  },
+
+  // 8. TRF REJECTED (di-reject oleh PM)
+  {
+    id: 'trf-008',
+    trfNumber: 'TRF-20240224-008',
+    employeeId: 'emp-004',
+    employee: mockEmployees[3],
+    department: 'Exploration',
+    travelPurpose: 'Conference',
+    startDate: '2024-05-01',
+    endDate: '2024-05-05',
+    purposeRemarks: 'International geology conference',
+    status: 'REJECTED',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-15T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'Valid request'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-15T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved'
+      },
+      hr: {
+        status: 'APPROVED',
+        actionAt: '2024-02-15T16:00:00Z',
+        actionBy: 'usr-005',
+        actionByName: 'HR Admin',
+        remarks: 'Valid'
+      }
+    },
+    pmApproval: {
+      approved: false,
+      approvedAt: '2024-02-16T10:00:00Z',
+      approvedBy: 'usr-006',
+      approverName: 'PM Manager',
+      remarks: 'Budget cut for Q2 - please reschedule to Q3'
+    },
+    accommodation: {
+      hotelName: 'City Center Hotel',
+      checkInDate: '2024-05-01',
+      checkOutDate: '2024-05-05',
+      remarks: ''
+    },
+    travelArrangements: [],
+    submittedAt: '2024-02-15T09:00:00Z',
+    approvedAt: '2024-02-16T10:00:00Z',
+    approvedBy: 'usr-006',
+    approverName: 'PM Manager',
+    createdAt: '2024-02-15T08:00:00Z',
+    updatedAt: '2024-02-16T10:00:00Z'
+  },
+
+  // 9. TRF NEEDS_REVISION (dikembalikan oleh HR)
+  {
+    id: 'trf-009',
+    trfNumber: 'TRF-20240224-009',
+    employeeId: 'emp-001',
+    employee: mockEmployees[0],
+    department: 'Operations',
+    travelPurpose: 'Site Inspection',
+    startDate: '2024-03-25',
+    endDate: '2024-03-28',
+    purposeRemarks: 'Monthly inspection',
+    status: 'NEEDS_REVISION',
+    adminDeptVerify: {
+      verified: true,
+      verifiedAt: '2024-02-24T10:00:00Z',
+      verifiedBy: 'usr-003',
+      verifierName: 'Admin OPS',
+      remarks: 'OK'
+    },
+    parallelApproval: {
+      hod: {
+        status: 'APPROVED',
+        actionAt: '2024-02-24T14:00:00Z',
+        actionBy: 'usr-004',
+        actionByName: 'HOD OPS',
+        remarks: 'Approved'
+      },
+      hr: {
+        status: 'REJECTED',
+        actionAt: '2024-02-24T16:00:00Z',
+        actionBy: 'usr-005',
+        actionByName: 'HR Admin',
+        remarks: 'MCU expired - please renew medical checkup first'
+      }
+    },
+    accommodation: {
+      hotelName: 'Grand Mining Hotel',
+      checkInDate: '2024-03-25',
+      checkOutDate: '2024-03-28',
+      remarks: ''
+    },
+    travelArrangements: [],
+    submittedAt: '2024-02-24T09:00:00Z',
+    createdAt: '2024-02-24T08:00:00Z',
+    updatedAt: '2024-02-24T16:00:00Z'
   }
 ];
 
 // ============================================
 // STATUS HISTORY
 // ============================================
-
 export const mockStatusHistory: StatusHistory[] = [
   {
     id: 'sh-001',
@@ -384,33 +707,6 @@ export const mockStatusHistory: StatusHistory[] = [
   },
   {
     id: 'sh-002',
-    trfId: 'trf-001',
-    changedBy: 'usr-001',
-    changedByName: 'John Doe',
-    oldStatus: 'DRAFT',
-    newStatus: 'SUBMITTED',
-    changedAt: '2024-02-20T08:30:00Z'
-  },
-  {
-    id: 'sh-003',
-    trfId: 'trf-001',
-    changedBy: 'usr-003',
-    changedByName: 'Robert Wilson',
-    oldStatus: 'SUBMITTED',
-    newStatus: 'APPROVED',
-    remarks: 'Approved for site inspection',
-    changedAt: '2024-02-21T10:15:00Z'
-  },
-  {
-    id: 'sh-004',
-    trfId: 'trf-002',
-    changedBy: 'usr-002',
-    changedByName: 'Jane Smith',
-    newStatus: 'DRAFT',
-    changedAt: '2024-02-22T14:00:00Z'
-  },
-  {
-    id: 'sh-005',
     trfId: 'trf-002',
     changedBy: 'usr-002',
     changedByName: 'Jane Smith',
@@ -419,65 +715,39 @@ export const mockStatusHistory: StatusHistory[] = [
     changedAt: '2024-02-22T14:20:00Z'
   },
   {
-    id: 'sh-006',
-    trfId: 'trf-004',
-    changedBy: 'usr-005',
-    changedByName: 'Sarah Johnson',
-    newStatus: 'DRAFT',
-    changedAt: '2024-02-18T10:30:00Z'
-  },
-  {
-    id: 'sh-007',
-    trfId: 'trf-004',
-    changedBy: 'usr-005',
-    changedByName: 'Sarah Johnson',
-    oldStatus: 'DRAFT',
-    newStatus: 'SUBMITTED',
-    changedAt: '2024-02-18T11:00:00Z'
-  },
-  {
-    id: 'sh-008',
-    trfId: 'trf-004',
-    changedBy: 'usr-003',
-    changedByName: 'Robert Wilson',
-    oldStatus: 'SUBMITTED',
-    newStatus: 'REJECTED',
-    remarks: 'Budget constraints - please reschedule to next quarter',
-    changedAt: '2024-02-19T16:30:00Z'
-  },
-  {
-    id: 'sh-009',
-    trfId: 'trf-005',
-    changedBy: 'usr-001',
-    changedByName: 'John Doe',
-    newStatus: 'DRAFT',
-    changedAt: '2024-02-21T12:00:00Z'
-  },
-  {
-    id: 'sh-010',
-    trfId: 'trf-005',
+    id: 'sh-003',
+    trfId: 'trf-003',
     changedBy: 'usr-001',
     changedByName: 'John Doe',
     oldStatus: 'DRAFT',
     newStatus: 'SUBMITTED',
-    changedAt: '2024-02-21T13:00:00Z'
+    changedAt: '2024-02-23T09:00:00Z'
   },
   {
-    id: 'sh-011',
-    trfId: 'trf-005',
+    id: 'sh-004',
+    trfId: 'trf-003',
     changedBy: 'usr-003',
-    changedByName: 'Robert Wilson',
+    changedByName: 'Admin OPS',
     oldStatus: 'SUBMITTED',
-    newStatus: 'REVISED',
-    remarks: 'Please update travel dates to avoid weekend',
-    changedAt: '2024-02-22T09:00:00Z'
+    newStatus: 'PENDING_APPROVAL',
+    remarks: 'Dates confirmed, budget available',
+    changedAt: '2024-02-23T10:00:00Z'
+  },
+  {
+    id: 'sh-005',
+    trfId: 'trf-007',
+    changedBy: 'usr-007',
+    changedByName: 'GA Admin',
+    oldStatus: 'PM_APPROVED',
+    newStatus: 'GA_PROCESSED',
+    remarks: 'Voucher issued, tickets booked',
+    changedAt: '2024-02-07T10:00:00Z'
   }
 ];
 
 // ============================================
 // DASHBOARD DATA
 // ============================================
-
 export const dashboardStats: DashboardStats = {
   totalTravelIn: 156,
   totalTravelOut: 142,
@@ -505,42 +775,26 @@ export const weeklyTravel: WeeklyTravel[] = [
 export const recentActivities: Activity[] = [
   {
     id: 'act-001',
-    date: '2024-02-24T10:30:00Z',
-    type: 'SUBMISSION',
-    description: 'New TRF submitted by Jane Smith',
-    trfNumber: 'TRF-20240224-002',
-    status: 'SUBMITTED'
+    date: '2024-02-24T16:00:00Z',
+    type: 'REVISION',
+    description: 'TRF returned by HR - MCU expired',
+    trfNumber: 'TRF-20240224-009',
+    status: 'NEEDS_REVISION'
   },
   {
     id: 'act-002',
-    date: '2024-02-23T16:45:00Z',
-    type: 'APPROVAL',
-    description: 'TRF approved by Robert Wilson',
-    trfNumber: 'TRF-20240224-001',
-    status: 'APPROVED'
+    date: '2024-02-24T10:00:00Z',
+    type: 'VERIFICATION',
+    description: 'TRF verified by Admin Dept',
+    trfNumber: 'TRF-20240224-003',
+    status: 'PENDING_APPROVAL'
   },
   {
     id: 'act-003',
-    date: '2024-02-22T09:00:00Z',
-    type: 'REVISION',
-    description: 'TRF returned for revision by Robert Wilson',
-    trfNumber: 'TRF-20240224-005',
-    status: 'REVISED'
-  },
-  {
-    id: 'act-004',
-    date: '2024-02-21T10:15:00Z',
-    type: 'APPROVAL',
-    description: 'TRF approved by Robert Wilson',
-    trfNumber: 'TRF-20240224-001',
-    status: 'APPROVED'
-  },
-  {
-    id: 'act-005',
-    date: '2024-02-20T14:20:00Z',
+    date: '2024-02-22T14:20:00Z',
     type: 'SUBMISSION',
-    description: 'New TRF submitted by John Doe',
-    trfNumber: 'TRF-20240224-005',
+    description: 'New TRF submitted by Jane Smith',
+    trfNumber: 'TRF-20240224-002',
     status: 'SUBMITTED'
   }
 ];
