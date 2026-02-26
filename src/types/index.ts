@@ -56,14 +56,11 @@ export interface Employee {
   employeeName: string;
   jobTitle?: string;
   department?: string;
-  tenant?: string;
   section?: string;
   email?: string;
   phone?: string;
   dateOfHire?: string;
-  mcuStatus: MCUStatus;
   pointOfHire?: string;
-  validUntil?: string;
 }
 
 // ============================================

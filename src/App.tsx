@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
-import { useAuthStore } from '@/store';
+import { useTRFStore, useAuthStore } from '@/store';
 
 // Layouts
 import MainLayout from '@/layout/MainLayout';
@@ -58,6 +58,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 function App() {
+  const { fetchAllData } = useTRFStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
+
+  // Fetch data from Supabase when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      fetchAllData();
+    }
+  }, [isAuthenticated, isLoading, fetchAllData]);
+
   return (
     <BrowserRouter>
       <Toaster position="top-right" richColors />

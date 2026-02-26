@@ -101,14 +101,11 @@ export const mockEmployees: Employee[] = [
     employeeName: 'John Doe',
     jobTitle: 'Mining Engineer',
     department: 'Operations',
-    tenant: 'Main Contractor',
     section: 'Production',
     email: 'john.doe@mining.com',
     phone: '+62 812-3456-7890',
     dateOfHire: '2020-03-15',
-    mcuStatus: 'VALID',
-    pointOfHire: 'Jakarta',
-    validUntil: '2025-03-15'
+    pointOfHire: 'Jakarta'
   },
   {
     id: 'emp-002',
@@ -117,14 +114,11 @@ export const mockEmployees: Employee[] = [
     employeeName: 'Jane Smith',
     jobTitle: 'Safety Officer',
     department: 'HSE',
-    tenant: 'Main Contractor',
     section: 'Safety',
     email: 'jane.smith@mining.com',
     phone: '+62 813-9876-5432',
     dateOfHire: '2021-06-20',
-    mcuStatus: 'VALID',
-    pointOfHire: 'Surabaya',
-    validUntil: '2025-06-20'
+    pointOfHire: 'Surabaya'
   },
   {
     id: 'emp-003',
@@ -132,13 +126,10 @@ export const mockEmployees: Employee[] = [
     employeeName: 'Michael Chen',
     jobTitle: 'External Auditor',
     department: 'External',
-    tenant: 'Vendor A',
     section: 'Audit',
     email: 'michael.chen@vendor.com',
     phone: '+62 814-5566-7788',
-    mcuStatus: 'PENDING',
-    pointOfHire: 'Singapore',
-    validUntil: '2024-12-31'
+    pointOfHire: 'Singapore'
   },
   {
     id: 'emp-004',
@@ -146,14 +137,11 @@ export const mockEmployees: Employee[] = [
     employeeName: 'Sarah Johnson',
     jobTitle: 'Geologist',
     department: 'Exploration',
-    tenant: 'Main Contractor',
     section: 'Geology',
     email: 'sarah.johnson@mining.com',
     phone: '+62 815-6677-8899',
     dateOfHire: '2022-09-05',
-    mcuStatus: 'VALID',
-    pointOfHire: 'Balikpapan',
-    validUntil: '2025-09-05'
+    pointOfHire: 'Balikpapan'
   }
 ];
 
@@ -194,13 +182,6 @@ export const referenceData: ReferenceData = {
     { code: 'DEPT004', name: 'Exploration' },
     { code: 'DEPT005', name: 'HR' },
     { code: 'DEPT006', name: 'Finance' }
-  ],
-  tenants: [
-    { code: 'TEN001', name: 'Main Contractor' },
-    { code: 'TEN002', name: 'Subcontractor A' },
-    { code: 'TEN003', name: 'Subcontractor B' },
-    { code: 'TEN004', name: 'Vendor A' },
-    { code: 'TEN005', name: 'Vendor B' }
   ]
 };
 

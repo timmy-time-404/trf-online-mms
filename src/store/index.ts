@@ -1,7 +1,8 @@
-// TRF Online System - Zustand Store
+// TRF Online System - Zustand Store with Supabase Integration
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabase, isSupabaseEnabled } from '@/lib/supabase';
 import type { 
   User, 
   UserRole, 
@@ -12,7 +13,7 @@ import type {
   ParallelApproval,
   AdminDeptVerification,
   PMApproval,
-  GAProcess
+  GAProcess 
 } from '@/types';
 import { 
   mockEmployees, 
@@ -29,21 +30,69 @@ import {
 interface AuthState {
   currentUser: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (user: User) => void;
   logout: () => void;
   switchRole: (role: UserRole) => void;
+  loadUserFromSession: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentUser: null,
       isAuthenticated: false,
-      login: (user) => set({ currentUser: user, isAuthenticated: true }),
-      logout: () => set({ currentUser: null, isAuthenticated: false }),
+      isLoading: true,
+
+      login: (user) => set({ currentUser: user, isAuthenticated: true, isLoading: false }),
+      
+      logout: () => {
+        // Clear Supabase session if enabled
+        if (isSupabaseEnabled()) {
+          supabase.auth.signOut();
+        }
+        set({ currentUser: null, isAuthenticated: false, isLoading: false });
+      },
+      
       switchRole: (role) => set((state) => ({
         currentUser: state.currentUser ? { ...state.currentUser, role } : null
-      }))
+      })),
+
+      loadUserFromSession: async () => {
+        if (!isSupabaseEnabled()) {
+          set({ isLoading: false });
+          return;
+        }
+
+        // Check Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Fetch user data from our users table
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (userData) {
+            set({
+              currentUser: {
+                id: userData.id,
+                username: userData.username,
+                email: userData.email,
+                role: userData.role as UserRole,
+                employeeId: userData.employee_id,
+                department: userData.department
+              },
+              isAuthenticated: true,
+              isLoading: false
+            });
+          }
+        } else {
+          set({ isLoading: false });
+        }
+      }
     }),
     {
       name: 'trf-auth-storage'
@@ -61,46 +110,49 @@ interface TRFState {
   employees: Employee[];
   users: User[];
   referenceData: typeof referenceData;
+  isLoading: boolean;
+  
+  // Fetch operations
+  fetchAllData: () => Promise<void>;
+  fetchEmployees: () => Promise<void>;
+  fetchTRFs: () => Promise<void>;
   
   // CRUD Operations
   getTRFById: (id: string) => TRF | undefined;
   getTRFsByEmployee: (employeeId: string) => TRF[];
   getTRFsByStatus: (status: TRFStatus) => TRF[];
   getTRFsByDepartment: (department: string) => TRF[];
-  createTRF: (trf: Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>) => TRF;
-  updateTRF: (id: string, updates: Partial<TRF>) => void;
-  deleteTRF: (id: string) => void;
+  createTRF: (trf: Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>) => Promise<TRF | null>;
+  updateTRF: (id: string, updates: Partial<TRF>) => Promise<boolean>;
+  deleteTRF: (id: string) => Promise<boolean>;
   
-  // NEW: Role-based visibility
+  // Role-based visibility
   getVisibleTRFs: (user: User) => TRF[];
   
-  // NEW: Admin Dept Verification
+  // Admin Dept Verification
   getTRFsForVerification: (department: string) => TRF[];
-  verifyTRF: (id: string, verifierId: string, verifierName: string, verified: boolean, remarks?: string) => void;
+  verifyTRF: (id: string, verifierId: string, verifierName: string, verified: boolean, remarks?: string) => Promise<boolean>;
   
-  // NEW: Parallel Approval (HoD & HR)
+  // Parallel Approval
   getTRFsForApproval: (user: User) => TRF[];
-  hodApproveTRF: (id: string, hodId: string, hodName: string, approved: boolean, remarks?: string) => void;
-  hrApproveTRF: (id: string, hrId: string, hrName: string, approved: boolean, remarks?: string) => void;
+  hodApproveTRF: (id: string, hodId: string, hodName: string, approved: boolean, remarks?: string) => Promise<boolean>;
+  hrApproveTRF: (id: string, hrId: string, hrName: string, approved: boolean, remarks?: string) => Promise<boolean>;
   
-  // NEW: PM Final Approval
+  // PM Final Approval
   getTRFsForPMApproval: () => TRF[];
-  pmApproveTRF: (id: string, pmId: string, pmName: string, approved: boolean, remarks?: string) => void;
+  pmApproveTRF: (id: string, pmId: string, pmName: string, approved: boolean, remarks?: string) => Promise<boolean>;
   
-  // NEW: GA Process
+  // GA Process
   getTRFsForProcessing: () => TRF[];
-  gaProcessTRF: (id: string, gaId: string, gaName: string, voucherDetails: GAProcess['voucherDetails'], remarksToEmployee?: string, files?: string[]) => void;
+  gaProcessTRF: (id: string, gaId: string, gaName: string, voucherDetails: GAProcess['voucherDetails'], remarksToEmployee?: string, files?: string[]) => Promise<boolean>;
   
-  // Legacy (for backward compatibility)
+  // Legacy
   getPendingApprovals: () => TRF[];
-  submitTRF: (id: string) => void;
-  approveTRF: (id: string, approverId: string, approverName: string, remarks?: string) => void;
-  rejectTRF: (id: string, approverId: string, approverName: string, remarks?: string) => void;
-  reviseTRF: (id: string, approverId: string, approverName: string, remarks?: string) => void;
+  submitTRF: (id: string) => Promise<boolean>;
   
   // Status History
   getStatusHistory: (trfId: string) => StatusHistory[];
-  addStatusHistory: (entry: Omit<StatusHistory, 'id' | 'changedAt'>) => void;
+  addStatusHistory: (entry: Omit<StatusHistory, 'id' | 'changedAt'>) => Promise<void>;
   
   // Reference Data
   getEmployeeById: (id: string) => Employee | undefined;
@@ -108,23 +160,126 @@ interface TRFState {
   getUserById: (id: string) => User | undefined;
 }
 
-const generateTRFNumber = () => {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const random = Math.floor(Math.random() * 900) + 100;
-  return `TRF-${date}-${random}`;
+// Transformers
+const transformUserFromDB = (dbUser: any): User => ({
+  id: dbUser.id,
+  username: dbUser.username,
+  email: dbUser.email,
+  role: dbUser.role as UserRole,
+  employeeId: dbUser.employee_id,
+  department: dbUser.department
+});
+
+const transformEmployeeFromDB = (dbEmp: any): Employee => ({
+  id: dbEmp.id,
+  userId: dbEmp.user_id,
+  employeeType: dbEmp.employee_type,
+  employeeName: dbEmp.employee_name,
+  jobTitle: dbEmp.job_title,
+  department: dbEmp.department,
+  section: dbEmp.section,
+  email: dbEmp.email,
+  phone: dbEmp.phone,
+  dateOfHire: dbEmp.date_of_hire,
+  pointOfHire: dbEmp.point_of_hire
+});
+
+const transformTRFFromDB = (dbTRF: any, employees: Employee[]): TRF => {
+  const employee = employees.find(e => e.id === dbTRF.employee_id);
+  
+  return {
+    id: dbTRF.id,
+    trfNumber: dbTRF.trf_number,
+    employeeId: dbTRF.employee_id,
+    employee,
+    department: dbTRF.department,
+    travelPurpose: dbTRF.travel_purpose,
+    startDate: dbTRF.start_date,
+    endDate: dbTRF.end_date,
+    purposeRemarks: dbTRF.purpose_remarks,
+    status: dbTRF.status as TRFStatus,
+    accommodation: dbTRF.accommodation,
+    travelArrangements: dbTRF.travel_arrangements || [],
+    adminDeptVerify: dbTRF.admin_dept_verify,
+    parallelApproval: dbTRF.parallel_approval,
+    pmApproval: dbTRF.pm_approval,
+    gaProcess: dbTRF.ga_process,
+    submittedAt: dbTRF.submitted_at,
+    createdAt: dbTRF.created_at,
+    updatedAt: dbTRF.updated_at
+  };
 };
 
 export const useTRFStore = create<TRFState>()(
   persist(
     (set, get) => ({
-      trfs: mockTRFs,
+      trfs: mockTRFs, // Start with mock, replace after fetch
       statusHistory: mockStatusHistory,
       employees: mockEmployees,
       users: mockUsers,
       referenceData,
+      isLoading: false,
 
       // ============================================
-      // BASIC CRUD
+      // FETCH OPERATIONS
+      // ============================================
+
+      fetchAllData: async () => {
+        if (!isSupabaseEnabled()) {
+          console.log('Supabase not enabled, using mock data');
+          return;
+        }
+
+        set({ isLoading: true });
+        
+        try {
+          await get().fetchEmployees();
+          await get().fetchTRFs();
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      fetchEmployees: async () => {
+        if (!isSupabaseEnabled()) return;
+
+        const { data, error } = await supabase
+          .from('employees')
+          .select('*');
+
+        if (error) {
+          console.error('Error fetching employees:', error);
+          return;
+        }
+
+        if (data) {
+          set({ employees: data.map(transformEmployeeFromDB) });
+        }
+      },
+
+      fetchTRFs: async () => {
+        if (!isSupabaseEnabled()) return;
+
+        const { data, error } = await supabase
+          .from('trfs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching TRFs:', error);
+          return;
+        }
+
+        if (data) {
+          const employees = get().employees;
+          set({ trfs: data.map(trf => transformTRFFromDB(trf, employees)) });
+        }
+      },
+
+      // ============================================
+      // CRUD OPERATIONS
       // ============================================
 
       getTRFById: (id) => {
@@ -164,12 +319,14 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      createTRF: (trfData) => {
+      createTRF: async (trfData) => {
         const now = new Date().toISOString();
+        
+        // Local state update first (optimistic)
         const newTRF: TRF = {
           ...trfData,
           id: `trf-${Date.now()}`,
-          trfNumber: generateTRFNumber(),
+          trfNumber: `TRF-${now.slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random()*900)+100}`,
           status: 'DRAFT',
           createdAt: now,
           updatedAt: now
@@ -187,23 +344,99 @@ export const useTRFStore = create<TRFState>()(
           newStatus: 'DRAFT'
         });
 
+        // Supabase insert
+        if (isSupabaseEnabled()) {
+          const { data, error } = await supabase
+            .from('trfs')
+            .insert([{
+              employee_id: trfData.employeeId,
+              department: trfData.department,
+              travel_purpose: trfData.travelPurpose,
+              start_date: trfData.startDate,
+              end_date: trfData.endDate,
+              purpose_remarks: trfData.purposeRemarks,
+              status: 'DRAFT',
+              accommodation: trfData.accommodation,
+              travel_arrangements: trfData.travelArrangements
+            }])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error creating TRF in Supabase:', error);
+            return null;
+          }
+
+          // Update local ID with Supabase ID
+          if (data) {
+            const employees = get().employees;
+            const supabaseTRF = transformTRFFromDB(data, employees);
+            set((state) => ({
+              trfs: state.trfs.map(t => t.id === newTRF.id ? supabaseTRF : t)
+            }));
+            return supabaseTRF;
+          }
+        }
+
         return newTRF;
       },
 
-      updateTRF: (id, updates) => {
+      updateTRF: async (id, updates) => {
         const now = new Date().toISOString();
+        
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((trf) =>
             trf.id === id ? { ...trf, ...updates, updatedAt: now } : trf
           )
         }));
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const dbUpdates: any = {};
+          if (updates.travelPurpose) dbUpdates.travel_purpose = updates.travelPurpose;
+          if (updates.startDate) dbUpdates.start_date = updates.startDate;
+          if (updates.endDate) dbUpdates.end_date = updates.endDate;
+          if (updates.purposeRemarks) dbUpdates.purpose_remarks = updates.purposeRemarks;
+          if (updates.accommodation) dbUpdates.accommodation = updates.accommodation;
+          if (updates.travelArrangements) dbUpdates.travel_arrangements = updates.travelArrangements;
+          if (updates.status) dbUpdates.status = updates.status;
+
+          const { error } = await supabase
+            .from('trfs')
+            .update(dbUpdates)
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error updating TRF:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
-      deleteTRF: (id) => {
+      deleteTRF: async (id) => {
+        // Local delete
         set((state) => ({
           trfs: state.trfs.filter((trf) => trf.id !== id),
           statusHistory: state.statusHistory.filter((sh) => sh.trfId !== id)
         }));
+
+        // Supabase delete
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .delete()
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error deleting TRF:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
       // ============================================
@@ -215,27 +448,21 @@ export const useTRFStore = create<TRFState>()(
 
         switch (user.role) {
           case 'EMPLOYEE':
-            // Employee hanya lihat TRF sendiri
             if (user.employeeId) {
               filtered = get().getTRFsByEmployee(user.employeeId);
             }
             break;
-
           case 'ADMIN_DEPT':
           case 'HOD':
-            // Admin Dept & HoD hanya lihat TRF department mereka
             if (user.department) {
               filtered = get().getTRFsByDepartment(user.department);
             }
             break;
-
           case 'HR':
           case 'PM':
           case 'GA':
           case 'SUPER_ADMIN':
-            // HR, PM, GA, Super Admin lihat semua
             break;
-
           default:
             filtered = [];
         }
@@ -262,11 +489,11 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      verifyTRF: (id, verifierId, verifierName, verified, remarks) => {
+      verifyTRF: async (id, verifierId, verifierName, verified, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'SUBMITTED') return;
+        if (!trf || trf.status !== 'SUBMITTED') return false;
 
         const verification: AdminDeptVerification = {
           verified,
@@ -276,70 +503,66 @@ export const useTRFStore = create<TRFState>()(
           remarks
         };
 
-        if (verified) {
-          // Verified = lanjut ke parallel approval
-          const newStatus: TRFStatus = 'PENDING_APPROVAL';
-          
-          set((state) => ({
-            trfs: state.trfs.map((t) =>
-              t.id === id
-                ? { 
-                    ...t, 
-                    status: newStatus,
-                    adminDeptVerify: verification,
-                    parallelApproval: {
-                      hod: { status: 'PENDING' },
-                      hr: { status: 'PENDING' }
-                    },
-                    updatedAt: now 
-                  }
-                : t
-            )
-          }));
+        const newStatus: TRFStatus = verified ? 'PENDING_APPROVAL' : 'NEEDS_REVISION';
 
-          get().addStatusHistory({
-            trfId: id,
-            changedBy: verifierId,
-            changedByName: verifierName,
-            oldStatus: 'SUBMITTED',
-            newStatus,
-            remarks: `Verified: ${remarks || 'OK'}`
-          });
-        } else {
-          // Not verified = kembali ke employee
-          set((state) => ({
-            trfs: state.trfs.map((t) =>
-              t.id === id
-                ? { 
-                    ...t, 
-                    status: 'NEEDS_REVISION',
-                    adminDeptVerify: verification,
-                    updatedAt: now 
-                  }
-                : t
-            )
-          }));
+        // Local update
+        set((state) => ({
+          trfs: state.trfs.map((t) =>
+            t.id === id
+              ? { 
+                  ...t, 
+                  status: newStatus,
+                  adminDeptVerify: verification,
+                  parallelApproval: verified ? {
+                    hod: { status: 'PENDING' },
+                    hr: { status: 'PENDING' }
+                  } : undefined,
+                  updatedAt: now 
+                }
+              : t
+          )
+        }));
 
-          get().addStatusHistory({
-            trfId: id,
-            changedBy: verifierId,
-            changedByName: verifierName,
-            oldStatus: 'SUBMITTED',
-            newStatus: 'NEEDS_REVISION',
-            remarks: `Not verified: ${remarks || 'Does not meet requirements'}`
-          });
+        get().addStatusHistory({
+          trfId: id,
+          changedBy: verifierId,
+          changedByName: verifierName,
+          oldStatus: 'SUBMITTED',
+          newStatus,
+          remarks: verified ? `Verified: ${remarks || 'OK'}` : `Not verified: ${remarks}`
+        });
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: newStatus,
+              admin_dept_verify: verification,
+              parallel_approval: verified ? {
+                hod: { status: 'PENDING' },
+                hr: { status: 'PENDING' }
+              } : null
+            })
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error verifying TRF:', error);
+            return false;
+          }
         }
+
+        return true;
       },
 
       // ============================================
-      // PARALLEL APPROVAL (HoD & HR)
+      // PARALLEL APPROVAL
       // ============================================
 
       getTRFsForApproval: (user) => {
         const { trfs } = get();
         
         return trfs.filter((t) => {
-          // HoD: lihat TRF dari department mereka yang pending HoD approval
           if (user.role === 'HOD' && user.department) {
             return (
               t.department === user.department &&
@@ -348,7 +571,6 @@ export const useTRFStore = create<TRFState>()(
             );
           }
           
-          // HR: lihat semua TRF yang pending HR approval
           if (user.role === 'HR') {
             return (
               (t.status === 'PENDING_APPROVAL' || t.status === 'HOD_APPROVED') &&
@@ -363,11 +585,11 @@ export const useTRFStore = create<TRFState>()(
         });
       },
 
-      hodApproveTRF: (id, hodId, hodName, approved, remarks) => {
+      hodApproveTRF: async (id, hodId, hodName, approved, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || !trf.parallelApproval) return;
+        if (!trf || !trf.parallelApproval) return false;
 
         const hodApproval = {
           status: approved ? 'APPROVED' as const : 'REJECTED' as const,
@@ -377,45 +599,11 @@ export const useTRFStore = create<TRFState>()(
           remarks
         };
 
-        if (!approved) {
-          // HoD reject = TRF rejected
-          set((state) => ({
-            trfs: state.trfs.map((t) =>
-              t.id === id
-                ? { 
-                    ...t, 
-                    status: 'REJECTED',
-                    parallelApproval: {
-                      ...t.parallelApproval,
-                      hod: hodApproval
-                    },
-                    updatedAt: now 
-                  }
-                : t
-            )
-          }));
+        const newStatus: TRFStatus = approved 
+          ? (trf.parallelApproval.hr?.status === 'APPROVED' ? 'PARALLEL_APPROVED' : 'HOD_APPROVED')
+          : 'REJECTED';
 
-          get().addStatusHistory({
-            trfId: id,
-            changedBy: hodId,
-            changedByName: hodName,
-            oldStatus: trf.status,
-            newStatus: 'REJECTED',
-            remarks: `Rejected by HoD: ${remarks}`
-          });
-          return;
-        }
-
-        // HoD approved - check if HR also approved
-        const hrStatus = trf.parallelApproval.hr?.status;
-        let newStatus: TRFStatus;
-
-        if (hrStatus === 'APPROVED') {
-          newStatus = 'PARALLEL_APPROVED';
-        } else {
-          newStatus = 'HOD_APPROVED';
-        }
-
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
@@ -438,15 +626,36 @@ export const useTRFStore = create<TRFState>()(
           changedByName: hodName,
           oldStatus: trf.status,
           newStatus,
-          remarks: remarks || 'Approved by HoD'
+          remarks: approved ? 'Approved by HoD' : `Rejected by HoD: ${remarks}`
         });
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: newStatus,
+              parallel_approval: {
+                ...trf.parallelApproval,
+                hod: hodApproval
+              }
+            })
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error HoD approval:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
-      hrApproveTRF: (id, hrId, hrName, approved, remarks) => {
+      hrApproveTRF: async (id, hrId, hrName, approved, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || !trf.parallelApproval) return;
+        if (!trf || !trf.parallelApproval) return false;
 
         const hrApproval = {
           status: approved ? 'APPROVED' as const : 'REJECTED' as const,
@@ -456,45 +665,11 @@ export const useTRFStore = create<TRFState>()(
           remarks
         };
 
-        if (!approved) {
-          // HR reject = TRF needs revision (bisa diperbaiki)
-          set((state) => ({
-            trfs: state.trfs.map((t) =>
-              t.id === id
-                ? { 
-                    ...t, 
-                    status: 'NEEDS_REVISION',
-                    parallelApproval: {
-                      ...t.parallelApproval,
-                      hr: hrApproval
-                    },
-                    updatedAt: now 
-                  }
-                : t
-            )
-          }));
+        const newStatus: TRFStatus = approved 
+          ? (trf.parallelApproval.hod?.status === 'APPROVED' ? 'PARALLEL_APPROVED' : 'HR_APPROVED')
+          : 'NEEDS_REVISION';
 
-          get().addStatusHistory({
-            trfId: id,
-            changedBy: hrId,
-            changedByName: hrName,
-            oldStatus: trf.status,
-            newStatus: 'NEEDS_REVISION',
-            remarks: `Revision required by HR: ${remarks}`
-          });
-          return;
-        }
-
-        // HR approved - check if HoD also approved
-        const hodStatus = trf.parallelApproval.hod?.status;
-        let newStatus: TRFStatus;
-
-        if (hodStatus === 'APPROVED') {
-          newStatus = 'PARALLEL_APPROVED';
-        } else {
-          newStatus = 'HR_APPROVED';
-        }
-
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
@@ -517,8 +692,29 @@ export const useTRFStore = create<TRFState>()(
           changedByName: hrName,
           oldStatus: trf.status,
           newStatus,
-          remarks: remarks || 'Approved by HR'
+          remarks: approved ? 'Approved by HR' : `Revision required by HR: ${remarks}`
         });
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: newStatus,
+              parallel_approval: {
+                ...trf.parallelApproval,
+                hr: hrApproval
+              }
+            })
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error HR approval:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
       // ============================================
@@ -534,11 +730,11 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      pmApproveTRF: (id, pmId, pmName, approved, remarks) => {
+      pmApproveTRF: async (id, pmId, pmName, approved, remarks) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'PARALLEL_APPROVED') return;
+        if (!trf || trf.status !== 'PARALLEL_APPROVED') return false;
 
         const pmApproval: PMApproval = {
           approved,
@@ -550,6 +746,7 @@ export const useTRFStore = create<TRFState>()(
 
         const newStatus: TRFStatus = approved ? 'PM_APPROVED' : 'REJECTED';
 
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
@@ -574,6 +771,24 @@ export const useTRFStore = create<TRFState>()(
           newStatus,
           remarks: remarks || (approved ? 'Final approval by PM' : 'Rejected by PM')
         });
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: newStatus,
+              pm_approval: pmApproval
+            })
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error PM approval:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
       // ============================================
@@ -589,11 +804,11 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      gaProcessTRF: (id, gaId, gaName, voucherDetails, remarksToEmployee, files) => {
+      gaProcessTRF: async (id, gaId, gaName, voucherDetails, remarksToEmployee, files) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'PM_APPROVED') return;
+        if (!trf || trf.status !== 'PM_APPROVED') return false;
 
         const gaProcess: GAProcess = {
           processed: true,
@@ -605,6 +820,7 @@ export const useTRFStore = create<TRFState>()(
           remarksToEmployee
         };
 
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
@@ -626,14 +842,31 @@ export const useTRFStore = create<TRFState>()(
           newStatus: 'GA_PROCESSED',
           remarks: `Processed: ${remarksToEmployee || 'Voucher issued'}`
         });
+
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: 'GA_PROCESSED',
+              ga_process: gaProcess
+            })
+            .eq('id', id);
+
+          if (error) {
+            console.error('Error GA process:', error);
+            return false;
+          }
+        }
+
+        return true;
       },
 
       // ============================================
-      // LEGACY METHODS (Backward Compatibility)
+      // LEGACY
       // ============================================
 
       getPendingApprovals: () => {
-        // Legacy: return SUBMITTED TRFs
         return get().trfs
           .filter((t) => t.status === 'SUBMITTED')
           .map((trf) => {
@@ -642,12 +875,13 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      submitTRF: (id) => {
+      submitTRF: async (id) => {
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'DRAFT') return;
+        if (!trf || trf.status !== 'DRAFT') return false;
 
+        // Local update
         set((state) => ({
           trfs: state.trfs.map((t) =>
             t.id === id
@@ -668,71 +902,24 @@ export const useTRFStore = create<TRFState>()(
           oldStatus: 'DRAFT',
           newStatus: 'SUBMITTED'
         });
-      },
 
-      approveTRF: (id, approverId, approverName, remarks) => {
-        // Legacy method - redirect to pmApproveTRF for new flow
-        get().pmApproveTRF(id, approverId, approverName, true, remarks);
-      },
+        // Supabase update
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('trfs')
+            .update({
+              status: 'SUBMITTED',
+              submitted_at: now
+            })
+            .eq('id', id);
 
-      rejectTRF: (id, approverId, approverName, remarks) => {
-        const now = new Date().toISOString();
-        const trf = get().trfs.find((t) => t.id === id);
-        
-        if (!trf) return;
+          if (error) {
+            console.error('Error submitting TRF:', error);
+            return false;
+          }
+        }
 
-        set((state) => ({
-          trfs: state.trfs.map((t) =>
-            t.id === id
-              ? { 
-                  ...t, 
-                  status: 'REJECTED' as TRFStatus, 
-                  approvedBy: approverId,
-                  approverName,
-                  updatedAt: now 
-                }
-              : t
-          )
-        }));
-
-        get().addStatusHistory({
-          trfId: id,
-          changedBy: approverId,
-          changedByName: approverName,
-          oldStatus: trf.status,
-          newStatus: 'REJECTED',
-          remarks
-        });
-      },
-
-      reviseTRF: (id, approverId, approverName, remarks) => {
-        const now = new Date().toISOString();
-        const trf = get().trfs.find((t) => t.id === id);
-        
-        if (!trf) return;
-
-        set((state) => ({
-          trfs: state.trfs.map((t) =>
-            t.id === id
-              ? { 
-                  ...t, 
-                  status: 'NEEDS_REVISION' as TRFStatus,
-                  approvedBy: approverId,
-                  approverName,
-                  updatedAt: now 
-                }
-              : t
-          )
-        }));
-
-        get().addStatusHistory({
-          trfId: id,
-          changedBy: approverId,
-          changedByName: approverName,
-          oldStatus: trf.status,
-          newStatus: 'NEEDS_REVISION',
-          remarks
-        });
+        return true;
       },
 
       // ============================================
@@ -745,7 +932,7 @@ export const useTRFStore = create<TRFState>()(
           .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
       },
 
-      addStatusHistory: (entry) => {
+      addStatusHistory: async (entry) => {
         const now = new Date().toISOString();
         const newEntry: StatusHistory = {
           ...entry,
@@ -756,6 +943,24 @@ export const useTRFStore = create<TRFState>()(
         set((state) => ({
           statusHistory: [newEntry, ...state.statusHistory]
         }));
+
+        // Supabase insert
+        if (isSupabaseEnabled()) {
+          const { error } = await supabase
+            .from('status_history')
+            .insert([{
+              trf_id: entry.trfId,
+              changed_by: entry.changedBy,
+              changed_by_name: entry.changedByName,
+              old_status: entry.oldStatus,
+              new_status: entry.newStatus,
+              remarks: entry.remarks
+            }]);
+
+          if (error) {
+            console.error('Error adding status history:', error);
+          }
+        }
       },
 
       // ============================================
