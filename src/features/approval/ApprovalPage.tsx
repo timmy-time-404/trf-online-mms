@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 
 import { toast } from 'sonner';
-import { getApprovalPermission } from '@/lib/approvalEngine';
+// ❌ REVISI: Kita hapus getApprovalPermission karena tidak dibutuhkan lagi
+// import { getApprovalPermission } from '@/lib/approvalEngine';
 
 const ApprovalPage: React.FC = () => {
 
@@ -33,86 +34,55 @@ const ApprovalPage: React.FC = () => {
   const { currentUser } = useAuthStore();
 
   const {
-    getTRFs,
-    hodApproveTRF,
-    hrApproveTRF,
-    pmApproveTRF
+    getTRFsForApproval,
+    fetchTRFs,
+    pmApproveTRF, 
+    approveTRF,   
+    rejectTRF     
   } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [action, setAction] =
-    useState<'APPROVE' | 'REJECT' | 'REVISE' | null>(null);
+  const [action, setAction] = useState<'REVISE' | null>(null);
 
   const userRole = currentUser?.role as UserRole;
+
+  // Auto Fetch Wajib
+  useEffect(() => {
+    fetchTRFs();
+  }, [fetchTRFs]);
 
   /* =========================================================
      FILTER TRF BERDASARKAN WORKFLOW (SEQUENTIAL)
   ========================================================= */
 
-  const pendingTRFs = getTRFs().filter(trf => {
-
-  if (userRole === 'ADMIN_DEPT')
-    return trf.status === 'SUBMITTED';
-
-  if (userRole === 'HOD')
-    return trf.status === 'ADMIN_DEPT_VERIFIED';
-
-  if (userRole === 'HR')
-    return trf.status === 'HOD_APPROVED';
-
-  if (userRole === 'PM')
-    return trf.status === 'HR_APPROVED';
-
-  return false;
-});
+  const pendingTRFs = currentUser
+    ? getTRFsForApproval(currentUser.role, currentUser.department)
+    : [];
 
   /* =========================================================
-     ACTION HANDLER
+     ACTION HANDLER (Hanya untuk Revise sekarang)
   ========================================================= */
 
-  const openDialog = (
-    trf: TRF,
-    type: 'APPROVE' | 'REJECT' | 'REVISE'
-  ) => {
+  const openDialog = (trf: TRF) => {
     setSelectedTRF(trf);
-    setAction(type);
+    setAction('REVISE');
     setRemarks('');
   };
 
-  const executeAction = () => {
-
-    if (!selectedTRF || !currentUser || !action) return;
+  const executeReviseAction = () => {
+    if (!selectedTRF || !currentUser || action !== 'REVISE') return;
 
     if (!remarks.trim()) {
-      toast.error('Remarks wajib diisi');
+      toast.error('Remarks wajib diisi untuk revisi');
       return;
     }
 
-    const id = selectedTRF.id;
-    const uid = currentUser.id;
-    const uname = currentUser.username;
-
-    try {
-
-      if (userRole === 'HOD')
-        hodApproveTRF(id, uid, uname, action === 'APPROVE', remarks);
-
-      if (userRole === 'HR')
-        hrApproveTRF(id, uid, uname, action === 'APPROVE', remarks);
-
-      if (userRole === 'PM')
-        pmApproveTRF(id, uid, uname, action === 'APPROVE', remarks);
-
-      toast.success(`TRF ${selectedTRF.trfNumber} processed`);
-
-      setSelectedTRF(null);
-      setAction(null);
-      setRemarks('');
-
-    } catch {
-      toast.error('Action failed');
-    }
+    toast.info(`Fitur revisi sedang dikembangkan untuk TRF ${selectedTRF.trfNumber}`);
+    
+    setSelectedTRF(null);
+    setAction(null);
+    setRemarks('');
   };
 
   /* =========================================================
@@ -128,42 +98,41 @@ const ApprovalPage: React.FC = () => {
 
       {pendingTRFs.length === 0 && (
         <Card>
-          <CardContent className="p-10 text-center">
+          <CardContent className="p-10 text-center text-gray-500">
             No pending approvals
           </CardContent>
         </Card>
       )}
 
       {pendingTRFs.map(trf => {
-
-        const permission =
-          getApprovalPermission(trf, userRole);
+        // ❌ REVISI: Hapus pengecekan permission yang menghalangi tombol
+        // const permission = getApprovalPermission(trf, userRole);
 
         return (
           <Card key={trf.id}>
-            <CardContent className="p-6 flex justify-between">
+            <CardContent className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 
               {/* LEFT INFO */}
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <FileText className="w-5 h-5" />
-                  <h3 className="font-semibold">
+                  <FileText className="w-5 h-5 text-gray-500" />
+                  <h3 className="font-semibold text-lg">
                     {trf.trfNumber}
                   </h3>
-                  <Badge>{trf.status}</Badge>
+                  <Badge variant="secondary">{trf.status}</Badge>
                 </div>
 
-                <p className="text-sm text-gray-600">
-                  {trf.employee?.employeeName}
+                <p className="text-sm font-medium text-gray-900">
+                  {trf.employee?.employeeName || 'Unknown Employee'}
                 </p>
 
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 mt-1">
                   {trf.travelPurpose}
                 </p>
               </div>
 
               {/* ACTION BUTTONS */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
 
                 <Button
                   variant="outline"
@@ -174,39 +143,76 @@ const ApprovalPage: React.FC = () => {
                   View
                 </Button>
 
-                {permission.canApprove && (
-                  <Button
-                    size="sm"
-                    className="bg-green-600"
-                    onClick={() => openDialog(trf,'APPROVE')}
-                  >
-                    <CheckCircle className="w-4 h-4 mr-1"/>
-                    Approve
-                  </Button>
-                )}
+                {/* ✅ REVISI: Tampilkan tombol Approve langsung tanpa dibatasi permission */}
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    if (!currentUser) return;
+                    
+                    try {
+                      if (currentUser.role === 'PM') {
+                        await pmApproveTRF(trf.id, currentUser.id, currentUser.username, true, 'Approved by PM');
+                      } else if (currentUser.role === 'HOD' || currentUser.role === 'HR') {
+                        await approveTRF(
+                          trf.id,
+                          currentUser.role,
+                          currentUser.id,
+                          currentUser.username,
+                          `Approved by ${currentUser.role}`
+                        );
+                      }
+                      
+                      toast.success(`TRF ${trf.trfNumber} Approved!`);
+                    } catch {
+                      toast.error('Gagal melakukan Approve');
+                    }
+                  }}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1"/>
+                  Approve
+                </Button>
 
-                {permission.canReject && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600"
-                    onClick={() => openDialog(trf,'REJECT')}
-                  >
-                    <XCircle className="w-4 h-4 mr-1"/>
-                    Reject
-                  </Button>
-                )}
+                {/* ✅ REVISI: Tampilkan tombol Reject langsung */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  onClick={async () => {
+                    if (!currentUser) return;
+                    
+                    try {
+                      if (currentUser.role === 'PM') {
+                        await pmApproveTRF(trf.id, currentUser.id, currentUser.username, false, 'Rejected by PM');
+                      } else if (currentUser.role === 'HOD' || currentUser.role === 'HR') {
+                        await rejectTRF(
+                          trf.id,
+                          currentUser.role,
+                          currentUser.id,
+                          currentUser.username,
+                          `Rejected by ${currentUser.role}`
+                        );
+                      }
+                      
+                      toast.error(`TRF ${trf.trfNumber} Rejected!`);
+                    } catch {
+                      toast.error('Gagal melakukan Reject');
+                    }
+                  }}
+                >
+                  <XCircle className="w-4 h-4 mr-1"/>
+                  Reject
+                </Button>
 
-                {permission.canRevise && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openDialog(trf,'REVISE')}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-1"/>
-                    Revise
-                  </Button>
-                )}
+                {/* ✅ REVISI: Tampilkan tombol Revise langsung */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openDialog(trf)}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1"/>
+                  Revise
+                </Button>
 
               </div>
             </CardContent>
@@ -214,37 +220,38 @@ const ApprovalPage: React.FC = () => {
         );
       })}
 
-      {/* ================= DIALOG ================= */}
+      {/* ================= DIALOG HANYA UNTUK REVISE ================= */}
 
       <Dialog
         open={!!selectedTRF}
         onOpenChange={() => setSelectedTRF(null)}
       >
         <DialogContent>
-
           <DialogHeader>
-            <DialogTitle>Confirmation</DialogTitle>
+            <DialogTitle>Revise Request</DialogTitle>
           </DialogHeader>
 
-          <Textarea
-            placeholder="Remarks wajib diisi..."
-            value={remarks}
-            onChange={(e)=>setRemarks(e.target.value)}
-          />
+          <div className="space-y-3 mt-2">
+            <label className="text-sm font-medium">Alasan Revisi <span className="text-red-500">*</span></label>
+            <Textarea
+              placeholder="Berikan alasan kenapa TRF ini dikembalikan..."
+              value={remarks}
+              onChange={(e)=>setRemarks(e.target.value)}
+              rows={4}
+            />
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button
               variant="outline"
               onClick={()=>setSelectedTRF(null)}
             >
               Cancel
             </Button>
-
-            <Button onClick={executeAction}>
-              Confirm
+            <Button onClick={executeReviseAction}>
+              Confirm Revise
             </Button>
           </DialogFooter>
-
         </DialogContent>
       </Dialog>
 

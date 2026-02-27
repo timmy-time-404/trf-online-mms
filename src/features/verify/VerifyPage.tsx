@@ -33,7 +33,10 @@ const VerifyPage: React.FC = () => {
   const { currentUser } = useAuthStore();
   
   // ✅ REVISI: Tambahkan fetchTRFs ke sini
-  const { getTRFsForVerification, verifyTRF, fetchTRFs } = useTRFStore();
+  const trfs = useTRFStore(state => state.trfs);
+  const getTRFsForVerification = useTRFStore(state => state.getTRFsForVerification);
+  const verifyTRF = useTRFStore(state => state.verifyTRF);
+  const fetchTRFs = useTRFStore(state => state.fetchTRFs);
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
@@ -43,7 +46,7 @@ const VerifyPage: React.FC = () => {
   // ✅ REVISI: Tambahkan AUTO FETCH di sini menggunakan useEffect
   useEffect(() => {
     fetchTRFs();
-  }, []); // Array kosong berarti ini hanya berjalan sekali saat halaman dibuka
+  }, []);
 
   // Get TRFs for current Admin Dept's department
   const trfsForVerification = currentUser?.department 
@@ -94,7 +97,6 @@ const VerifyPage: React.FC = () => {
       day: 'numeric'
     });
   };
-
   return (
     <div className="space-y-6">
       {/* Header */}

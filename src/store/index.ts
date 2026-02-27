@@ -137,7 +137,7 @@ interface TRFState {
   verifyTRF: (id: string, verifierId: string, verifierName: string, verified: boolean, remarks?: string) => Promise<boolean>;
   
   // Parallel Approval
-  getTRFsForApproval: (user: User) => TRF[];
+  getTRFsForApproval: (role: UserRole, department?: string) => TRF[]; // ✅ REVISI TYPE PARAMETER
   hodApproveTRF: (id: string, hodId: string, hodName: string, approved: boolean, remarks?: string) => Promise<boolean>;
   hrApproveTRF: (id: string, hrId: string, hrName: string, approved: boolean, remarks?: string) => Promise<boolean>;
   
@@ -161,6 +161,10 @@ interface TRFState {
   getEmployeeById: (id: string) => Employee | undefined;
   getEmployeesByType: (type: 'EMPLOYEE' | 'VISITOR') => Employee[];
   getUserById: (id: string) => User | undefined;
+
+  // Fungsi approveTRF dan rejectTRF baru
+  approveTRF: (trfId: string, role: string, userId: string, userName: string, remarks?: string) => Promise<void>;
+  rejectTRF: (trfId: string, role: string, userId: string, userName: string, remarks?: string) => Promise<void>;
 }
 
 // Transformers
@@ -329,31 +333,26 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
-      // ============================================
-      // FUNGSI createTRF YANG SUDAH DIREVISI LAGI
-      // ============================================
       createTRF: async (trfData) => {
         if (!isSupabaseEnabled()) return null;
 
         const now = new Date().toISOString();
 
-        // ✅ REVISI: Cari tahu departemen dari data karyawan yang dipilih
         const employee = get().employees.find(
           e => e.id === trfData.employeeId
         );
         const department = employee?.department ?? null;
 
-        // ✅ INSERT KE SUPABASE DULU
         const { data, error } = await supabase
           .from('trfs')
           .insert([{
             employee_id: trfData.employeeId,
-            department: department, // ⭐ FIX: pakai department si karyawan
+            department: department,
             travel_purpose: trfData.travelPurpose,
             start_date: trfData.startDate,
             end_date: trfData.endDate,
             purpose_remarks: trfData.purposeRemarks || null,
-            status: 'SUBMITTED', // ⭐ Sesuai revisi dari teman Anda
+            status: 'SUBMITTED',
             accommodation: trfData.accommodation || null,
             travel_arrangements: trfData.travelArrangements || []
           }])
@@ -365,24 +364,21 @@ export const useTRFStore = create<TRFState>()(
           return null;
         }
 
-        // ✅ pakai UUID asli dari DB
         const newTRF: TRF = {
           ...trfData,
           id: data.id,
-          department: department || undefined, // Update local trfData dengan departemen yang benar
+          department: department || undefined, 
           trfNumber: data.trf_number,
-          status: 'SUBMITTED', // ⭐ Sesuai revisi dari teman Anda
+          status: 'SUBMITTED', 
           createdAt: data.created_at,
           updatedAt: data.updated_at,
           travelArrangements: trfData.travelArrangements || []
         };
 
-        // update local store
         set((state) => ({
           trfs: [newTRF, ...state.trfs]
         }));
 
-        // ✅ SEKARANG trf_id VALID UUID
         await get().addStatusHistory({
           trfId: data.id,
           changedBy: trfData.employeeId,
@@ -573,33 +569,146 @@ export const useTRFStore = create<TRFState>()(
       },
 
       // ============================================
-      // PARALLEL APPROVAL
+      // SEQUENTIAL APPROVAL (REVISI)
       // ============================================
 
-      getTRFsForApproval: (user) => {
-        const { trfs } = get();
-        
-        return trfs.filter((t) => {
-          if (user.role === 'HOD' && user.department) {
-            return (
-              t.department === user.department &&
-              (t.status === 'PENDING_APPROVAL' || t.status === 'HR_APPROVED') &&
-              t.parallelApproval?.hod?.status !== 'APPROVED'
-            );
+      // ✅ REVISI: Logika diubah menjadi sequential flow sesuai arahan
+      getTRFsForApproval: (role: UserRole, department?: string) => {
+        return get().trfs.filter((trf) => {
+          switch (role) {
+            // ✅ HOD hanya lihat setelah Admin Verify
+            case 'HOD':
+              return trf.status === 'PENDING_APPROVAL' 
+                && trf.department === department;
+      
+            // ✅ HR hanya lihat setelah HOD approve
+            case 'HR':
+              return trf.status === 'HOD_APPROVED';
+      
+            // ✅ PM hanya lihat setelah HR approve
+            case 'PM':
+              return trf.status === 'HR_APPROVED';
+      
+            // ✅ GA hanya lihat setelah PM approve
+            case 'GA':
+              return trf.status === 'PM_APPROVED';
+      
+            default:
+              return false;
           }
-          
-          if (user.role === 'HR') {
-            return (
-              (t.status === 'PENDING_APPROVAL' || t.status === 'HOD_APPROVED') &&
-              t.parallelApproval?.hr?.status !== 'APPROVED'
-            );
-          }
-          
-          return false;
         }).map((trf) => {
           const employee = get().employees.find((e) => e.id === trf.employeeId);
           return { ...trf, employee };
         });
+      },
+
+      approveTRF: async (trfId, role, userId, userName, remarks) => {
+        const now = new Date().toISOString();
+
+        const { data: trf } = await supabase
+          .from('trfs')
+          .select('*')
+          .eq('id', trfId)
+          .single();
+
+        if (!trf) return;
+
+        let nextStatus = trf.status;
+        let parallel = trf.parallel_approval || {
+          hod: { status: 'PENDING' },
+          hr: { status: 'PENDING' }
+        };
+
+        // =========================
+        // HOD APPROVAL
+        // =========================
+        if (role === 'HOD') {
+          parallel.hod = {
+            status: 'APPROVED',
+            actionBy: userId,
+            actionByName: userName,
+            actionAt: now,
+            remarks
+          };
+
+          // Karena sequential, statusnya langsung jadi HOD_APPROVED
+          nextStatus = 'HOD_APPROVED'; 
+        }
+
+        // =========================
+        // HR APPROVAL
+        // =========================
+        if (role === 'HR') {
+          parallel.hr = {
+            status: 'APPROVED',
+            actionBy: userId,
+            actionByName: userName,
+            actionAt: now,
+            remarks
+          };
+
+          // Karena sequential, statusnya langsung jadi HR_APPROVED
+          nextStatus = 'HR_APPROVED';
+        }
+
+        await supabase
+          .from('trfs')
+          .update({
+            status: nextStatus,
+            parallel_approval: parallel,
+            updated_at: now
+          })
+          .eq('id', trfId);
+
+        await get().fetchTRFs();
+      },
+
+      rejectTRF: async (trfId, role, userId, userName, remarks) => {
+        const now = new Date().toISOString();
+
+        const { data: trf } = await supabase
+          .from('trfs')
+          .select('*')
+          .eq('id', trfId)
+          .single();
+
+        if (!trf) return;
+
+        let parallel = trf.parallel_approval || {
+          hod: { status: 'PENDING' },
+          hr: { status: 'PENDING' }
+        };
+
+        if (role === 'HOD') {
+          parallel.hod = {
+            status: 'REJECTED',
+            actionBy: userId,
+            actionByName: userName,
+            actionAt: now,
+            remarks: remarks || 'Rejected by HoD without remarks'
+          };
+        }
+
+        if (role === 'HR') {
+          parallel.hr = {
+            status: 'REJECTED',
+            actionBy: userId,
+            actionByName: userName,
+            actionAt: now,
+            remarks: remarks || 'Rejected by HR without remarks'
+          };
+        }
+
+        await supabase
+          .from('trfs')
+          .update({
+            status: 'REJECTED', 
+            parallel_approval: parallel,
+            updated_at: now
+          })
+          .eq('id', trfId);
+
+        await get().fetchTRFs();
       },
 
       hodApproveTRF: async (id, hodId, hodName, approved, remarks) => {
@@ -617,7 +726,7 @@ export const useTRFStore = create<TRFState>()(
         };
 
         const newStatus: TRFStatus = approved 
-          ? (trf.parallelApproval.hr?.status === 'APPROVED' ? 'PARALLEL_APPROVED' : 'HOD_APPROVED')
+          ? 'HOD_APPROVED' // Disesuaikan untuk sequential
           : 'REJECTED';
 
         // Local update
@@ -683,7 +792,7 @@ export const useTRFStore = create<TRFState>()(
         };
 
         const newStatus: TRFStatus = approved 
-          ? (trf.parallelApproval.hod?.status === 'APPROVED' ? 'PARALLEL_APPROVED' : 'HR_APPROVED')
+          ? 'HR_APPROVED' // Disesuaikan untuk sequential
           : 'NEEDS_REVISION';
 
         // Local update
@@ -740,7 +849,7 @@ export const useTRFStore = create<TRFState>()(
 
       getTRFsForPMApproval: () => {
         return get().trfs
-          .filter((t) => t.status === 'PARALLEL_APPROVED')
+          .filter((t) => t.status === 'HR_APPROVED') // Disesuaikan untuk sequential
           .map((trf) => {
             const employee = get().employees.find((e) => e.id === trf.employeeId);
             return { ...trf, employee };
@@ -751,7 +860,7 @@ export const useTRFStore = create<TRFState>()(
         const now = new Date().toISOString();
         const trf = get().trfs.find((t) => t.id === id);
         
-        if (!trf || trf.status !== 'PARALLEL_APPROVED') return false;
+        if (!trf || trf.status !== 'HR_APPROVED') return false; // Disesuaikan untuk sequential
 
         const pmApproval: PMApproval = {
           approved,
@@ -784,7 +893,7 @@ export const useTRFStore = create<TRFState>()(
           trfId: id,
           changedBy: pmId,
           changedByName: pmName,
-          oldStatus: 'PARALLEL_APPROVED',
+          oldStatus: 'HR_APPROVED', // Disesuaikan untuk sequential
           newStatus,
           remarks: remarks || (approved ? 'Final approval by PM' : 'Rejected by PM')
         });
