@@ -24,6 +24,9 @@ import SuperAdminPage from './features/super-admin/SuperAdminPage'; // Super Adm
 import EmployeeManagementPage from './features/employees/EmployeeManagementPage'; // HR
 import HotelManagementPage from './features/hotels/HotelManagementPage';       // GA
 
+// import TestPage from './features/test/TestPage';// Temporary test page
+// import TestDebug from './components/TestDebug';
+
 // Protected Route Component
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -58,15 +61,22 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 function App() {
-  const { fetchAllData } = useTRFStore();
+  // ✅ REVISI: Menggunakan fetchEmployees dan fetchTRFs sesuai arahan teman Anda
+  const { fetchEmployees, fetchTRFs } = useTRFStore();
   const { isAuthenticated, isLoading } = useAuthStore();
 
   // Fetch data from Supabase when authenticated
   useEffect(() => {
+    // Membungkusnya dalam async function agar bisa ditunggu (await) sesuai urutan
+    const loadData = async () => {
+      await fetchEmployees(); // ⭐ WAJIB DULU
+      await fetchTRFs();      // Setelah employee selesai, baru tarik TRF
+    };
+
     if (isAuthenticated && !isLoading) {
-      fetchAllData();
+      loadData();
     }
-  }, [isAuthenticated, isLoading, fetchAllData]);
+  }, [isAuthenticated, isLoading, fetchEmployees, fetchTRFs]);
 
   return (
     <BrowserRouter>
@@ -74,6 +84,9 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route element={<AuthLayout />}>
+                  {/* <Route path="/test" element={<TestPage />} />
+                  <Route path="/debug" element={<TestDebug />} /> */}
+
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
@@ -87,6 +100,7 @@ function App() {
           {/* DASHBOARD - All authenticated users */}
           {/* ============================================ */}
           <Route path="/" element={<DashboardPage />} />
+
 
           {/* ============================================ */}
           {/* TRF ROUTES */}

@@ -12,12 +12,14 @@ import { Save, Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TRFNewPage: React.FC = () => {
+
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { createTRF, submitTRF } = useTRFStore();
+  const { createTRF, submitTRF, fetchAllData } = useTRFStore();
 
   const [formData, setFormData] = useState<Partial<TRF>>({
     employeeId: currentUser?.employeeId || '',
+    department: currentUser?.department || '',
     travelPurpose: '',
     startDate: '',
     endDate: '',
@@ -34,9 +36,13 @@ const TRFNewPage: React.FC = () => {
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /* ================= HANDLERS ================= */
   const handleEmployeeChange = (employeeId: string) => {
-    setFormData(prev => ({ ...prev, employeeId }));
-  };
+  setFormData(prev => ({
+    ...prev,
+    employeeId
+  }));
+};
 
   const handlePurposeChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -56,47 +62,82 @@ const TRFNewPage: React.FC = () => {
     setFormData(prev => ({ ...prev, travelArrangements: arrangements }));
   };
 
+  /* ================= VALIDATION ================= */
+
   const validateForm = (): boolean => {
-    if (!formData.employeeId) {
-      toast.error('Please select an employee');
+
+    if (!currentUser?.employeeId) {
+      toast.error('Employee account not linked');
       return false;
     }
+
     if (!formData.travelPurpose) {
       toast.error('Please select travel purpose');
       return false;
     }
+
     if (!formData.startDate || !formData.endDate) {
       toast.error('Please select travel dates');
       return false;
     }
+
     return true;
   };
 
-  const handleSaveDraft = () => {
+  /* ================= SAVE DRAFT ================= */
+
+  const handleSaveDraft = async () => {
+
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+
     try {
-      const newTRF = createTRF(formData as Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>);
+      await fetchAllData();
+      const newTRF = await createTRF(formData as any);
+
+      if (!newTRF) throw new Error();
+
       toast.success('TRF saved as draft');
       navigate(`/trf/${newTRF.id}`);
-    } catch (error) {
+
+    } catch {
       toast.error('Failed to save TRF');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSubmit = () => {
-    if (!validateForm()) return;
+  /* ================= SUBMIT ================= */
+
+  const handleSubmit = async () => {
+
+    if (!validateForm() || !currentUser) return;
 
     setIsSubmitting(true);
+
     try {
-      const newTRF = createTRF(formData as Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>);
-      submitTRF(newTRF.id);
+
+      const newTRF = await createTRF(formData as any);
+
+      if (!newTRF) throw new Error();
+
+      await submitTRF(
+  newTRF.id,
+  currentUser.id,
+  currentUser.username
+);
+
+// ✅ reload data dari Supabase
+await fetchAllData();
+
+toast.success('TRF submitted successfully');
+navigate(`/trf/${newTRF.id}`);
+
       toast.success('TRF submitted successfully');
       navigate(`/trf/${newTRF.id}`);
-    } catch (error) {
+
+    } catch {
       toast.error('Failed to submit TRF');
     } finally {
       setIsSubmitting(false);
@@ -104,9 +145,11 @@ const TRFNewPage: React.FC = () => {
     }
   };
 
+  /* ================= UI ================= */
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
+
       <div className="flex items-center justify-between">
         <div>
           <Button
@@ -118,18 +161,22 @@ const TRFNewPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4 mr-1" />
             Back to List
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900">New Travel Request</h1>
-          <p className="text-gray-500 mt-1">Create a new travel request form</p>
+
+          <h1 className="text-2xl font-bold text-gray-900">
+            New Travel Request
+          </h1>
+
+          <p className="text-gray-500 mt-1">
+            Create a new travel request form
+          </p>
         </div>
       </div>
 
-      {/* Form */}
       <div className="space-y-6">
         <EmployeeInfoSection
-          selectedEmployeeId={formData.employeeId || ''}
-          onEmployeeChange={handleEmployeeChange}
-        />
-
+  selectedEmployeeId={formData.employeeId || ''}
+  onEmployeeChange={handleEmployeeChange}
+/>
         <TravelPurposeSection
           purpose={formData.travelPurpose || ''}
           startDate={formData.startDate || ''}
@@ -152,44 +199,34 @@ const TRFNewPage: React.FC = () => {
         />
       </div>
 
-      {/* Actions */}
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
-        <Button
-          variant="outline"
-          onClick={() => navigate('/trf')}
-          disabled={isSubmitting}
-        >
+        <Button variant="outline" onClick={() => navigate('/trf')}>
           Cancel
         </Button>
-        <Button
-          variant="secondary"
-          onClick={handleSaveDraft}
-          disabled={isSubmitting}
-        >
+
+        <Button variant="secondary" onClick={handleSaveDraft}>
           <Save className="w-4 h-4 mr-2" />
           Save as Draft
         </Button>
-        <Button
-          onClick={() => setSubmitDialogOpen(true)}
-          disabled={isSubmitting}
-        >
+
+        <Button onClick={() => setSubmitDialogOpen(true)}>
           <Send className="w-4 h-4 mr-2" />
           Submit TRF
         </Button>
       </div>
 
-      {/* Submit Confirmation */}
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
         title="Confirm Submission"
-        description="Are you sure you want to submit this TRF? Once submitted, you will not be able to edit it until it is reviewed."
+        description="Are you sure you want to submit this TRF?"
         onConfirm={handleSubmit}
         confirmText="Submit"
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}
       />
+
     </div>
   );
 };

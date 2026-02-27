@@ -10,18 +10,21 @@ import type {
   TRFStatus, 
   Employee, 
   StatusHistory,
-  ParallelApproval,
   AdminDeptVerification,
   PMApproval,
   GAProcess 
 } from '@/types';
-import { 
-  mockEmployees, 
-  mockTRFs, 
+import {
+  mockEmployees,
+  mockTRFs,
   mockStatusHistory,
   referenceData,
   mockUsers
 } from '@/mock/data';
+
+import {
+  processTRFApproval
+} from './supabaseStore';
 
 // ============================================
 // AUTH STORE
@@ -122,9 +125,9 @@ interface TRFState {
   getTRFsByEmployee: (employeeId: string) => TRF[];
   getTRFsByStatus: (status: TRFStatus) => TRF[];
   getTRFsByDepartment: (department: string) => TRF[];
-  createTRF: (trf: Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>) => Promise<TRF | null>;
-  updateTRF: (id: string, updates: Partial<TRF>) => Promise<boolean>;
-  deleteTRF: (id: string) => Promise<boolean>;
+  createTRF: (input: CreateTRFInput) => Promise<TRF | null>;
+  updateTRF: (id: string, input: UpdateTRFInput) => Promise<boolean>;
+  deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   
   // Role-based visibility
   getVisibleTRFs: (user: User) => TRF[];
@@ -172,7 +175,7 @@ const transformUserFromDB = (dbUser: any): User => ({
 
 const transformEmployeeFromDB = (dbEmp: any): Employee => ({
   id: dbEmp.id,
-  userId: dbEmp.user_id,
+  userId: dbEmp.user_id || undefined,  // ✅ FIXED: Handle null
   employeeType: dbEmp.employee_type,
   employeeName: dbEmp.employee_name,
   jobTitle: dbEmp.job_title,
@@ -185,13 +188,16 @@ const transformEmployeeFromDB = (dbEmp: any): Employee => ({
 });
 
 const transformTRFFromDB = (dbTRF: any, employees: Employee[]): TRF => {
-  const employee = employees.find(e => e.id === dbTRF.employee_id);
-  
   return {
     id: dbTRF.id,
     trfNumber: dbTRF.trf_number,
     employeeId: dbTRF.employee_id,
-    employee,
+    // ✅ Pake Fallback dari revisi sebelumnya
+    employee: employees.find(e => e.id === dbTRF.employee_id) ?? {
+      id: dbTRF.employee_id,
+      employeeName: 'Unknown Employee',
+      employeeType: 'EMPLOYEE'
+    },
     department: dbTRF.department,
     travelPurpose: dbTRF.travel_purpose,
     startDate: dbTRF.start_date,
@@ -220,6 +226,10 @@ export const useTRFStore = create<TRFState>()(
       referenceData,
       isLoading: false,
 
+      processTRFApproval: async (...args) => {
+        return await processTRFApproval(...args);
+      },
+      
       // ============================================
       // FETCH OPERATIONS
       // ============================================
@@ -319,64 +329,67 @@ export const useTRFStore = create<TRFState>()(
           });
       },
 
+      // ============================================
+      // FUNGSI createTRF YANG SUDAH DIREVISI LAGI
+      // ============================================
       createTRF: async (trfData) => {
+        if (!isSupabaseEnabled()) return null;
+
         const now = new Date().toISOString();
-        
-        // Local state update first (optimistic)
+
+        // ✅ REVISI: Cari tahu departemen dari data karyawan yang dipilih
+        const employee = get().employees.find(
+          e => e.id === trfData.employeeId
+        );
+        const department = employee?.department ?? null;
+
+        // ✅ INSERT KE SUPABASE DULU
+        const { data, error } = await supabase
+          .from('trfs')
+          .insert([{
+            employee_id: trfData.employeeId,
+            department: department, // ⭐ FIX: pakai department si karyawan
+            travel_purpose: trfData.travelPurpose,
+            start_date: trfData.startDate,
+            end_date: trfData.endDate,
+            purpose_remarks: trfData.purposeRemarks || null,
+            status: 'SUBMITTED', // ⭐ Sesuai revisi dari teman Anda
+            accommodation: trfData.accommodation || null,
+            travel_arrangements: trfData.travelArrangements || []
+          }])
+          .select()
+          .single();
+
+        if (error || !data) {
+          console.error(error);
+          return null;
+        }
+
+        // ✅ pakai UUID asli dari DB
         const newTRF: TRF = {
           ...trfData,
-          id: `trf-${Date.now()}`,
-          trfNumber: `TRF-${now.slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random()*900)+100}`,
-          status: 'DRAFT',
-          createdAt: now,
-          updatedAt: now
+          id: data.id,
+          department: department || undefined, // Update local trfData dengan departemen yang benar
+          trfNumber: data.trf_number,
+          status: 'SUBMITTED', // ⭐ Sesuai revisi dari teman Anda
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+          travelArrangements: trfData.travelArrangements || []
         };
 
+        // update local store
         set((state) => ({
           trfs: [newTRF, ...state.trfs]
         }));
 
-        // Add status history
-        get().addStatusHistory({
-          trfId: newTRF.id,
+        // ✅ SEKARANG trf_id VALID UUID
+        await get().addStatusHistory({
+          trfId: data.id,
           changedBy: trfData.employeeId,
-          changedByName: newTRF.employee?.employeeName || 'Unknown',
-          newStatus: 'DRAFT'
+          changedByName: "System",
+          newStatus: "SUBMITTED",
+          remarks: "TRF created and submitted"
         });
-
-        // Supabase insert
-        if (isSupabaseEnabled()) {
-          const { data, error } = await supabase
-            .from('trfs')
-            .insert([{
-              employee_id: trfData.employeeId,
-              department: trfData.department,
-              travel_purpose: trfData.travelPurpose,
-              start_date: trfData.startDate,
-              end_date: trfData.endDate,
-              purpose_remarks: trfData.purposeRemarks,
-              status: 'DRAFT',
-              accommodation: trfData.accommodation,
-              travel_arrangements: trfData.travelArrangements
-            }])
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Error creating TRF in Supabase:', error);
-            return null;
-          }
-
-          // Update local ID with Supabase ID
-          if (data) {
-            const employees = get().employees;
-            const supabaseTRF = transformTRFFromDB(data, employees);
-            set((state) => ({
-              trfs: state.trfs.map(t => t.id === newTRF.id ? supabaseTRF : t)
-            }));
-            return supabaseTRF;
-          }
-        }
 
         return newTRF;
       },
@@ -477,16 +490,19 @@ export const useTRFStore = create<TRFState>()(
       // ADMIN DEPT VERIFICATION
       // ============================================
 
-      getTRFsForVerification: (department) => {
-        return get().trfs
-          .filter((t) => 
-            t.department === department && 
-            t.status === 'SUBMITTED'
-          )
-          .map((trf) => {
-            const employee = get().employees.find((e) => e.id === trf.employeeId);
-            return { ...trf, employee };
-          });
+      getTRFsForVerification: (department: string) => {
+        const normalize = (v?: string) =>
+          (v || '').trim().toLowerCase();
+
+        return get().trfs.filter((trf) => {
+          const sameDept =
+            normalize(trf.department) === normalize(department);
+
+          const isSubmitted =
+            normalize(trf.status) === 'submitted';
+
+          return sameDept && isSubmitted;
+        });
       },
 
       verifyTRF: async (id, verifierId, verifierName, verified, remarks) => {
@@ -522,7 +538,8 @@ export const useTRFStore = create<TRFState>()(
               : t
           )
         }));
-
+        
+        
         get().addStatusHistory({
           trfId: id,
           changedBy: verifierId,

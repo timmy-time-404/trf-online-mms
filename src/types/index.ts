@@ -1,8 +1,193 @@
-// TRF Online System - Type Definitions
+// types/index.ts - Complete Type Definitions for TRF Online System
+
+// ============================================
+// DATABASE TYPES (Supabase Schema)
+// ============================================
+
+export interface Database {
+  public: {
+    Tables: {
+      employees: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          employee_type: string;
+          employee_name: string;
+          job_title: string | null;
+          department: string | null;
+          section: string | null;
+          email: string | null;
+          phone: string | null;
+          date_of_hire: string | null;
+          point_of_hire: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          employee_type: string;
+          employee_name: string;
+          job_title?: string | null;
+          department?: string | null;
+          section?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          date_of_hire?: string | null;
+          point_of_hire?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          employee_type?: string;
+          employee_name?: string;
+          job_title?: string | null;
+          department?: string | null;
+          section?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          date_of_hire?: string | null;
+          point_of_hire?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      users: {
+        Row: {
+          id: string;
+          username: string;
+          email: string;
+          role: string;
+          employee_id: string | null;
+          department: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          username: string;
+          email: string;
+          role: string;
+          employee_id?: string | null;
+          department?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          username?: string;
+          email?: string;
+          role?: string;
+          employee_id?: string | null;
+          department?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      trfs: {
+        Row: {
+          id: string;
+          trf_number: string;
+          employee_id: string;
+          department: string;
+          travel_purpose: string;
+          start_date: string;
+          end_date: string;
+          purpose_remarks: string | null;
+          status: string;
+          accommodation: any | null;
+          travel_arrangements: any;
+          admin_dept_verify: any | null;
+          parallel_approval: any | null;
+          pm_approval: any | null;
+          ga_process: any | null;
+          submitted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          trf_number?: string;
+          employee_id: string;
+          department: string;
+          travel_purpose: string;
+          start_date: string;
+          end_date: string;
+          purpose_remarks?: string | null;
+          status?: string;
+          accommodation?: any | null;
+          travel_arrangements?: any;
+          admin_dept_verify?: any | null;
+          parallel_approval?: any | null;
+          pm_approval?: any | null;
+          ga_process?: any | null;
+          submitted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          trf_number?: string;
+          employee_id?: string;
+          department?: string;
+          travel_purpose?: string;
+          start_date?: string;
+          end_date?: string;
+          purpose_remarks?: string | null;
+          status?: string;
+          accommodation?: any | null;
+          travel_arrangements?: any;
+          admin_dept_verify?: any | null;
+          parallel_approval?: any | null;
+          pm_approval?: any | null;
+          ga_process?: any | null;
+          submitted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      status_history: {
+        Row: {
+          id: string;
+          trf_id: string;
+          changed_by: string;
+          changed_by_name: string;
+          old_status: string | null;
+          new_status: string;
+          remarks: string | null;
+          changed_at: string;
+        };
+        Insert: {
+          id?: string;
+          trf_id: string;
+          changed_by: string;
+          changed_by_name: string;
+          old_status?: string | null;
+          new_status: string;
+          remarks?: string | null;
+          changed_at?: string;
+        };
+        Update: {
+          id?: string;
+          trf_id?: string;
+          changed_by?: string;
+          changed_by_name?: string;
+          old_status?: string | null;
+          new_status?: string;
+          remarks?: string | null;
+          changed_at?: string;
+        };
+      };
+    };
+  };
+}
 
 // ============================================
 // ROLES (7 Total)
 // ============================================
+
 export type UserRole = 
   | 'EMPLOYEE' 
   | 'ADMIN_DEPT' 
@@ -17,8 +202,9 @@ export type EmployeeType = 'EMPLOYEE' | 'VISITOR';
 export type MCUStatus = 'PENDING' | 'VALID' | 'EXPIRED';
 
 // ============================================
-// TRF STATUS (11 Total - dengan Parallel Approval)
+// TRF STATUS (10 Total - dengan Parallel Approval)
 // ============================================
+
 export type TRFStatus = 
   | 'DRAFT'                          // Employee editing
   | 'SUBMITTED'                      // Waiting Admin Dept verify
@@ -40,6 +226,7 @@ export type TransportationType = 'CAR' | 'FLIGHT' | 'TRAIN' | 'SELF_ARRANGEMENT'
 // ============================================
 // USER & EMPLOYEE
 // ============================================
+
 export interface User {
   id: string;
   username: string;
@@ -51,7 +238,7 @@ export interface User {
 
 export interface Employee {
   id: string;
-  userId?: string;
+  userId?: string;      // Nullable untuk VISITOR atau external
   employeeType: EmployeeType;
   employeeName: string;
   jobTitle?: string;
@@ -66,6 +253,7 @@ export interface Employee {
 // ============================================
 // ACCOMMODATION & TRAVEL
 // ============================================
+
 export interface Accommodation {
   id?: string;
   hotelName: string;
@@ -90,6 +278,7 @@ export interface TravelArrangement {
 // ============================================
 // APPROVAL STRUCTURE (Parallel)
 // ============================================
+
 export interface AdminDeptVerification {
   verified: boolean;      // true = yes, false = no
   verifiedAt: string;
@@ -141,6 +330,7 @@ export interface GAProcess {
 // ============================================
 // TRF (Updated dengan Approval Structure)
 // ============================================
+
 export interface TRF {
   id: string;
   trfNumber: string;
@@ -174,6 +364,7 @@ export interface TRF {
 // ============================================
 // STATUS HISTORY
 // ============================================
+
 export interface StatusHistory {
   id: string;
   trfId: string;
@@ -188,6 +379,7 @@ export interface StatusHistory {
 // ============================================
 // DASHBOARD & REFERENCE
 // ============================================
+
 export interface DashboardStats {
   totalTravelIn: number;
   totalTravelOut: number;
@@ -223,4 +415,95 @@ export interface ReferenceData {
   purposes: { code: string; name: string }[];
   departments: { code: string; name: string }[];
   tenants: { code: string; name: string }[];
+}
+
+// ============================================
+// API RESPONSE TYPES
+// ============================================
+
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  success: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ============================================
+// STORE TYPES
+// ============================================
+
+export interface AuthState {
+  currentUser: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+export interface TRFState {
+  trfs: TRF[];
+  statusHistory: StatusHistory[];
+  employees: Employee[];
+  users: User[];
+  isLoading: boolean;
+}
+
+export interface DashboardState {
+  stats: DashboardStats;
+  roomAvailability: RoomAvailability[];
+  weeklyTravel: WeeklyTravel[];
+  recentActivities: Activity[];
+}
+
+// ============================================
+// API RESPONSE TYPES
+// ============================================
+
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  success: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ============================================
+// FORM INPUT TYPES (Untuk Create/Update)
+// ============================================
+
+export interface CreateTRFInput {
+  employeeId: string;
+  department: string;
+  travelPurpose: string;
+  startDate: string;
+  endDate: string;
+  purposeRemarks?: string;
+  accommodation?: Accommodation;
+  travelArrangements: TravelArrangement[];
+}
+
+export interface UpdateTRFInput {
+  travelPurpose?: string;
+  startDate?: string;
+  endDate?: string;
+  purposeRemarks?: string;
+  accommodation?: Accommodation;
+  travelArrangements?: TravelArrangement[];
+  status?: TRFStatus;
+  adminDeptVerify?: AdminDeptVerification;
+  parallelApproval?: ParallelApproval;
+  pmApproval?: PMApproval;
+  gaProcess?: GAProcess;
+  submittedAt?: string;
 }

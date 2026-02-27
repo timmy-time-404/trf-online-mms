@@ -1,253 +1,555 @@
-// store/supabaseStore.ts - Supabase operations
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
-import type { 
-  User, 
-  Employee, 
-  TRF, 
+
+import type {
+  User,
+  Employee,
+  TRF,
   StatusHistory,
-  TRFStatus 
+  TRFStatus,
+  UserRole,
+  CreateTRFInput,
 } from '@/types';
-import { mockUsers, mockEmployees, mockTRFs, mockStatusHistory } from '@/mock/data';
 
-// ============================================
-// USERS
-// ============================================
+import {
+  mockUsers,
+  mockEmployees,
+  mockTRFs
+} from '@/mock/data';
 
-export const getUsers = async (): Promise<User[]> => {
-  if (!isSupabaseEnabled()) return mockUsers;
+type ApprovalAction = 'APPROVE' | 'REJECT' | 'REVISE';
 
-  const { data, error } = await supabase
-    .from('users')
-    .select('*');
-
-  if (error) {
-    console.error('Error fetching users:', error);
-    return mockUsers;
-  }
-
-  return data.map(transformUserFromDB) || [];
-};
-
-export const getUserById = async (id: string): Promise<User | null> => {
-  if (!isSupabaseEnabled()) {
-    return mockUsers.find(u => u.id === id) || null;
-  }
-
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) return null;
-  return data ? transformUserFromDB(data) : null;
-};
-
-// ============================================
-// EMPLOYEES
-// ============================================
-
-export const getEmployees = async (): Promise<Employee[]> => {
-  if (!isSupabaseEnabled()) return mockEmployees;
-
-  const { data, error } = await supabase
-    .from('employees')
-    .select('*');
-
-  if (error) {
-    console.error('Error fetching employees:', error);
-    return mockEmployees;
-  }
-
-  return data.map(transformEmployeeFromDB) || [];
-};
-
-export const getEmployeeById = async (id: string): Promise<Employee | null> => {
-  if (!isSupabaseEnabled()) {
-    return mockEmployees.find(e => e.id === id) || null;
-  }
-
-  const { data, error } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) return null;
-  return data ? transformEmployeeFromDB(data) : null;
-};
-
-// ============================================
-// TRFS
-// ============================================
-
-export const getTRFs = async (): Promise<TRF[]> => {
-  if (!isSupabaseEnabled()) return mockTRFs;
-
-  const { data, error } = await supabase
-    .from('trfs')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching TRFs:', error);
-    return mockTRFs;
-  }
-
-  // Fetch employees for relation
-  const employees = await getEmployees();
-  
-  return (data || []).map(trf => transformTRFFromDB(trf, employees));
-};
-
-export const getTRFById = async (id: string): Promise<TRF | null> => {
-  if (!isSupabaseEnabled()) {
-    return mockTRFs.find(t => t.id === id) || null;
-  }
-
-  const { data, error } = await supabase
-    .from('trfs')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) return null;
-
-  const employees = await getEmployees();
-  return data ? transformTRFFromDB(data, employees) : null;
-};
-
-export const createTRF = async (trf: Omit<TRF, 'id' | 'trfNumber' | 'createdAt' | 'updatedAt' | 'status'>): Promise<TRF | null> => {
-  if (!isSupabaseEnabled()) {
-    // Mock mode - use local store
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from('trfs')
-    .insert([{
-      employee_id: trf.employeeId,
-      department: trf.department,
-      travel_purpose: trf.travelPurpose,
-      start_date: trf.startDate,
-      end_date: trf.endDate,
-      purpose_remarks: trf.purposeRemarks,
-      status: 'DRAFT',
-      accommodation: trf.accommodation,
-      travel_arrangements: trf.travelArrangements
-    }])
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating TRF:', error);
-    return null;
-  }
-
-  const employees = await getEmployees();
-  return data ? transformTRFFromDB(data, employees) : null;
-};
-
-export const updateTRFStatus = async (
-  id: string, 
-  status: TRFStatus, 
-  updates: Partial<TRF>
+export const processTRFApproval = async (
+  trfId: string,
+  role: UserRole,
+  userId: string,
+  userName: string,
+  action: ApprovalAction,
+  remarks: string
 ): Promise<boolean> => {
-  if (!isSupabaseEnabled()) return false;
 
-  const dbUpdates: any = { status };
-  
-  if (updates.adminDeptVerify) dbUpdates.admin_dept_verify = updates.adminDeptVerify;
-  if (updates.parallelApproval) dbUpdates.parallel_approval = updates.parallelApproval;
-  if (updates.pmApproval) dbUpdates.pm_approval = updates.pmApproval;
-  if (updates.gaProcess) dbUpdates.ga_process = updates.gaProcess;
-  if (updates.submittedAt) dbUpdates.submitted_at = updates.submittedAt;
+  requireRemarks(remarks);
 
-  const { error } = await supabase
-    .from('trfs')
-    .update(dbUpdates)
-    .eq('id', id);
+const { data: trf, error } = await supabase
+  .from("trfs")
+  .select("status")
+  .eq("id", trfId)
+  .single();
 
-  if (error) {
-    console.error('Error updating TRF:', error);
-    return false;
+if (error) throw error;
+if (!trf) throw new Error("TRF tidak ditemukan");
+
+let expectedStatus: TRFStatus;
+let nextStatus: TRFStatus = "REJECTED";
+
+switch (role) {
+  case "HOD":
+    expectedStatus = "ADMIN_DEPT_VERIFIED";
+    nextStatus =
+      action === "APPROVE" ? "HOD_APPROVED"
+      : action === "REVISE" ? "NEEDS_REVISION"
+      : "REJECTED";
+    break;
+
+    case "HR":
+      expectedStatus = "HOD_APPROVED";
+      nextStatus =
+        action === "APPROVE" ? "HR_APPROVED"
+        : action === "REVISE" ? "NEEDS_REVISION"
+        : "REJECTED";
+      break;
+
+    case "PM":
+      expectedStatus = "HR_APPROVED";
+      nextStatus =
+        action === "APPROVE" ? "PM_APPROVED"
+        : "REJECTED";
+      break;
+
+    default:
+      throw new Error("Role tidak memiliki approval permission");
   }
+
+  requireStatus(trf.status, expectedStatus);
+
+  await supabase
+    .from("trfs")
+    .update({
+      status: nextStatus,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", trfId);
+
+  await addStatusHistory({
+    trfId,
+    changedBy: userId,
+    changedByName: userName,
+    oldStatus: trf.status,
+    newStatus: nextStatus,
+    remarks
+  });
 
   return true;
 };
+/* =====================================================
+   HELPERS
+===================================================== */
 
-// ============================================
-// STATUS HISTORY
-// ============================================
+const requireRemarks = (remarks?: string) => {
+  if (!remarks || remarks.trim().length === 0) {
+    throw new Error("Remarks wajib diisi");
+  }
+};
 
-export const addStatusHistory = async (entry: Omit<StatusHistory, 'id' | 'changedAt'>): Promise<void> => {
+const requireStatus = (current: string, expected: string) => {
+  if (current !== expected) {
+    throw new Error(`Invalid workflow state. Expected ${expected}`);
+  }
+};
+
+/* =====================================================
+   CREATE TRF
+===================================================== */
+
+export const createTRF = async (
+  input: CreateTRFInput
+): Promise<TRF | null> => {
+
+  if (!isSupabaseEnabled()) return null;
+
+  try {
+
+    const now = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('trfs')
+      .insert({
+        // ⚠️ JANGAN KIRIM ID
+        employee_id: input.employeeId,
+        department: input.department,
+        travel_purpose: input.travelPurpose,
+        start_date: input.startDate,
+        end_date: input.endDate,
+        purpose_remarks: input.purposeRemarks ?? null,
+        status: 'DRAFT',
+        accommodation: input.accommodation ?? null,
+        travel_arrangements: input.travelArrangements ?? [],
+        created_at: now,
+        updated_at: now
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await addStatusHistory({
+      trfId: data.id,
+      changedBy: input.employeeId,
+      changedByName: "System",
+      newStatus: "DRAFT",
+      remarks: "TRF created"
+    });
+
+    const employees = await getEmployees();
+    return transformTRFFromDB(data, employees);
+
+  } catch (err) {
+    console.error("CREATE TRF ERROR:", err);
+    return null;
+  }
+};
+
+/* =====================================================
+   SUBMIT
+===================================================== */
+
+export const submitTRF = async (
+  id: string,
+  employeeId: string,
+  employeeName: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+
+  try {
+
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('trfs')
+      .update({
+        status: 'SUBMITTED',
+        submitted_at: now,
+        updated_at: now
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: employeeId,
+      changedByName: employeeName,
+      oldStatus: "DRAFT",
+      newStatus: "SUBMITTED",
+      remarks: "TRF submitted"
+    });
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+};
+
+/* =====================================================
+   APPROVAL WORKFLOW (SEQUENTIAL)
+===================================================== */
+
+export const verifyTRF = async (
+  id: string,
+  verifierId: string,
+  verifierName: string,
+  verified: boolean,
+  remarks: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+  requireRemarks(remarks);
+
+  try {
+    const { data: trf } = await supabase
+      .from("trfs")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!trf) throw new Error("TRF tidak ditemukan");
+
+    requireStatus(trf.status, "SUBMITTED");
+
+    const newStatus = verified
+      ? "ADMIN_DEPT_VERIFIED"
+      : "NEEDS_REVISION";
+
+    await supabase.from("trfs")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: verifierId,
+      changedByName: verifierName,
+      oldStatus: "SUBMITTED",
+      newStatus,
+      remarks
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+export const hodApproveTRF = async (
+  id: string,
+  hodId: string,
+  hodName: string,
+  approved: boolean,
+  remarks: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+  requireRemarks(remarks);
+
+  try {
+    const { data: trf } = await supabase
+      .from("trfs")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!trf) throw new Error("TRF tidak ditemukan");
+
+    requireStatus(trf.status, "ADMIN_DEPT_VERIFIED");
+
+    const newStatus = approved ? "HOD_APPROVED" : "REJECTED";
+
+    await supabase.from("trfs")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: hodId,
+      changedByName: hodName,
+      oldStatus: "ADMIN_DEPT_VERIFIED",
+      newStatus,
+      remarks
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+export const hrApproveTRF = async (
+  id: string,
+  hrId: string,
+  hrName: string,
+  approved: boolean,
+  remarks: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+  requireRemarks(remarks);
+
+  try {
+    const { data: trf } = await supabase
+      .from("trfs")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!trf) throw new Error("TRF tidak ditemukan");
+
+    requireStatus(trf.status, "HOD_APPROVED");
+
+    const newStatus = approved ? "HR_APPROVED" : "NEEDS_REVISION";
+
+    await supabase.from("trfs")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: hrId,
+      changedByName: hrName,
+      oldStatus: "HOD_APPROVED",
+      newStatus,
+      remarks
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+export const pmApproveTRF = async (
+  id: string,
+  pmId: string,
+  pmName: string,
+  approved: boolean,
+  remarks: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+  requireRemarks(remarks);
+
+  try {
+    const { data: trf } = await supabase
+      .from("trfs")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!trf) throw new Error("TRF tidak ditemukan");
+
+    requireStatus(trf.status, "HR_APPROVED");
+
+    const newStatus = approved ? "PM_APPROVED" : "REJECTED";
+
+    await supabase.from("trfs")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: pmId,
+      changedByName: pmName,
+      oldStatus: "HR_APPROVED",
+      newStatus,
+      remarks
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+export const gaProcessTRF = async (
+  id: string,
+  gaId: string,
+  gaName: string,
+  remarks: string
+): Promise<boolean> => {
+
+  if (!isSupabaseEnabled()) return false;
+  requireRemarks(remarks);
+
+  try {
+    const { data: trf } = await supabase
+      .from("trfs")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (!trf) throw new Error("TRF tidak ditemukan");
+
+    requireStatus(trf.status, "PM_APPROVED");
+
+    await supabase.from("trfs")
+      .update({
+        status: "GA_PROCESSED",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id);
+
+    await addStatusHistory({
+      trfId: id,
+      changedBy: gaId,
+      changedByName: gaName,
+      oldStatus: "PM_APPROVED",
+      newStatus: "GA_PROCESSED",
+      remarks
+    });
+
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+/* =====================================================
+   STATUS HISTORY
+===================================================== */
+
+export const addStatusHistory = async (
+  entry: Omit<StatusHistory, 'id' | 'changedAt'>
+): Promise<void> => {
+
   if (!isSupabaseEnabled()) return;
 
-  const { error } = await supabase
-    .from('status_history')
+  await supabase
+    .from("status_history")
     .insert([{
       trf_id: entry.trfId,
       changed_by: entry.changedBy,
       changed_by_name: entry.changedByName,
-      old_status: entry.oldStatus,
+      old_status: entry.oldStatus || null,
       new_status: entry.newStatus,
-      remarks: entry.remarks
+
+      // ✅ FIX PALING PENTING
+      remarks: entry.remarks ?? "System update"
     }]);
+};
+
+
+/* =====================================================
+   FETCHERS + TRANSFORMERS
+===================================================== */
+
+export const getEmployees = async (): Promise<Employee[]> => {
+  if (!isSupabaseEnabled()) return mockEmployees;
+
+  const { data } = await supabase.from("employees").select("*");
+  return (data || []).map(transformEmployeeFromDB);
+};
+
+export const getTRFs = async (): Promise<TRF[]> => {
+  if (!isSupabaseEnabled()) return mockTRFs;
+
+  const { data } = await supabase
+    .from("trfs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const employees = await getEmployees();
+  return (data || []).map(t => transformTRFFromDB(t, employees));
+};
+export const getUsers = async (): Promise<User[]> => {
+  if (!isSupabaseEnabled()) return mockUsers;
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("*");
 
   if (error) {
-    console.error('Error adding status history:', error);
+    console.error("Error fetching users:", error);
+    return mockUsers;
   }
+
+  return (data || []).map((dbUser: any) => ({
+    id: dbUser.id,
+    username: dbUser.username,
+    email: dbUser.email,
+    role: dbUser.role as UserRole,
+    employeeId: dbUser.employee_id,
+    department: dbUser.department
+  }));
 };
+/* =====================================================
+   TRANSFORMERS
+===================================================== */
 
-// ============================================
-// TRANSFORMERS (DB → App Types)
-// ============================================
-
-const transformUserFromDB = (dbUser: any): User => ({
-  id: dbUser.id,
-  username: dbUser.username,
-  email: dbUser.email,
-  role: dbUser.role,
-  employeeId: dbUser.employee_id,
-  department: dbUser.department
+const transformEmployeeFromDB = (db: any): Employee => ({
+  id: db.id,
+  userId: db.user_id || null,
+  employeeType: db.employee_type,
+  employeeName: db.employee_name,
+  jobTitle: db.job_title,
+  department: db.department,
+  section: db.section,
+  email: db.email,
+  phone: db.phone,
+  dateOfHire: db.date_of_hire,
+  pointOfHire: db.point_of_hire
 });
 
-const transformEmployeeFromDB = (dbEmp: any): Employee => ({
-  id: dbEmp.id,
-  userId: dbEmp.user_id,
-  employeeType: dbEmp.employee_type,
-  employeeName: dbEmp.employee_name,
-  jobTitle: dbEmp.job_title,
-  department: dbEmp.department,
-  section: dbEmp.section,
-  email: dbEmp.email,
-  phone: dbEmp.phone,
-  dateOfHire: dbEmp.date_of_hire,
-  pointOfHire: dbEmp.point_of_hire
-});
-
-const transformTRFFromDB = (dbTRF: any, employees: Employee[]): TRF => {
-  const employee = employees.find(e => e.id === dbTRF.employee_id);
+const transformTRFFromDB = (db: any, employees: Employee[]): TRF => ({
+  id: db.id,
+  trfNumber: db.trf_number,
+  employeeId: db.employee_id,
   
-  return {
-    id: dbTRF.id,
-    trfNumber: dbTRF.trf_number,
-    employeeId: dbTRF.employee_id,
-    employee,
-    department: dbTRF.department,
-    travelPurpose: dbTRF.travel_purpose,
-    startDate: dbTRF.start_date,
-    endDate: dbTRF.end_date,
-    purposeRemarks: dbTRF.purpose_remarks,
-    status: dbTRF.status as TRFStatus,
-    accommodation: dbTRF.accommodation,
-    travelArrangements: dbTRF.travel_arrangements || [],
-    adminDeptVerify: dbTRF.admin_dept_verify,
-    parallelApproval: dbTRF.parallel_approval,
-    pmApproval: dbTRF.pm_approval,
-    gaProcess: dbTRF.ga_process,
-    submittedAt: dbTRF.submitted_at,
-    createdAt: dbTRF.created_at,
-    updatedAt: dbTRF.updated_at
-  };
-};
+  // ✅ REVISI: Fallback object jika data employee belum ter-load atau tidak ditemukan
+  employee: employees.find(e => e.id === db.employee_id) ?? {
+    id: db.employee_id,
+    employeeName: 'Unknown Employee',
+    employeeType: 'EMPLOYEE'
+  },
+  
+  department: db.department,
+  travelPurpose: db.travel_purpose,
+  startDate: db.start_date,
+  endDate: db.end_date,
+  purposeRemarks: db.purpose_remarks,
+  status: db.status,
+  accommodation: db.accommodation,
+  travelArrangements: db.travel_arrangements || [],
+  adminDeptVerify: db.admin_dept_verify,
+  pmApproval: db.pm_approval,
+  gaProcess: db.ga_process,
+  submittedAt: db.submitted_at,
+  createdAt: db.created_at,
+  updatedAt: db.updated_at
+});

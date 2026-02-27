@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,12 +31,19 @@ import { cn } from '@/lib/utils';
 const VerifyPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { getTRFsForVerification, verifyTRF } = useTRFStore();
+  
+  // ✅ REVISI: Tambahkan fetchTRFs ke sini
+  const { getTRFsForVerification, verifyTRF, fetchTRFs } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [verifyAction, setVerifyAction] = useState<'YES' | 'NO' | null>(null);
   const [remarks, setRemarks] = useState('');
+
+  // ✅ REVISI: Tambahkan AUTO FETCH di sini menggunakan useEffect
+  useEffect(() => {
+    fetchTRFs();
+  }, []); // Array kosong berarti ini hanya berjalan sekali saat halaman dibuka
 
   // Get TRFs for current Admin Dept's department
   const trfsForVerification = currentUser?.department 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TRFDetailView from './components/TRFDetailView';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -6,19 +6,22 @@ import { useTRFStore } from '@/store';
 import { toast } from 'sonner';
 
 const TRFDetailPage: React.FC = () => {
+  
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getTRFById, deleteTRF } = useTRFStore();
-
+  const { getTRFById, deleteTRF, fetchAllData } = useTRFStore();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  useEffect(() => {
+  fetchAllData();
+}, []);
 
-  const trf = id ? getTRFById(id) : undefined;
-
+  const trf = id ? getTRFById(id) : undefined;  
+  
   if (!trf) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">TRF Not Found</h2>
-        <p className="text-gray-500 mt-2">The requested travel request form could not be found.</p>
+        <h2 className="text-xl font-semibold text-gray-900">Loading TRF...</h2>
+        <p className="text-gray-500 mt-2">Fetching latest data....</p>
         <button
           onClick={() => navigate('/trf')}
           className="mt-4 text-blue-600 hover:text-blue-700"
@@ -42,6 +45,8 @@ const TRFDetailPage: React.FC = () => {
     toast.success('TRF deleted successfully');
     navigate('/trf');
   };
+  
+  
 
   return (
     <div>
