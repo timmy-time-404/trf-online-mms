@@ -29,26 +29,26 @@ export const processTRFApproval = async (
 
   requireRemarks(remarks);
 
-const { data: trf, error } = await supabase
-  .from("trfs")
-  .select("status")
-  .eq("id", trfId)
-  .single();
+  const { data: trf, error } = await supabase
+    .from("trfs")
+    .select("status")
+    .eq("id", trfId)
+    .single();
 
-if (error) throw error;
-if (!trf) throw new Error("TRF tidak ditemukan");
+  if (error) throw error;
+  if (!trf) throw new Error("TRF tidak ditemukan");
 
-let expectedStatus: TRFStatus;
-let nextStatus: TRFStatus = "REJECTED";
+  let expectedStatus: TRFStatus;
+  let nextStatus: TRFStatus = "REJECTED";
 
-switch (role) {
-  case "HOD":
-    expectedStatus = "ADMIN_DEPT_VERIFIED";
-    nextStatus =
-      action === "APPROVE" ? "HOD_APPROVED"
-      : action === "REVISE" ? "NEEDS_REVISION"
-      : "REJECTED";
-    break;
+  switch (role) {
+    case "HOD":
+      expectedStatus = "ADMIN_DEPT_VERIFIED";
+      nextStatus =
+        action === "APPROVE" ? "HOD_APPROVED"
+        : action === "REVISE" ? "NEEDS_REVISION"
+        : "REJECTED";
+      break;
 
     case "HR":
       expectedStatus = "HOD_APPROVED";
@@ -90,6 +90,7 @@ switch (role) {
 
   return true;
 };
+
 /* =====================================================
    HELPERS
 ===================================================== */
@@ -117,13 +118,11 @@ export const createTRF = async (
   if (!isSupabaseEnabled()) return null;
 
   try {
-
     const now = new Date().toISOString();
 
     const { data, error } = await supabase
       .from('trfs')
       .insert({
-        // ⚠️ JANGAN KIRIM ID
         employee_id: input.employeeId,
         department: input.department,
         travel_purpose: input.travelPurpose,
@@ -171,7 +170,6 @@ export const submitTRF = async (
   if (!isSupabaseEnabled()) return false;
 
   try {
-
     const now = new Date().toISOString();
 
     const { error } = await supabase
@@ -400,16 +398,16 @@ export const gaProcessTRF = async (
   id: string,
   gaId: string,
   gaName: string,
+  voucherDetails: any, 
   remarks: string
 ): Promise<boolean> => {
 
   if (!isSupabaseEnabled()) return false;
-  requireRemarks(remarks);
 
   try {
     const { data: trf } = await supabase
       .from("trfs")
-      .select("status")
+      .select("*, gaDocuments") 
       .eq("id", id)
       .single();
 
@@ -417,12 +415,24 @@ export const gaProcessTRF = async (
 
     requireStatus(trf.status, "PM_APPROVED");
 
-    await supabase.from("trfs")
+    const gaProcessData = {
+      processed: true,
+      processedAt: new Date().toISOString(),
+      processorId: gaId,
+      processorName: gaName,
+      voucherDetails: voucherDetails,
+      remarksToEmployee: remarks || ""
+    };
+
+    const { error: updateError } = await supabase.from("trfs")
       .update({
         status: "GA_PROCESSED",
+        ga_process: gaProcessData, 
         updated_at: new Date().toISOString()
       })
       .eq("id", id);
+
+    if (updateError) throw updateError;
 
     await addStatusHistory({
       trfId: id,
@@ -430,14 +440,39 @@ export const gaProcessTRF = async (
       changedByName: gaName,
       oldStatus: "PM_APPROVED",
       newStatus: "GA_PROCESSED",
-      remarks
+      remarks: remarks || "TRF Processed by GA"
     });
 
     return true;
   } catch (e) {
-    console.error(e);
-    return false;
+    console.error("GA Process Error:", e);
+    throw e;
   }
+};
+
+/* =====================================================
+   HR LUMPSUM (TAMBAHAN DARI MAHA RAJA)
+===================================================== */
+
+export const saveHRLumpsum = async (
+  trfId: string,
+  amount: number,
+  note: string,
+  hrUserId: string
+) => {
+  if (!isSupabaseEnabled()) return;
+
+  const { error } = await supabase
+    .from("trfs")
+    .update({
+      lumpsum_amount: amount,
+      lumpsum_note: note,
+      lumpsum_input_by: hrUserId,
+      lumpsum_input_at: new Date().toISOString()
+    })
+    .eq("id", trfId);
+
+  if (error) throw error;
 };
 
 /* =====================================================
@@ -458,12 +493,9 @@ export const addStatusHistory = async (
       changed_by_name: entry.changedByName,
       old_status: entry.oldStatus || null,
       new_status: entry.newStatus,
-
-      // ✅ FIX PALING PENTING
       remarks: entry.remarks ?? "System update"
     }]);
 };
-
 
 /* =====================================================
    FETCHERS + TRANSFORMERS
@@ -481,12 +513,13 @@ export const getTRFs = async (): Promise<TRF[]> => {
 
   const { data } = await supabase
     .from("trfs")
-    .select("*")
+    .select("*, ga_documents") 
     .order("created_at", { ascending: false });
 
   const employees = await getEmployees();
   return (data || []).map(t => transformTRFFromDB(t, employees));
 };
+
 export const getUsers = async (): Promise<User[]> => {
   if (!isSupabaseEnabled()) return mockUsers;
 
@@ -508,6 +541,7 @@ export const getUsers = async (): Promise<User[]> => {
     department: dbUser.department
   }));
 };
+
 /* =====================================================
    TRANSFORMERS
 ===================================================== */
@@ -530,14 +564,11 @@ const transformTRFFromDB = (db: any, employees: Employee[]): TRF => ({
   id: db.id,
   trfNumber: db.trf_number,
   employeeId: db.employee_id,
-  
-  // ✅ REVISI: Fallback object jika data employee belum ter-load atau tidak ditemukan
   employee: employees.find(e => e.id === db.employee_id) ?? {
     id: db.employee_id,
     employeeName: 'Unknown Employee',
     employeeType: 'EMPLOYEE'
   },
-  
   department: db.department,
   travelPurpose: db.travel_purpose,
   startDate: db.start_date,
@@ -549,7 +580,48 @@ const transformTRFFromDB = (db: any, employees: Employee[]): TRF => ({
   adminDeptVerify: db.admin_dept_verify,
   pmApproval: db.pm_approval,
   gaProcess: db.ga_process,
+  gaDocuments: db.ga_documents ?? {},
   submittedAt: db.submitted_at,
   createdAt: db.created_at,
   updatedAt: db.updated_at
 });
+
+/* =====================================================
+   FILE UPLOAD (Legacy / Opsional)
+===================================================== */
+
+export const uploadGAFile = async (
+  trfId: string,
+  file: File
+): Promise<string | null> => {
+  const filePath = `${trfId}/${Date.now()}_${file.name}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("trf-documents")
+    .upload(filePath, file);
+
+  if (uploadError) {
+    console.error(uploadError);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from("trf-documents")
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+};
+
+export const saveGAFileToTRF = async (
+  trfId: string,
+  fileUrl: string,
+  fileName: string
+) => {
+  const { data: trf } = await supabase
+    .from("trfs")
+    .select("*, ga_documents")
+    .eq("id", trfId)
+    .single();
+
+  const existing = trf?.ga_documents || {};
+};

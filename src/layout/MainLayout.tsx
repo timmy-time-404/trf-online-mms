@@ -23,7 +23,8 @@ import {
   Briefcase,
   Crown,
   CheckCircle,
-  Plane
+  Plane,
+  UserPlus // ✅ Import icon tambahan untuk menu User Management
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
@@ -110,6 +111,13 @@ const MainLayout: React.FC = () => {
         label: 'Reports', 
         icon: Briefcase, 
         roles: ['ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'] 
+      },
+      // ✅ TAMBAHAN BARU: User Management - Khusus Super Admin
+      { 
+        path: '/admin/users', 
+        label: 'User Management', 
+        icon: UserPlus, 
+        roles: ['SUPER_ADMIN'] 
       },
       // Super Admin
       { 

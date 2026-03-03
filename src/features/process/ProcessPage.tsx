@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,7 +13,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import type { TRF, GAProcess } from '@/types';
+import { gaProcessTRF } from '@/store/supabaseStore'; // gaProcessTRF tetap dipertahankan untuk update status workflow
+import type { TRF } from '@/types';
 import {
   Plane,
   Eye,
@@ -26,65 +26,110 @@ import {
   Hotel,
   Ticket,
   Car,
-  FilePlus,
-  Send
+  Ship,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+// ✅ REVISI: Import supabase untuk upload file langsung
+import { supabase } from '@/lib/supabase';
 
 const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { getTRFsForProcessing, gaProcessTRF } = useTRFStore();
+  const { getTRFsForProcessing, fetchAllData } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   
-  // Voucher form state
-  const [hotelVoucher, setHotelVoucher] = useState('');
-  const [flightTicket, setFlightTicket] = useState('');
-  const [transportation, setTransportation] = useState('');
-  const [otherDetails, setOtherDetails] = useState('');
+  // ✅ REVISI: State baru sesuai instruksi Maha Raja
+  const [documents, setDocuments] = useState<Record<string, {name: string, url: string}>>({});
+  const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
-  const [files, setFiles] = useState<string[]>([]);
 
   const trfsForProcessing = getTRFsForProcessing();
 
   const handleProcessClick = (trf: TRF) => {
     setSelectedTRF(trf);
-    // Reset form
-    setHotelVoucher('');
-    setFlightTicket('');
-    setTransportation('');
-    setOtherDetails('');
+    setDocuments((trf as any).gaDocuments || {});
+    setGroundInfo((trf as any).gaDocuments?.groundInfo || '');
     setRemarksToEmployee('');
-    setFiles([]);
     setProcessDialogOpen(true);
   };
 
-  const confirmProcess = () => {
-    if (!selectedTRF || !currentUser) return;
+  // ✅ REVISI: Fungsi Upload Handler
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedTRF) return;
 
-    const voucherDetails: GAProcess['voucherDetails'] = {
-      hotelVoucher: hotelVoucher || undefined,
-      flightTicket: flightTicket || undefined,
-      transportation: transportation || undefined,
-      other: otherDetails || undefined
-    };
+    setIsUploading(true);
+    toast.info(`Uploading ${type}...`);
 
     try {
-      gaProcessTRF(
+      const path = `${selectedTRF.id}/${type}-${Date.now()}-${file.name}`;
+
+      const { error } = await supabase.storage
+        .from("trf-documents")
+        .upload(path, file);
+
+      if (error) throw error;
+
+      const { data } = supabase.storage
+        .from("trf-documents")
+        .getPublicUrl(path);
+
+      setDocuments(prev => ({
+        ...prev,
+        [type]: {
+          name: file.name,
+          url: data.publicUrl
+        }
+      }));
+      
+      toast.success(`${type} uploaded successfully!`);
+    } catch (err) {
+      console.error(err);
+      toast.error(`Failed to upload ${type}`);
+    } finally {
+      setIsUploading(false);
+      // Reset input agar bisa upload file yang sama jika salah
+      e.target.value = '';
+    }
+  };
+
+  const confirmProcess = async () => {
+    if (!selectedTRF || !currentUser) return;
+
+    try {
+      // ✅ REVISI: Save dokumen ke kolom ga_documents di tabel trfs
+      const { error } = await supabase
+        .from("trfs")
+        .update({
+          gaDocuments: {
+            ...documents,
+            groundInfo
+          }
+        })
+        .eq("id", selectedTRF.id);
+
+      if (error) throw error;
+
+      // Tetap jalankan fungsi ini untuk mengubah status TRF menjadi GA_PROCESSED & catat history
+      await gaProcessTRF(
         selectedTRF.id,
         currentUser.id,
         currentUser.username,
-        voucherDetails,
-        remarksToEmployee,
-        files.length > 0 ? files : undefined
+        {}, // voucher lama dikosongkan karena sudah pindah ke ga_documents
+        remarksToEmployee
       );
 
+      await fetchAllData();
       toast.success(`TRF ${selectedTRF.trfNumber} processed successfully`);
       setProcessDialogOpen(false);
       setSelectedTRF(null);
     } catch (error) {
+      console.error(error);
       toast.error('Failed to process TRF');
     }
   };
@@ -98,23 +143,14 @@ const ProcessPage: React.FC = () => {
     });
   };
 
-  const addMockFile = () => {
-    const fileNames = ['ticket.pdf', 'voucher.pdf', 'itinerary.pdf', 'receipt.pdf'];
-    const randomFile = fileNames[Math.floor(Math.random() * fileNames.length)];
-    setFiles([...files, randomFile]);
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header & Stats & TRF List Render (Bagian ini sama seperti aslinya) */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Process TRFs</h1>
-        <p className="text-gray-500 mt-1">
-          Issue vouchers and tickets for approved travel requests
-        </p>
+        <p className="text-gray-500 mt-1">Issue vouchers and tickets for approved travel requests</p>
       </div>
 
-      {/* Stats */}
       <div className="flex gap-4">
         <Card className="flex-1 bg-green-50 border-green-200">
           <CardContent className="p-4 flex items-center gap-4">
@@ -129,7 +165,6 @@ const ProcessPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* TRF List */}
       {trfsForProcessing.length === 0 ? (
         <Card className="border shadow-sm">
           <CardContent className="p-12 text-center">
@@ -179,48 +214,14 @@ const ProcessPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-
-                    {/* Show accommodation info */}
-                    {trf.accommodation && (
-                      <div className="p-3 bg-blue-50 rounded-lg mb-3">
-                        <p className="text-xs text-blue-700 font-medium flex items-center gap-1">
-                          <Hotel className="w-3 h-3" />
-                          Accommodation: {trf.accommodation.hotelName}
-                        </p>
-                        <p className="text-xs text-blue-600">
-                          {formatDate(trf.accommodation.checkInDate)} - {formatDate(trf.accommodation.checkOutDate)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Show travel arrangements */}
-                    {trf.travelArrangements.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {trf.travelArrangements.map((arr, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
-                            {arr.travelType}: {arr.fromLocation} → {arr.toLocation}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/trf/${trf.id}`)}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      View
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/trf/${trf.id}`)}>
+                      <Eye className="w-4 h-4 mr-1" /> View
                     </Button>
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => handleProcessClick(trf)}
-                    >
-                      <Plane className="w-4 h-4 mr-1" />
-                      Process
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleProcessClick(trf)}>
+                      <Plane className="w-4 h-4 mr-1" /> Process
                     </Button>
                   </div>
                 </div>
@@ -239,90 +240,70 @@ const ProcessPage: React.FC = () => {
               Process TRF {selectedTRF?.trfNumber}
             </DialogTitle>
             <DialogDescription>
-              Issue vouchers and tickets for this travel request
+              Upload documents and vouchers for this travel request
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Hotel Voucher */}
+            
+            {/* ✅ REVISI: Hotel Voucher File Input */}
             <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Hotel className="w-4 h-4 text-blue-600" />
-                Hotel Voucher Details
+              <label className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2"><Hotel className="w-4 h-4 text-blue-600" /> Hotel Voucher</span>
+                {documents.hotelVoucher && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
               </label>
-              <Textarea
-                placeholder="e.g., Voucher #12345, Grand Mining Hotel, 2 nights, Single room"
-                value={hotelVoucher}
-                onChange={(e) => setHotelVoucher(e.target.value)}
-                rows={2}
-                className="resize-none text-sm"
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => handleUpload(e, "hotelVoucher")}
+                disabled={isUploading}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border rounded-md p-1"
               />
             </div>
 
-            {/* Flight Ticket */}
+            {/* ✅ REVISI: Flight Ticket File Input */}
             <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-green-600" />
-                Flight Ticket Details
+              <label className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2"><Ticket className="w-4 h-4 text-green-600" /> Flight Ticket</span>
+                {documents.flightTicket && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
               </label>
-              <Textarea
-                placeholder="e.g., GA-123 Jakarta-Site A, 10 Mar 2024 08:00, Seat 12A"
-                value={flightTicket}
-                onChange={(e) => setFlightTicket(e.target.value)}
-                rows={2}
-                className="resize-none text-sm"
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => handleUpload(e, "flightTicket")}
+                disabled={isUploading}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer border rounded-md p-1"
               />
             </div>
 
-            {/* Transportation */}
+            {/* ✅ REVISI: Ship Ticket File Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center justify-between">
+                <span className="flex items-center gap-2"><Ship className="w-4 h-4 text-cyan-600" /> Ship Ticket</span>
+                {documents.shipTicket && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
+              </label>
+              <input
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => handleUpload(e, "shipTicket")}
+                disabled={isUploading}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer border rounded-md p-1"
+              />
+            </div>
+
+            {/* ✅ REVISI: Ground Info Textarea */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2">
                 <Car className="w-4 h-4 text-orange-600" />
-                Ground Transportation
+                Ground Transportation Details
               </label>
-              <Input
-                placeholder="e.g., Airport pickup arranged, Car rental #67890"
-                value={transportation}
-                onChange={(e) => setTransportation(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-
-            {/* Other Details */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Other Details</label>
               <Textarea
-                placeholder="Any other arrangements or notes..."
-                value={otherDetails}
-                onChange={(e) => setOtherDetails(e.target.value)}
+                placeholder="e.g., Driver Budi will pickup at 08:00 AM"
+                value={groundInfo}
+                onChange={(e) => setGroundInfo(e.target.value)}
                 rows={2}
                 className="resize-none text-sm"
               />
-            </div>
-
-            {/* Files */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <FilePlus className="w-4 h-4 text-purple-600" />
-                Attachments (Mock)
-              </label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {files.map((file, idx) => (
-                  <Badge key={idx} variant="secondary" className="text-xs">
-                    {file}
-                  </Badge>
-                ))}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addMockFile}
-                className="text-xs"
-              >
-                <FilePlus className="w-3 h-3 mr-1" />
-                Add Mock File
-              </Button>
             </div>
 
             {/* Remarks to Employee */}
@@ -335,25 +316,18 @@ const ProcessPage: React.FC = () => {
                 placeholder="Instructions for the employee regarding ticket collection, check-in, etc."
                 value={remarksToEmployee}
                 onChange={(e) => setRemarksToEmployee(e.target.value)}
-                rows={3}
+                rows={2}
                 className="resize-none text-sm"
               />
             </div>
           </div>
 
           <DialogFooter className="gap-3 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setProcessDialogOpen(false)}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => setProcessDialogOpen(false)} className="flex-1" disabled={isUploading}>
               Cancel
             </Button>
-            <Button
-              onClick={confirmProcess}
-              className="flex-1 bg-green-600 hover:bg-green-700"
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
+            <Button onClick={confirmProcess} className="flex-1 bg-green-600 hover:bg-green-700" disabled={isUploading}>
+              {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
               Complete Processing
             </Button>
           </DialogFooter>

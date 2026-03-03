@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input'; // ✅ TAMBAHKAN IMPORT INPUT
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -14,6 +15,8 @@ import {
 } from '@/components/ui/dialog';
 
 import { useTRFStore, useAuthStore } from '@/store';
+// ✅ IMPORT FUNGSI LUMPSUM DARI SUPABASE STORE
+import { saveHRLumpsum } from '@/store/supabaseStore'; 
 import type { TRF, UserRole } from '@/types';
 
 import {
@@ -21,12 +24,11 @@ import {
   CheckCircle,
   XCircle,
   RotateCcw,
-  FileText
+  FileText,
+  Banknote
 } from 'lucide-react';
 
 import { toast } from 'sonner';
-// ❌ REVISI: Kita hapus getApprovalPermission karena tidak dibutuhkan lagi
-// import { getApprovalPermission } from '@/lib/approvalEngine';
 
 const ApprovalPage: React.FC = () => {
 
@@ -36,14 +38,16 @@ const ApprovalPage: React.FC = () => {
   const {
     getTRFsForApproval,
     fetchTRFs,
-    pmApproveTRF, 
-    approveTRF,   
-    rejectTRF     
+    handleApproval 
   } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [action, setAction] = useState<'REVISE' | null>(null);
+  const [action, setAction] = useState<'APPROVE' | 'REVISE' | null>(null);
+  
+  // ✅ STATE UNTUK LUMPSUM
+  const [lumpsum, setLumpsum] = useState<number | ''>('');
+  const [lumpsumNote, setLumpsumNote] = useState("");
 
   const userRole = currentUser?.role as UserRole;
 
@@ -61,24 +65,48 @@ const ApprovalPage: React.FC = () => {
     : [];
 
   /* =========================================================
-     ACTION HANDLER (Hanya untuk Revise sekarang)
+     ACTION HANDLERS
   ========================================================= */
 
-  const openDialog = (trf: TRF) => {
+  const openDialog = (trf: TRF, act: 'APPROVE' | 'REVISE') => {
     setSelectedTRF(trf);
-    setAction('REVISE');
+    setAction(act);
     setRemarks('');
+    setLumpsum('');
+    setLumpsumNote('');
   };
 
-  const executeReviseAction = () => {
-    if (!selectedTRF || !currentUser || action !== 'REVISE') return;
+  const executeAction = async () => {
+    if (!selectedTRF || !currentUser || !action) return;
 
-    if (!remarks.trim()) {
+    if (action === 'REVISE' && !remarks.trim()) {
       toast.error('Remarks wajib diisi untuk revisi');
       return;
     }
 
-    toast.info(`Fitur revisi sedang dikembangkan untuk TRF ${selectedTRF.trfNumber}`);
+    // ✅ JIKA ACTION APPROVE DAN ROLE ADALAH HR -> SIMPAN LUMPSUM DULU
+    if (action === 'APPROVE' && userRole === 'HR') {
+      try {
+        await saveHRLumpsum(
+          selectedTRF.id,
+          Number(lumpsum) || 0,
+          lumpsumNote,
+          currentUser.id
+        );
+      } catch (error) {
+        toast.error('Gagal menyimpan data Lumpsum.');
+        return;
+      }
+    }
+
+    // Panggil fungsi workflow utama
+    const success = await handleApproval(selectedTRF.id, currentUser, action, remarks);
+    
+    if (success) {
+       toast.success(`TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
+    } else {
+       toast.error(`Gagal memproses TRF ${selectedTRF.trfNumber}.`);
+    }
     
     setSelectedTRF(null);
     setAction(null);
@@ -105,8 +133,6 @@ const ApprovalPage: React.FC = () => {
       )}
 
       {pendingTRFs.map(trf => {
-        // ❌ REVISI: Hapus pengecekan permission yang menghalangi tombol
-        // const permission = getApprovalPermission(trf, userRole);
 
         return (
           <Card key={trf.id}>
@@ -143,29 +169,23 @@ const ApprovalPage: React.FC = () => {
                   View
                 </Button>
 
-                {/* ✅ REVISI: Tampilkan tombol Approve langsung tanpa dibatasi permission */}
+                {/* Tombol Approve */}
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={async () => {
                     if (!currentUser) return;
                     
-                    try {
-                      if (currentUser.role === 'PM') {
-                        await pmApproveTRF(trf.id, currentUser.id, currentUser.username, true, 'Approved by PM');
-                      } else if (currentUser.role === 'HOD' || currentUser.role === 'HR') {
-                        await approveTRF(
-                          trf.id,
-                          currentUser.role,
-                          currentUser.id,
-                          currentUser.username,
-                          `Approved by ${currentUser.role}`
-                        );
+                    // ✅ Jika role HR, buka Modal Lumpsum. Jika bukan, langsung approve.
+                    if (userRole === 'HR') {
+                      openDialog(trf, 'APPROVE');
+                    } else {
+                      const success = await handleApproval(trf.id, currentUser, 'APPROVE');
+                      if (success) {
+                          toast.success(`TRF ${trf.trfNumber} !`);
+                      } else {
+                          toast.error('Gagal melakukan Approve.');
                       }
-                      
-                      toast.success(`TRF ${trf.trfNumber} Approved!`);
-                    } catch {
-                      toast.error('Gagal melakukan Approve');
                     }
                   }}
                 >
@@ -173,7 +193,7 @@ const ApprovalPage: React.FC = () => {
                   Approve
                 </Button>
 
-                {/* ✅ REVISI: Tampilkan tombol Reject langsung */}
+                {/* Tombol Reject */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -181,22 +201,11 @@ const ApprovalPage: React.FC = () => {
                   onClick={async () => {
                     if (!currentUser) return;
                     
-                    try {
-                      if (currentUser.role === 'PM') {
-                        await pmApproveTRF(trf.id, currentUser.id, currentUser.username, false, 'Rejected by PM');
-                      } else if (currentUser.role === 'HOD' || currentUser.role === 'HR') {
-                        await rejectTRF(
-                          trf.id,
-                          currentUser.role,
-                          currentUser.id,
-                          currentUser.username,
-                          `Rejected by ${currentUser.role}`
-                        );
-                      }
-                      
-                      toast.error(`TRF ${trf.trfNumber} Rejected!`);
-                    } catch {
-                      toast.error('Gagal melakukan Reject');
+                    const success = await handleApproval(trf.id, currentUser, 'REJECT');
+                    if (success) {
+                         toast.error(`TRF ${trf.trfNumber} Rejected!`);
+                    } else {
+                         toast.error('Gagal melakukan Reject.');
                     }
                   }}
                 >
@@ -204,11 +213,11 @@ const ApprovalPage: React.FC = () => {
                   Reject
                 </Button>
 
-                {/* ✅ REVISI: Tampilkan tombol Revise langsung */}
+                {/* Tombol Revise */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => openDialog(trf)}
+                  onClick={() => openDialog(trf, 'REVISE')}
                 >
                   <RotateCcw className="w-4 h-4 mr-1"/>
                   Revise
@@ -220,7 +229,7 @@ const ApprovalPage: React.FC = () => {
         );
       })}
 
-      {/* ================= DIALOG HANYA UNTUK REVISE ================= */}
+      {/* ================= DIALOG MULTI-FUNGSI (REVISE & APPROVE HR) ================= */}
 
       <Dialog
         open={!!selectedTRF}
@@ -228,28 +237,67 @@ const ApprovalPage: React.FC = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revise Request</DialogTitle>
+            <DialogTitle>
+              {action === 'REVISE' ? 'Revise Request' : 'HR Approval & Lumpsum'}
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 mt-2">
-            <label className="text-sm font-medium">Alasan Revisi <span className="text-red-500">*</span></label>
-            <Textarea
-              placeholder="Berikan alasan kenapa TRF ini dikembalikan..."
-              value={remarks}
-              onChange={(e)=>setRemarks(e.target.value)}
-              rows={4}
-            />
+          <div className="space-y-4 mt-2">
+            
+            {/* JIKA ACTION === REVISE */}
+            {action === 'REVISE' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Alasan Revisi <span className="text-red-500">*</span></label>
+                <Textarea
+                  placeholder="Berikan alasan kenapa TRF ini dikembalikan..."
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  rows={4}
+                />
+              </div>
+            )}
+
+            {/* JIKA ACTION === APPROVE (HANYA HR YANG BISA MELIHAT INI) */}
+            {action === 'APPROVE' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Banknote className="w-4 h-4 text-green-600" />
+                    Nominal Lumpsum (Rp)
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="Masukkan nominal (contoh: 500000)"
+                    value={lumpsum}
+                    onChange={(e) => setLumpsum(e.target.value ? Number(e.target.value) : '')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Catatan HR (Opsional)</label>
+                  <Textarea
+                    placeholder="Tambahkan catatan terkait lumpsum..."
+                    value={lumpsumNote}
+                    onChange={(e) => setLumpsumNote(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </>
+            )}
+
           </div>
 
           <DialogFooter className="mt-4">
             <Button
               variant="outline"
-              onClick={()=>setSelectedTRF(null)}
+              onClick={() => setSelectedTRF(null)}
             >
               Cancel
             </Button>
-            <Button onClick={executeReviseAction}>
-              Confirm Revise
+            <Button 
+              onClick={executeAction}
+              className={action === 'APPROVE' ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              {action === 'REVISE' ? 'Confirm Revise' : 'Approve & Save Lumpsum'}
             </Button>
           </DialogFooter>
         </DialogContent>

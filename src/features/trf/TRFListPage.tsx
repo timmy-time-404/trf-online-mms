@@ -143,7 +143,7 @@ const TRFListPage: React.FC = () => {
 
       {/* Stats Summary */}
       <div className="flex flex-wrap gap-4">
-        {currentUser?.role !== 'EMPLOYEE' && (
+         {currentUser?.role !== 'EMPLOYEE' && (
           <>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full text-sm">
               <Shield className="w-4 h-4 text-blue-600" />
@@ -175,6 +175,7 @@ const TRFListPage: React.FC = () => {
       <TRFListTable
         trfs={filteredTRFs}
         onDelete={currentUser?.role === 'EMPLOYEE' ? handleDelete : undefined}
+        // ✅ Prop onDownload dihapus karena tidak lagi diperlukan
       />
 
       {/* Delete Confirmation */}

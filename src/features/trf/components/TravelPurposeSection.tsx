@@ -30,7 +30,8 @@ const TravelPurposeSection: React.FC<TravelPurposeSectionProps> = ({
   onChange,
   disabled = false
 }) => {
-  const { referenceData } = useTRFStore();
+  // ✅ Panggil referenceMaster
+  const { referenceMaster } = useTRFStore();
 
   return (
     <Card className="border shadow-sm">
@@ -61,9 +62,10 @@ const TravelPurposeSection: React.FC<TravelPurposeSectionProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="placeholder" disabled>Select travel purpose</SelectItem>
-              {referenceData.purposes.map((p) => (
-                <SelectItem key={p.code} value={p.name}>
-                  {p.name}
+              {/* ✅ Gunakan data dari referenceMaster */}
+              {referenceMaster.purposes.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -107,19 +107,31 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
     </Card>
   );
 
-  // Render approval timeline
+  // ✅ REVISI: Render approval timeline yang lebih akurat
   const renderApprovalTimeline = () => {
+    const statusHierarchy = [
+      'DRAFT',
+      'SUBMITTED', 
+      'ADMIN_DEPT_VERIFIED', 
+      'HOD_APPROVED', 
+      'HR_APPROVED', 
+      'PM_APPROVED', 
+      'GA_PROCESSED'
+    ];
+    
+    const currentIndex = statusHierarchy.indexOf(trf.status);
+
     const steps = [
       { 
         label: 'Submitted', 
         date: trf.submittedAt,
-        done: true,
+        done: currentIndex >= statusHierarchy.indexOf('SUBMITTED'),
         icon: Clock
       },
       { 
         label: 'Admin Dept Verified', 
         date: trf.adminDeptVerify?.verifiedAt,
-        done: !!trf.adminDeptVerify?.verified,
+        done: currentIndex >= statusHierarchy.indexOf('ADMIN_DEPT_VERIFIED'),
         icon: CheckCircle,
         by: trf.adminDeptVerify?.verifierName,
         remarks: trf.adminDeptVerify?.remarks
@@ -127,7 +139,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
       { 
         label: 'HoD Approved', 
         date: trf.parallelApproval?.hod?.actionAt,
-        done: trf.parallelApproval?.hod?.status === 'APPROVED',
+        done: currentIndex >= statusHierarchy.indexOf('HOD_APPROVED'),
         icon: Briefcase,
         by: trf.parallelApproval?.hod?.actionByName,
         remarks: trf.parallelApproval?.hod?.remarks
@@ -135,7 +147,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
       { 
         label: 'HR Approved', 
         date: trf.parallelApproval?.hr?.actionAt,
-        done: trf.parallelApproval?.hr?.status === 'APPROVED',
+        done: currentIndex >= statusHierarchy.indexOf('HR_APPROVED'),
         icon: User,
         by: trf.parallelApproval?.hr?.actionByName,
         remarks: trf.parallelApproval?.hr?.remarks
@@ -143,7 +155,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
       { 
         label: 'PM Approved', 
         date: trf.pmApproval?.approvedAt,
-        done: trf.pmApproval?.approved,
+        done: currentIndex >= statusHierarchy.indexOf('PM_APPROVED'),
         icon: Shield,
         by: trf.pmApproval?.approverName,
         remarks: trf.pmApproval?.remarks
@@ -151,7 +163,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
       { 
         label: 'GA Processed', 
         date: trf.gaProcess?.processedAt,
-        done: trf.gaProcess?.processed,
+        done: currentIndex >= statusHierarchy.indexOf('GA_PROCESSED'),
         icon: Plane,
         by: trf.gaProcess?.processorName
       },
@@ -165,14 +177,14 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
             <div key={index} className="flex gap-4 pb-4 last:pb-0">
               <div className="flex flex-col items-center">
                 <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center",
+                  "w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300",
                   step.done ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"
                 )}>
                   <step.icon className="w-4 h-4" />
                 </div>
                 {index < steps.length - 1 && (
                   <div className={cn(
-                    "w-0.5 flex-1 my-1",
+                    "w-0.5 flex-1 my-1 transition-colors duration-300",
                     step.done ? "bg-green-300" : "bg-gray-200"
                   )} />
                 )}
@@ -187,10 +199,10 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
                 {step.done && step.date && (
                   <p className="text-sm text-gray-500">{formatDateTime(step.date)}</p>
                 )}
-                {step.by && (
+                {step.done && step.by && (
                   <p className="text-sm text-gray-600">by {step.by}</p>
                 )}
-                {step.remarks && (
+                {step.done && step.remarks && (
                   <p className="text-sm text-gray-500 mt-1 italic">"{step.remarks}"</p>
                 )}
               </div>
@@ -200,6 +212,8 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
       </div>
     );
   };
+
+  const filesList = (trf as any).gaFiles || trf.gaProcess?.files || [];
 
   return (
     <div className="space-y-6">
@@ -278,7 +292,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
               <InfoRow icon={Mail} label="Email" value={trf.employee.email} />
               <InfoRow icon={Phone} label="Phone" value={trf.employee.phone} />
               <InfoRow icon={Calendar} label="Date of Hire" value={formatDate(trf.employee.dateOfHire)} />
-              <InfoRow icon={Shield} label="MCU Status" value={trf.employee.mcuStatus} />
+              <InfoRow icon={Shield} label="MCU Status" value={(trf.employee as any).mcuStatus} />
             </div>
           </div>
         )}
@@ -492,19 +506,25 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
               </div>
             )}
 
-            {/* Files */}
-            {trf.gaProcess.files && trf.gaProcess.files.length > 0 && (
-              <div className="space-y-2">
+            {/* 🔥 FILES - REAL DOWNLOAD LINKS 🔥 */}
+            {filesList.length > 0 && (
+              <div className="space-y-2 mt-4 pt-4 border-t border-gray-100">
                 <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
                   <Download className="w-4 h-4" />
-                  Attachments
+                  Attachments (E-Tickets / Vouchers)
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {trf.gaProcess.files.map((file, idx) => (
-                    <Button key={idx} variant="outline" size="sm" className="text-xs">
-                      <FileText className="w-3 h-3 mr-1" />
-                      {file}
-                    </Button>
+                <div className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {filesList.map((f: any, idx: number) => (
+                    <a
+                      key={f.url || idx}
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors bg-white p-2.5 rounded-md border shadow-sm w-fit"
+                    >
+                      <FileText className="w-4 h-4 text-blue-500" />
+                      Download {f.name}
+                    </a>
                   ))}
                 </div>
               </div>

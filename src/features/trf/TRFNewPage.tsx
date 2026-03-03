@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
@@ -10,16 +10,21 @@ import { useTRFStore, useAuthStore } from '@/store';
 import type { TRF, Accommodation, TravelArrangement } from '@/types';
 import { Save, Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+// ✅ Tambahkan import supabase
+import { supabase } from "@/lib/supabase";
 
 const TRFNewPage: React.FC = () => {
-
   const navigate = useNavigate();
+  
+  // ✅ Panggil currentUser dari Zustand Store
   const { currentUser } = useAuthStore();
-  const { createTRF, submitTRF, fetchAllData } = useTRFStore();
+  // ✅ REVISI: Tambahkan employees dari store
+  const { createTRF, submitTRF, fetchAllData, employees } = useTRFStore();
 
+  // ✅ REVISI: Initial state kosong, di-handle oleh useEffect di bawah
   const [formData, setFormData] = useState<Partial<TRF>>({
-    employeeId: currentUser?.employeeId || '',
-    department: currentUser?.department || '',
+    employeeId: '',
+    department: '',
     travelPurpose: '',
     startDate: '',
     endDate: '',
@@ -30,19 +35,34 @@ const TRFNewPage: React.FC = () => {
       checkOutDate: '',
       remarks: ''
     },
-    travelArrangements: []
+    travelArrangements: [],
   });
 
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ✅ REVISI: Mencari data employee berdasarkan userId dan auto-fill form
+  useEffect(() => {
+    if (currentUser?.role === "EMPLOYEE") {
+      const emp = employees.find(e => e.userId === currentUser.id);
+
+      if (emp) {
+        setFormData(prev => ({
+          ...prev,
+          employeeId: emp.id,
+          department: emp.department
+        }));
+      }
+    }
+  }, [currentUser, employees]);
+
   /* ================= HANDLERS ================= */
   const handleEmployeeChange = (employeeId: string) => {
-  setFormData(prev => ({
-    ...prev,
-    employeeId
-  }));
-};
+    setFormData(prev => ({
+      ...prev,
+      employeeId
+    }));
+  };
 
   const handlePurposeChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -62,81 +82,83 @@ const TRFNewPage: React.FC = () => {
     setFormData(prev => ({ ...prev, travelArrangements: arrangements }));
   };
 
+  /* ================= DOWNLOAD FUNCTION ================= */
+  const downloadFile = async (filePath: string) => {
+    const { data, error } = await supabase.storage
+      .from("trf-documents")
+      .createSignedUrl(filePath, 60);
+
+    if (error) {
+      console.error(error);
+      toast.error('Gagal mengunduh dokumen.');
+      return;
+    }
+
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, "_blank");
+    }
+  };
+
   /* ================= VALIDATION ================= */
-
   const validateForm = (): boolean => {
-
-    if (!currentUser?.employeeId) {
-      toast.error('Employee account not linked');
+    if (!formData.employeeId) {
+      toast.error('Akun employee tidak tertaut dengan sistem.');
       return false;
     }
-
     if (!formData.travelPurpose) {
-      toast.error('Please select travel purpose');
+      toast.error('Harap pilih tujuan perjalanan (Travel Purpose).');
       return false;
     }
-
     if (!formData.startDate || !formData.endDate) {
-      toast.error('Please select travel dates');
+      toast.error('Harap pilih tanggal mulai dan selesai perjalanan.');
       return false;
     }
-
     return true;
   };
 
   /* ================= SAVE DRAFT ================= */
-
   const handleSaveDraft = async () => {
-
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-
     try {
       await fetchAllData();
       const newTRF = await createTRF(formData as any);
 
-      if (!newTRF) throw new Error();
+      if (!newTRF) throw new Error("Gagal membuat data");
 
       toast.success('TRF saved as draft');
       navigate(`/trf/${newTRF.id}`);
-
     } catch {
-      toast.error('Failed to save TRF');
+      toast.error('Failed to save TRF draft');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   /* ================= SUBMIT ================= */
-
   const handleSubmit = async () => {
-
     if (!validateForm() || !currentUser) return;
 
     setIsSubmitting(true);
-
     try {
-
       const newTRF = await createTRF(formData as any);
 
-      if (!newTRF) throw new Error();
+      if (!newTRF) throw new Error("Gagal membuat data");
 
+      // Melakukan submit dan mengubah status
       await submitTRF(
-  newTRF.id,
-  currentUser.id,
-  currentUser.username
-);
+        newTRF.id,
+        currentUser.id,
+        currentUser.username
+      );
 
-// ✅ reload data dari Supabase
-await fetchAllData();
-
-toast.success('TRF submitted successfully');
-navigate(`/trf/${newTRF.id}`);
+      // reload data dari Supabase
+      await fetchAllData();
 
       toast.success('TRF submitted successfully');
       navigate(`/trf/${newTRF.id}`);
-
+      
     } catch {
       toast.error('Failed to submit TRF');
     } finally {
@@ -146,10 +168,10 @@ navigate(`/trf/${newTRF.id}`);
   };
 
   /* ================= UI ================= */
+  const gaDocument = (formData as any).ga_document;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-
       <div className="flex items-center justify-between">
         <div>
           <Button
@@ -174,9 +196,9 @@ navigate(`/trf/${newTRF.id}`);
 
       <div className="space-y-6">
         <EmployeeInfoSection
-  selectedEmployeeId={formData.employeeId || ''}
-  onEmployeeChange={handleEmployeeChange}
-/>
+          selectedEmployeeId={formData.employeeId || ''}
+          onEmployeeChange={handleEmployeeChange}
+        />
         <TravelPurposeSection
           purpose={formData.travelPurpose || ''}
           startDate={formData.startDate || ''}
@@ -184,7 +206,6 @@ navigate(`/trf/${newTRF.id}`);
           remarks={formData.purposeRemarks || ''}
           onChange={handlePurposeChange}
         />
-
         <AccommodationSection
           hotelName={formData.accommodation?.hotelName || ''}
           checkInDate={formData.accommodation?.checkInDate || ''}
@@ -192,11 +213,29 @@ navigate(`/trf/${newTRF.id}`);
           remarks={formData.accommodation?.remarks || ''}
           onChange={handleAccommodationChange}
         />
-
         <TravelArrangementSection
           arrangements={formData.travelArrangements || []}
           onChange={handleArrangementsChange}
         />
+
+        { gaDocument && gaDocument.length > 0 && (
+          <div className="mt-6 border rounded-lg p-4 bg-green-50">
+            <h3 className="font-semibold mb-3">
+              🎫 Travel Documents
+            </h3>
+
+            {gaDocument.map((file: any, index: number) => (
+              <button
+                key={index}
+                type="button" 
+                onClick={() => downloadFile(file.path)}
+                className="flex items-center gap-2 text-blue-600 hover:underline mb-2"
+              >
+                📄 Download {file.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
@@ -219,14 +258,13 @@ navigate(`/trf/${newTRF.id}`);
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
         title="Confirm Submission"
-        description="Are you sure you want to submit this TRF?"
+        description="Are you sure you want to submit this TRF for approval?"
         onConfirm={handleSubmit}
         confirmText="Submit"
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}
       />
-
     </div>
   );
 };

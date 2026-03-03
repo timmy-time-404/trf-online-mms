@@ -30,7 +30,8 @@ const AccommodationSection: React.FC<AccommodationSectionProps> = ({
   onChange,
   disabled = false
 }) => {
-  const { referenceData } = useTRFStore();
+  // ✅ Panggil referenceMaster
+  const { referenceMaster } = useTRFStore();
 
   return (
     <Card className="border shadow-sm">
@@ -41,30 +42,28 @@ const AccommodationSection: React.FC<AccommodationSectionProps> = ({
           </div>
           <div>
             <CardTitle className="text-lg">Accommodation</CardTitle>
-            <p className="text-sm text-gray-500">Hotel booking details</p>
+            <p className="text-sm text-gray-500">Booking details</p>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Hotel Selector */}
         <div className="space-y-2">
-          <Label htmlFor="hotel">Select Hotel</Label>
+          <Label htmlFor="hotel">Select</Label>
           <Select
             value={hotelName}
             onValueChange={(value) => onChange('hotelName', value)}
             disabled={disabled}
           >
             <SelectTrigger id="hotel" className="w-full">
-              <SelectValue placeholder="Select a hotel" />
+              <SelectValue placeholder="Select" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="placeholder" disabled>Select a hotel</SelectItem>
-              {referenceData.hotels.map((hotel) => (
-                <SelectItem key={hotel.code} value={hotel.name}>
-                  <div className="flex items-center justify-between w-full">
-                    <span>{hotel.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">({hotel.location})</span>
-                  </div>
+              <SelectItem value="placeholder" disabled>Select</SelectItem>
+              {/* ✅ Gunakan data dari referenceMaster */}
+              {referenceMaster.accommodations.map((hotelNameStr) => (
+                <SelectItem key={hotelNameStr} value={hotelNameStr}>
+                  {hotelNameStr}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -112,7 +111,7 @@ const AccommodationSection: React.FC<AccommodationSectionProps> = ({
             id="accommodationRemarks"
             placeholder="Special requests or additional information..."
             value={remarks}
-            onChange={(e) => onChange('accommodationRemarks', e.target.value)}
+            onChange={(e) => onChange('remarks', e.target.value)}
             disabled={disabled}
             rows={2}
             className="resize-none"

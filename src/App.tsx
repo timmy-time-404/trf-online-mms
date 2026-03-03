@@ -9,12 +9,13 @@ import AuthLayout from '@/layout/AuthLayout';
 
 // Pages
 import LoginPage from '@/features/auth/LoginPage';
+import ChangePasswordPage from '@/features/auth/ChangePasswordPage'; 
 import DashboardPage from '@/features/dashboard/DashboardPage';
 import TRFListPage from '@/features/trf/TRFListPage';
 import TRFNewPage from '@/features/trf/TRFNewPage';
 import TRFDetailPage from '@/features/trf/TRFDetailPage';
 
-// NEW: Role-specific pages
+// Role-specific pages
 import VerifyPage from './features/verify/VerifyPage';           // Admin Dept
 import ApprovalPage from '@/features/approval/ApprovalPage';     // HoD, HR, PM
 import ProcessPage from './features/process/ProcessPage';        // GA
@@ -23,9 +24,7 @@ import SuperAdminPage from './features/super-admin/SuperAdminPage'; // Super Adm
 // Placeholder for management pages
 import EmployeeManagementPage from './features/employees/EmployeeManagementPage'; // HR
 import HotelManagementPage from './features/hotels/HotelManagementPage';       // GA
-
-// import TestPage from './features/test/TestPage';// Temporary test page
-// import TestDebug from './components/TestDebug';
+import UsersPage from '@/features/admin/users/UsersPage';
 
 // Protected Route Component
 interface ProtectedRouteProps {
@@ -61,58 +60,55 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 function App() {
-  // ✅ REVISI: Menggunakan fetchEmployees dan fetchTRFs sesuai arahan teman Anda
-  const { fetchEmployees, fetchTRFs } = useTRFStore();
+  // ✅ Added fetchReferenceMaster
+  const { fetchEmployees, fetchTRFs, fetchReferenceMaster } = useTRFStore();
   const { isAuthenticated, isLoading } = useAuthStore();
 
   // Fetch data from Supabase when authenticated
   useEffect(() => {
-    // Membungkusnya dalam async function agar bisa ditunggu (await) sesuai urutan
     const loadData = async () => {
-      await fetchEmployees(); // ⭐ WAJIB DULU
-      await fetchTRFs();      // Setelah employee selesai, baru tarik TRF
+      await fetchReferenceMaster(); // ⭐ LOAD MASTER DULU
+      await fetchEmployees();
+      await fetchTRFs();      
     };
 
     if (isAuthenticated && !isLoading) {
       loadData();
     }
-  }, [isAuthenticated, isLoading, fetchEmployees, fetchTRFs]);
+  }, [isAuthenticated, isLoading, fetchReferenceMaster, fetchEmployees, fetchTRFs]);
 
   return (
     <BrowserRouter>
       <Toaster position="top-right" richColors />
       <Routes>
-        {/* Public Routes */}
+        {/* PUBLIC ROUTES */}
         <Route element={<AuthLayout />}>
-                  {/* <Route path="/test" element={<TestPage />} />
-                  <Route path="/debug" element={<TestDebug />} /> */}
-
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* Protected Routes */}
+        {/* FORCE CHANGE PASSWORD (No Sidebar/MainLayout) */}
+        <Route 
+          path="/change-password" 
+          element={
+            <ProtectedRoute>
+              <ChangePasswordPage />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* PROTECTED ROUTES (With MainLayout & Sidebar) */}
         <Route element={
           <ProtectedRoute>
             <MainLayout />
           </ProtectedRoute>
         }>
-          {/* ============================================ */}
           {/* DASHBOARD - All authenticated users */}
-          {/* ============================================ */}
           <Route path="/" element={<DashboardPage />} />
 
-
-          {/* ============================================ */}
           {/* TRF ROUTES */}
-          {/* ============================================ */}
-          
-          {/* TRF List - All roles (filtered by visibility) */}
           <Route path="/trf" element={<TRFListPage />} />
-          
-          {/* TRF Detail - All roles */}
           <Route path="/trf/:id" element={<TRFDetailPage />} />
           
-          {/* New TRF - Employee & Super Admin only */}
           <Route
             path="/trf/new"
             element={
@@ -122,9 +118,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* ADMIN DEPT - Verification */}
-          {/* ============================================ */}
           <Route
             path="/verify"
             element={
@@ -134,9 +128,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* APPROVAL ROUTES - HoD, HR, PM */}
-          {/* ============================================ */}
           <Route
             path="/approvals"
             element={
@@ -146,9 +138,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* GA PROCESS ROUTE */}
-          {/* ============================================ */}
           <Route
             path="/process"
             element={
@@ -158,9 +148,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* EMPLOYEE MANAGEMENT - HR only */}
-          {/* ============================================ */}
           <Route
             path="/employees"
             element={
@@ -170,9 +158,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* HOTEL MANAGEMENT - GA only */}
-          {/* ============================================ */}
           <Route
             path="/hotels"
             element={
@@ -182,9 +168,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* REPORTS - All except Employee */}
-          {/* ============================================ */}
           <Route
             path="/reports"
             element={
@@ -197,9 +181,17 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
+          {/* USER MANAGEMENT - Super Admin only */}
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <UsersPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* SUPER ADMIN - Full Access */}
-          {/* ============================================ */}
           <Route
             path="/super-admin"
             element={
@@ -209,9 +201,7 @@ function App() {
             }
           />
 
-          {/* ============================================ */}
           {/* SETTINGS - Super Admin only */}
-          {/* ============================================ */}
           <Route
             path="/settings"
             element={

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';  
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -32,21 +32,21 @@ const VerifyPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   
-  // ✅ REVISI: Tambahkan fetchTRFs ke sini
-  const trfs = useTRFStore(state => state.trfs);
-  const getTRFsForVerification = useTRFStore(state => state.getTRFsForVerification);
-  const verifyTRF = useTRFStore(state => state.verifyTRF);
-  const fetchTRFs = useTRFStore(state => state.fetchTRFs);
+  const { 
+    getTRFsForVerification, 
+    fetchTRFs, 
+    handleVerify // ✅ REVISI: Menggunakan fungsi sakti dari Mandor
+  } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [verifyAction, setVerifyAction] = useState<'YES' | 'NO' | null>(null);
   const [remarks, setRemarks] = useState('');
 
-  // ✅ REVISI: Tambahkan AUTO FETCH di sini menggunakan useEffect
+  // Auto Fetch
   useEffect(() => {
     fetchTRFs();
-  }, []);
+  }, [fetchTRFs]);
 
   // Get TRFs for current Admin Dept's department
   const trfsForVerification = currentUser?.department 
@@ -60,33 +60,35 @@ const VerifyPage: React.FC = () => {
     setVerifyDialogOpen(true);
   };
 
-  const confirmVerify = () => {
+  const confirmVerify = async () => {
     if (!selectedTRF || !currentUser || !verifyAction) return;
 
-    const verified = verifyAction === 'YES';
+    // ✅ REVISI: Jika aksi adalah 'YES', maka diterjemahkan sebagai 'VERIFY' untuk Engine.
+    // Jika aksi adalah 'NO', maka diterjemahkan sebagai 'REVISE' (dikembalikan).
+    const actionToEngine = verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
     
-    try {
-      verifyTRF(
-        selectedTRF.id,
-        currentUser.id,
-        currentUser.username,
-        verified,
+    // Panggil sang Mandor
+    const success = await handleVerify(
+        selectedTRF.id, 
+        currentUser, 
+        actionToEngine, 
         remarks
-      );
+    );
 
-      if (verified) {
-        toast.success(`TRF ${selectedTRF.trfNumber} verified successfully`);
+    if (success) {
+      if (verifyAction === 'YES') {
+        toast.success(`TRF ${selectedTRF.trfNumber} berhasil diverifikasi!`);
       } else {
-        toast.error(`TRF ${selectedTRF.trfNumber} returned to employee`);
+        toast.error(`TRF ${selectedTRF.trfNumber} dikembalikan ke karyawan.`);
       }
-
-      setVerifyDialogOpen(false);
-      setSelectedTRF(null);
-      setVerifyAction(null);
-      setRemarks('');
-    } catch (error) {
-      toast.error('Failed to verify TRF');
+    } else {
+      toast.error('Gagal memproses verifikasi. Cek izin workflow.');
     }
+
+    setVerifyDialogOpen(false);
+    setSelectedTRF(null);
+    setVerifyAction(null);
+    setRemarks('');
   };
 
   const formatDate = (dateString?: string) => {
@@ -97,6 +99,7 @@ const VerifyPage: React.FC = () => {
       day: 'numeric'
     });
   };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -285,8 +288,8 @@ const VerifyPage: React.FC = () => {
               className={cn(
                 "flex-1",
                 verifyAction === 'YES' 
-                  ? "bg-green-600 hover:bg-green-700" 
-                  : "bg-red-600 hover:bg-red-700"
+                  ? "bg-green-600 hover:bg-green-700 text-white" 
+                  : "bg-red-600 hover:bg-red-700 text-white"
               )}
               disabled={verifyAction === 'NO' && !remarks.trim()}
             >

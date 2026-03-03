@@ -16,13 +16,15 @@ import {
   Calendar,
   Phone,
   Mail,
-  Shield
+  Shield,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
-import { useTRFStore } from '@/store';
+import { useTRFStore, useAuthStore } from '@/store';
 
 interface EmployeeInfoSectionProps {
   selectedEmployeeId?: string;
-  onEmployeeChange?: (employeeId: string) => void; // ✅ OPTIONAL
+  onEmployeeChange?: (employeeId: string) => void;
   disabled?: boolean;
 }
 
@@ -31,15 +33,15 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
   onEmployeeChange,
   disabled = false
 }) => {
-
   const { employees } = useTRFStore();
+  const { currentUser } = useAuthStore();
 
-  const selectedEmployee = employees.find(
-    e => e.id === selectedEmployeeId
-  );
+  const selectedEmployee =
+  currentUser?.role === "EMPLOYEE"
+    ? employees.find(e => e.userId === currentUser.id)
+    : employees.find(e => e.id === selectedEmployeeId);
 
   /* ================= INFO ROW ================= */
-
   const InfoRow = ({
     icon: Icon,
     label,
@@ -63,7 +65,6 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
   );
 
   /* ================= UI ================= */
-
   return (
     <Card className="border shadow-sm">
       <CardHeader className="pb-4">
@@ -76,44 +77,60 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
               Employee Information
             </CardTitle>
             <p className="text-sm text-gray-500">
-              Select employee or visitor
+              Select Employee
             </p>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-6">
-
         {/* ================= SELECT ================= */}
         <div className="space-y-2">
           <Label>
-            Select Employee / Visitor
+            Employee Name
             <span className="text-red-500">*</span>
           </Label>
 
-          <Select
-  value={selectedEmployeeId || ""}
-  onValueChange={(value) => onEmployeeChange(value)}
-  disabled={disabled}
->
-  <SelectTrigger>
-    <SelectValue placeholder="Select an employee" />
-  </SelectTrigger>
+          {/* ✅ LOGIC UNTUK EMPLOYEE (READ-ONLY) */}
+          {currentUser?.role === "EMPLOYEE" ? (
+            <div className="p-3 border rounded-md bg-gray-50 text-sm font-medium text-gray-700">
+              {employees.length === 0 ? (
+                <span className="flex items-center text-gray-500">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Memuat data...
+                </span>
+              ) : selectedEmployee ? (
+                selectedEmployee.employeeName
+              ) : (
+                <span className="flex items-center text-red-600">
+                  <AlertTriangle className="w-4 h-4 mr-2" /> 
+                  Akun belum ditautkan ke Master Employee (Hubungi HR)
+                </span>
+              )}
+            </div>
+          ) : (
+            <Select
+              value={selectedEmployeeId || ""}
+              onValueChange={(value) => onEmployeeChange && onEmployeeChange(value)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select an employee" />
+              </SelectTrigger>
 
-  <SelectContent>
-    {employees.map(emp => (
-      <SelectItem key={emp.id} value={emp.id}>
-        {emp.employeeName}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+              <SelectContent>
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.employeeName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* ================= DETAILS ================= */}
         {selectedEmployee && (
           <div className="bg-gray-50 rounded-xl p-4 space-y-4">
-
             <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-lg font-semibold text-blue-700">
@@ -148,12 +165,9 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
               <InfoRow icon={Mail} label="Email" value={selectedEmployee.email}/>
               <InfoRow icon={Phone} label="Phone" value={selectedEmployee.phone}/>
               <InfoRow icon={Calendar} label="Date of Hire" value={selectedEmployee.dateOfHire}/>
-              <InfoRow icon={Shield} label="MCU Status" value={(selectedEmployee as any).mcuStatus}/>
             </div>
-
           </div>
         )}
-
       </CardContent>
     </Card>
   );
