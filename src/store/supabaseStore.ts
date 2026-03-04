@@ -649,7 +649,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => ({
   adminDeptVerify: dbTRF.admin_dept_verify,
   pmApproval: dbTRF.pm_approval,
   gaProcess: dbTRF.ga_process,
-  gaDocuments: dbTRF.ga_documents ?? {},
+  
   submittedAt: dbTRF.submitted_at,
   createdAt: dbTRF.created_at,
   updatedAt: dbTRF.updated_at

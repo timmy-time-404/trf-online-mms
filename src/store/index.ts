@@ -168,7 +168,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     lumpsumNote: dbTRF.lumpsum_note,
     lumpsumInputBy: dbTRF.lumpsum_input_by,
     lumpsumInputAt: dbTRF.lumpsum_input_at,
-    gaDocuments: dbTRF.ga_documents || [],  
+    gaDocuments: (dbTRF.ga_documents ?? {}) as Record<string, GADocument>, 
     submittedAt: dbTRF.submitted_at,
     createdAt: dbTRF.created_at,
     updatedAt: dbTRF.updated_at
