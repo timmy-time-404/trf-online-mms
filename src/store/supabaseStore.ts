@@ -3,11 +3,18 @@ import { supabase, isSupabaseEnabled } from '@/lib/supabase';
 import type {
   User,
   Employee,
+  EmployeeType,
   TRF,
   StatusHistory,
   TRFStatus,
   UserRole,
   CreateTRFInput,
+  GAProcess,
+  GADocument,
+  Accommodation,
+  TravelArrangement,
+  AdminDeptVerify,
+  PMApproval
 } from '@/types';
 
 import {
@@ -15,6 +22,62 @@ import {
   mockEmployees,
   mockTRFs
 } from '@/mock/data';
+
+/* =====================================================
+   DATABASE ROW INTERFACES (100% BEBAS ANY)
+===================================================== */
+interface DBUserRow {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  employee_id?: string;
+  department?: string;
+}
+
+interface DBEmployeeRow {
+  id: string;
+  user_id?: string;
+  employee_type: string;
+  employee_name: string;
+  job_title: string;
+  department: string;
+  section: string;
+  email: string;
+  phone: string;
+  date_of_hire?: string;
+  point_of_hire: string;
+}
+
+interface DBTRFRow {
+  id: string;
+  trf_number: string;
+  employee_id: string;
+  department?: string;
+  travel_purpose: string;
+  start_date: string;
+  end_date: string;
+  purpose_remarks?: string;
+  status: string;
+  accommodation?: Accommodation;
+  travel_arrangements?: TravelArrangement[];
+  admin_dept_verify?: AdminDeptVerify;
+  pm_approval?: PMApproval;
+  ga_process?: GAProcess;
+  ga_documents?: GADocument[];
+  lumpsum_amount?: number;
+  lumpsum_currency?: string;
+  lumpsum_note?: string;
+  lumpsum_input_by?: string;
+  lumpsum_input_at?: string;
+  submitted_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/* =====================================================
+   APPROVAL & WORKFLOW LOGIC
+===================================================== */
 
 type ApprovalAction = 'APPROVE' | 'REJECT' | 'REVISE';
 
@@ -69,7 +132,7 @@ export const processTRFApproval = async (
       throw new Error("Role tidak memiliki approval permission");
   }
 
-  requireStatus(trf.status, expectedStatus);
+  requireStatus(trf.status as TRFStatus, expectedStatus);
 
   await supabase
     .from("trfs")
@@ -83,7 +146,7 @@ export const processTRFApproval = async (
     trfId,
     changedBy: userId,
     changedByName: userName,
-    oldStatus: trf.status,
+    oldStatus: trf.status as string,
     newStatus: nextStatus,
     remarks
   });
@@ -108,7 +171,7 @@ const requireStatus = (current: string, expected: string) => {
 };
 
 /* =====================================================
-   CREATE TRF
+   CREATE & SUBMIT TRF
 ===================================================== */
 
 export const createTRF = async (
@@ -149,17 +212,13 @@ export const createTRF = async (
     });
 
     const employees = await getEmployees();
-    return transformTRFFromDB(data, employees);
+    return transformTRFFromDB(data as DBTRFRow, employees);
 
   } catch (err) {
     console.error("CREATE TRF ERROR:", err);
     return null;
   }
 };
-
-/* =====================================================
-   SUBMIT
-===================================================== */
 
 export const submitTRF = async (
   id: string,
@@ -201,7 +260,7 @@ export const submitTRF = async (
 };
 
 /* =====================================================
-   APPROVAL WORKFLOW (SEQUENTIAL)
+   SPECIFIC APPROVAL ACTIONS
 ===================================================== */
 
 export const verifyTRF = async (
@@ -224,7 +283,7 @@ export const verifyTRF = async (
 
     if (!trf) throw new Error("TRF tidak ditemukan");
 
-    requireStatus(trf.status, "SUBMITTED");
+    requireStatus(trf.status as string, "SUBMITTED");
 
     const newStatus = verified
       ? "ADMIN_DEPT_VERIFIED"
@@ -273,7 +332,7 @@ export const hodApproveTRF = async (
 
     if (!trf) throw new Error("TRF tidak ditemukan");
 
-    requireStatus(trf.status, "ADMIN_DEPT_VERIFIED");
+    requireStatus(trf.status as string, "ADMIN_DEPT_VERIFIED");
 
     const newStatus = approved ? "HOD_APPROVED" : "REJECTED";
 
@@ -320,7 +379,7 @@ export const hrApproveTRF = async (
 
     if (!trf) throw new Error("TRF tidak ditemukan");
 
-    requireStatus(trf.status, "HOD_APPROVED");
+    requireStatus(trf.status as string, "HOD_APPROVED");
 
     const newStatus = approved ? "HR_APPROVED" : "NEEDS_REVISION";
 
@@ -367,7 +426,7 @@ export const pmApproveTRF = async (
 
     if (!trf) throw new Error("TRF tidak ditemukan");
 
-    requireStatus(trf.status, "HR_APPROVED");
+    requireStatus(trf.status as string, "HR_APPROVED");
 
     const newStatus = approved ? "PM_APPROVED" : "REJECTED";
 
@@ -398,7 +457,7 @@ export const gaProcessTRF = async (
   id: string,
   gaId: string,
   gaName: string,
-  voucherDetails: any, 
+  voucherDetails: GAProcess['voucherDetails'], 
   remarks: string
 ): Promise<boolean> => {
 
@@ -407,15 +466,15 @@ export const gaProcessTRF = async (
   try {
     const { data: trf } = await supabase
       .from("trfs")
-      .select("*, gaDocuments") 
+      .select("*, ga_documents") 
       .eq("id", id)
       .single();
 
     if (!trf) throw new Error("TRF tidak ditemukan");
 
-    requireStatus(trf.status, "PM_APPROVED");
+    requireStatus(trf.status as string, "PM_APPROVED");
 
-    const gaProcessData = {
+    const gaProcessData: GAProcess = {
       processed: true,
       processedAt: new Date().toISOString(),
       processorId: gaId,
@@ -451,7 +510,7 @@ export const gaProcessTRF = async (
 };
 
 /* =====================================================
-   HR LUMPSUM (TAMBAHAN DARI MAHA RAJA)
+   HR LUMPSUM
 ===================================================== */
 
 export const saveHRLumpsum = async (
@@ -498,14 +557,16 @@ export const addStatusHistory = async (
 };
 
 /* =====================================================
-   FETCHERS + TRANSFORMERS
+   FETCHERS
 ===================================================== */
 
 export const getEmployees = async (): Promise<Employee[]> => {
   if (!isSupabaseEnabled()) return mockEmployees;
 
   const { data } = await supabase.from("employees").select("*");
-  return (data || []).map(transformEmployeeFromDB);
+  // Ciptakan barikade tipe untuk meyakinkan TS bahwa tidak ada any yang lewat
+  const rows = (data as DBEmployeeRow[]) || [];
+  return rows.map(transformEmployeeFromDB);
 };
 
 export const getTRFs = async (): Promise<TRF[]> => {
@@ -517,7 +578,8 @@ export const getTRFs = async (): Promise<TRF[]> => {
     .order("created_at", { ascending: false });
 
   const employees = await getEmployees();
-  return (data || []).map(t => transformTRFFromDB(t, employees));
+  const rows = (data as DBTRFRow[]) || [];
+  return rows.map(t => transformTRFFromDB(t, employees));
 };
 
 export const getUsers = async (): Promise<User[]> => {
@@ -532,13 +594,14 @@ export const getUsers = async (): Promise<User[]> => {
     return mockUsers;
   }
 
-  return (data || []).map((dbUser: any) => ({
+  const rows = (data as DBUserRow[]) || [];
+  return rows.map(dbUser => ({
     id: dbUser.id,
     username: dbUser.username,
     email: dbUser.email,
     role: dbUser.role as UserRole,
-    employeeId: dbUser.employee_id,
-    department: dbUser.department
+    employeeId: dbUser.employee_id || undefined,
+    department: dbUser.department || undefined
   }));
 };
 
@@ -546,10 +609,10 @@ export const getUsers = async (): Promise<User[]> => {
    TRANSFORMERS
 ===================================================== */
 
-const transformEmployeeFromDB = (db: any): Employee => ({
+const transformEmployeeFromDB = (db: DBEmployeeRow): Employee => ({
   id: db.id,
-  userId: db.user_id || null,
-  employeeType: db.employee_type,
+  userId: db.user_id || undefined,
+  employeeType: db.employee_type as EmployeeType,
   employeeName: db.employee_name,
   jobTitle: db.job_title,
   department: db.department,
@@ -560,34 +623,40 @@ const transformEmployeeFromDB = (db: any): Employee => ({
   pointOfHire: db.point_of_hire
 });
 
-const transformTRFFromDB = (db: any, employees: Employee[]): TRF => ({
-  id: db.id,
-  trfNumber: db.trf_number,
-  employeeId: db.employee_id,
-  employee: employees.find(e => e.id === db.employee_id) ?? {
-    id: db.employee_id,
+const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => ({
+  id: dbTRF.id,
+  trfNumber: dbTRF.trf_number,
+  employeeId: dbTRF.employee_id,
+  employee: employees.find(e => e.id === dbTRF.employee_id) ?? {
+    id: dbTRF.employee_id,
     employeeName: 'Unknown Employee',
-    employeeType: 'EMPLOYEE'
+    employeeType: 'EMPLOYEE' as EmployeeType,
+    jobTitle: '-',
+    department: 'Unknown',
+    section: '-',
+    email: '-',
+    phone: '-',
+    pointOfHire: '-'
   },
-  department: db.department,
-  travelPurpose: db.travel_purpose,
-  startDate: db.start_date,
-  endDate: db.end_date,
-  purposeRemarks: db.purpose_remarks,
-  status: db.status,
-  accommodation: db.accommodation,
-  travelArrangements: db.travel_arrangements || [],
-  adminDeptVerify: db.admin_dept_verify,
-  pmApproval: db.pm_approval,
-  gaProcess: db.ga_process,
-  gaDocuments: db.ga_documents ?? {},
-  submittedAt: db.submitted_at,
-  createdAt: db.created_at,
-  updatedAt: db.updated_at
+  department: dbTRF.department,
+  travelPurpose: dbTRF.travel_purpose,
+  startDate: dbTRF.start_date,
+  endDate: dbTRF.end_date,
+  purposeRemarks: dbTRF.purpose_remarks,
+  status: dbTRF.status as TRFStatus,
+  accommodation: dbTRF.accommodation,
+  travelArrangements: dbTRF.travel_arrangements || [],
+  adminDeptVerify: dbTRF.admin_dept_verify,
+  pmApproval: dbTRF.pm_approval,
+  gaProcess: dbTRF.ga_process,
+  gaDocuments: dbTRF.ga_documents ?? {},
+  submittedAt: dbTRF.submitted_at,
+  createdAt: dbTRF.created_at,
+  updatedAt: dbTRF.updated_at
 });
 
 /* =====================================================
-   FILE UPLOAD (Legacy / Opsional)
+   FILE UPLOAD
 ===================================================== */
 
 export const uploadGAFile = async (
@@ -614,7 +683,9 @@ export const uploadGAFile = async (
 
 export const saveGAFileToTRF = async (
   trfId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   fileUrl: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   fileName: string
 ) => {
   const { data: trf } = await supabase
@@ -623,5 +694,6 @@ export const saveGAFileToTRF = async (
     .eq("id", trfId)
     .single();
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const existing = trf?.ga_documents || {};
 };

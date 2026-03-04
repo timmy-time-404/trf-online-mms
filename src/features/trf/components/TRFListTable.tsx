@@ -74,7 +74,7 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
         <TableBody>
           {trfs.map((trf) => {
             // ✅ REVISI: Mengubah Object JSON menjadi Array dengan aman
-            const gaDocsObject = (trf as any).gaDocuments;
+            const gaDocsObject = trf.gaDocuments;
             const gaDocs = gaDocsObject ? Object.values(gaDocsObject) : [];
 
             return (
@@ -127,7 +127,7 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                       {/* ✅ REVISI: DAFTAR DOKUMEN DOWNLOAD YANG SUDAH DISEDERHANAKAN */}
                       {gaDocs.length > 0 && (
                         <div className="flex items-center gap-1.5">
-                          {gaDocs.map((file: any, index: number) => {
+                          {gaDocs.map((file, index) => {
                             if (!file || typeof file !== 'object' || !file.url) return null;
 
                             return (

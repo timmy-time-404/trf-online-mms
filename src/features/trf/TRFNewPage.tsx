@@ -7,11 +7,11 @@ import AccommodationSection from './components/AccommodationSection';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import type { TRF, Accommodation, TravelArrangement } from '@/types';
+import type { CreateTRFInput, Accommodation, TravelArrangement } from '@/types';
 import { Save, Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 // ✅ Tambahkan import supabase
-import { supabase } from "@/lib/supabase";
+
 
 const TRFNewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,21 +22,21 @@ const TRFNewPage: React.FC = () => {
   const { createTRF, submitTRF, fetchAllData, employees } = useTRFStore();
 
   // ✅ REVISI: Initial state kosong, di-handle oleh useEffect di bawah
-  const [formData, setFormData] = useState<Partial<TRF>>({
-    employeeId: '',
-    department: '',
-    travelPurpose: '',
-    startDate: '',
-    endDate: '',
-    purposeRemarks: '',
-    accommodation: {
-      hotelName: '',
-      checkInDate: '',
-      checkOutDate: '',
-      remarks: ''
-    },
-    travelArrangements: [],
-  });
+  const [formData, setFormData] = useState<CreateTRFInput>({
+  employeeId: '',
+  department: '',
+  travelPurpose: '',
+  startDate: '',
+  endDate: '',
+  purposeRemarks: '',
+  accommodation: {
+    hotelName: '',
+    checkInDate: '',
+    checkOutDate: '',
+    remarks: ''
+  },
+  travelArrangements: []
+});
 
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,21 +83,7 @@ const TRFNewPage: React.FC = () => {
   };
 
   /* ================= DOWNLOAD FUNCTION ================= */
-  const downloadFile = async (filePath: string) => {
-    const { data, error } = await supabase.storage
-      .from("trf-documents")
-      .createSignedUrl(filePath, 60);
-
-    if (error) {
-      console.error(error);
-      toast.error('Gagal mengunduh dokumen.');
-      return;
-    }
-
-    if (data?.signedUrl) {
-      window.open(data.signedUrl, "_blank");
-    }
-  };
+  
 
   /* ================= VALIDATION ================= */
   const validateForm = (): boolean => {
@@ -123,7 +109,7 @@ const TRFNewPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       await fetchAllData();
-      const newTRF = await createTRF(formData as any);
+      const newTRF = await createTRF(formData);
 
       if (!newTRF) throw new Error("Gagal membuat data");
 
@@ -142,7 +128,7 @@ const TRFNewPage: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      const newTRF = await createTRF(formData as any);
+      const newTRF = await createTRF(formData);
 
       if (!newTRF) throw new Error("Gagal membuat data");
 
@@ -168,7 +154,7 @@ const TRFNewPage: React.FC = () => {
   };
 
   /* ================= UI ================= */
-  const gaDocument = (formData as any).ga_document;
+  
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -218,24 +204,7 @@ const TRFNewPage: React.FC = () => {
           onChange={handleArrangementsChange}
         />
 
-        { gaDocument && gaDocument.length > 0 && (
-          <div className="mt-6 border rounded-lg p-4 bg-green-50">
-            <h3 className="font-semibold mb-3">
-              🎫 Travel Documents
-            </h3>
-
-            {gaDocument.map((file: any, index: number) => (
-              <button
-                key={index}
-                type="button" 
-                onClick={() => downloadFile(file.path)}
-                className="flex items-center gap-2 text-blue-600 hover:underline mb-2"
-              >
-                📄 Download {file.name}
-              </button>
-            ))}
-          </div>
-        )}
+        
       </div>
 
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">

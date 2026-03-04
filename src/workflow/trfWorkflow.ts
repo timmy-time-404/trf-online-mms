@@ -1,5 +1,6 @@
 import type { TRFStatus, UserRole } from '@/types';
 
+export type WorkflowAction = 'APPROVE' | 'REJECT' | 'REVISE' | 'VERIFY';
 export function getNextStatus(
   current: TRFStatus,
   role: UserRole,

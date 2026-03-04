@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import { gaProcessTRF } from '@/store/supabaseStore'; // gaProcessTRF tetap dipertahankan untuk update status workflow
+import { gaProcessTRF } from '@/store/supabaseStore'; 
 import type { TRF } from '@/types';
 import {
   Plane,
@@ -31,34 +31,64 @@ import {
   Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
-// ✅ REVISI: Import supabase untuk upload file langsung
 import { supabase } from '@/lib/supabase';
 
 const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { getTRFsForProcessing, fetchAllData } = useTRFStore();
+  // ✅ MENGGUNAKAN forceRefreshTRFs agar UI lebih responsif
+  const { getTRFsForProcessing, forceRefreshTRFs } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
-  // ✅ REVISI: State baru sesuai instruksi Maha Raja
+  // State dengan tipe data yang sangat spesifik
   const [documents, setDocuments] = useState<Record<string, {name: string, url: string}>>({});
   const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
 
   const trfsForProcessing = getTRFsForProcessing();
 
+  /* =========================================================================
+     ✅ LOGIC PARSING SUPER AMAN (Menjawab "Lihat Setiap Kemungkinan")
+  ========================================================================= */
+  /* =========================================================================
+     ✅ LOGIC PARSING SUPER AMAN (100% BEBAS ANY)
+  ========================================================================= */
   const handleProcessClick = (trf: TRF) => {
     setSelectedTRF(trf);
-    setDocuments((trf as any).gaDocuments || {});
-    setGroundInfo((trf as any).gaDocuments?.groundInfo || '');
+    
+    // Ganti any menjadi unknown agar linter diam
+    const rawDocs = (trf.gaDocuments as unknown) as Record<string, unknown> || {};
+    
+    const parsedDocs: Record<string, { name: string; url: string }> = {};
+    let parsedGroundInfo = '';
+
+    // Filter dan ekstrak data dengan Type-Guard ketat
+    Object.entries(rawDocs).forEach(([key, value]) => {
+      if (key === 'groundInfo') {
+        parsedGroundInfo = typeof value === 'string' ? value : '';
+      } else if (
+        value !== null && 
+        typeof value === 'object' && 
+        'url' in value // Pastikan object ini punya property 'url'
+      ) {
+        // Karena sudah di-cek di atas, cast ini dijamin aman oleh TypeScript
+        const docValue = value as Record<string, unknown>; 
+        parsedDocs[key] = {
+          name: String(docValue.name || 'Document'),
+          url: String(docValue.url),
+        };
+      }
+    });
+
+    setDocuments(parsedDocs);
+    setGroundInfo(parsedGroundInfo);
     setRemarksToEmployee('');
     setProcessDialogOpen(true);
   };
 
-  // ✅ REVISI: Fungsi Upload Handler
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (!file || !selectedTRF) return;
@@ -93,7 +123,6 @@ const ProcessPage: React.FC = () => {
       toast.error(`Failed to upload ${type}`);
     } finally {
       setIsUploading(false);
-      // Reset input agar bisa upload file yang sama jika salah
       e.target.value = '';
     }
   };
@@ -102,11 +131,11 @@ const ProcessPage: React.FC = () => {
     if (!selectedTRF || !currentUser) return;
 
     try {
-      // ✅ REVISI: Save dokumen ke kolom ga_documents di tabel trfs
+      // ✅ REVISI FATAL: Ubah gaDocuments menjadi ga_documents agar masuk ke Supabase
       const { error } = await supabase
         .from("trfs")
         .update({
-          gaDocuments: {
+          ga_documents: {
             ...documents,
             groundInfo
           }
@@ -115,16 +144,18 @@ const ProcessPage: React.FC = () => {
 
       if (error) throw error;
 
-      // Tetap jalankan fungsi ini untuk mengubah status TRF menjadi GA_PROCESSED & catat history
+      // Update status workflow TRF
       await gaProcessTRF(
         selectedTRF.id,
         currentUser.id,
         currentUser.username,
-        {}, // voucher lama dikosongkan karena sudah pindah ke ga_documents
+        {}, 
         remarksToEmployee
       );
 
-      await fetchAllData();
+      // ✅ Pakai fungsi sakti untuk merefresh UI seketika
+      await forceRefreshTRFs();
+      
       toast.success(`TRF ${selectedTRF.trfNumber} processed successfully`);
       setProcessDialogOpen(false);
       setSelectedTRF(null);
@@ -145,7 +176,6 @@ const ProcessPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header & Stats & TRF List Render (Bagian ini sama seperti aslinya) */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Process TRFs</h1>
         <p className="text-gray-500 mt-1">Issue vouchers and tickets for approved travel requests</p>
@@ -246,7 +276,7 @@ const ProcessPage: React.FC = () => {
 
           <div className="space-y-4 py-4">
             
-            {/* ✅ REVISI: Hotel Voucher File Input */}
+            {/* Hotel Voucher */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Hotel className="w-4 h-4 text-blue-600" /> Hotel Voucher</span>
@@ -261,7 +291,7 @@ const ProcessPage: React.FC = () => {
               />
             </div>
 
-            {/* ✅ REVISI: Flight Ticket File Input */}
+            {/* Flight Ticket */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Ticket className="w-4 h-4 text-green-600" /> Flight Ticket</span>
@@ -276,7 +306,7 @@ const ProcessPage: React.FC = () => {
               />
             </div>
 
-            {/* ✅ REVISI: Ship Ticket File Input */}
+            {/* Ship Ticket */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Ship className="w-4 h-4 text-cyan-600" /> Ship Ticket</span>
@@ -291,7 +321,7 @@ const ProcessPage: React.FC = () => {
               />
             </div>
 
-            {/* ✅ REVISI: Ground Info Textarea */}
+            {/* Ground Info Textarea */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center gap-2">
                 <Car className="w-4 h-4 text-orange-600" />

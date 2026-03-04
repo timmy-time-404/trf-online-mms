@@ -93,7 +93,7 @@ const ApprovalPage: React.FC = () => {
           lumpsumNote,
           currentUser.id
         );
-      } catch (error) {
+      } catch{
         toast.error('Gagal menyimpan data Lumpsum.');
         return;
       }

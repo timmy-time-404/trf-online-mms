@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';  
+import { Card, CardContent,} from '@/components/ui/card';  
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import type { WorkflowAction } from '@/workflow/trfWorkflow';
 
 const VerifyPage: React.FC = () => {
   const navigate = useNavigate();
@@ -63,9 +64,9 @@ const VerifyPage: React.FC = () => {
   const confirmVerify = async () => {
     if (!selectedTRF || !currentUser || !verifyAction) return;
 
-    // ✅ REVISI: Jika aksi adalah 'YES', maka diterjemahkan sebagai 'VERIFY' untuk Engine.
-    // Jika aksi adalah 'NO', maka diterjemahkan sebagai 'REVISE' (dikembalikan).
-    const actionToEngine = verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
+    
+    const actionToEngine: WorkflowAction =
+  verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
     
     // Panggil sang Mandor
     const success = await handleVerify(
