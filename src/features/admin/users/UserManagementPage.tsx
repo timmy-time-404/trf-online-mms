@@ -1,22 +1,32 @@
 import { useState, useEffect } from "react";
 import { useTRFStore } from "@/store";
 import UserFormDialog from "./UserFormDialog";
+import type { User } from "@/types"; 
 
 const UserManagementPage = () => {
   const { users, fetchUsers } = useTRFStore();
-  const [open, setOpen] = useState(false);
-
-  // ✅ State untuk menyimpan data user yang sedang diedit
-  const [editingUser, setEditingUser] = useState<any>(null);
+  
+  // State untuk menyimpan data user yang sedang diedit
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  // ✅ TAMBAHAN: State untuk mengontrol apakah modal dialog terbuka atau tertutup
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ✅ Fungsi untuk handle klik edit
-  const editUser = (user: any) => {
-    setEditingUser(user);
-    // TODO: Nantinya ini akan membuka modal edit
+  const editUser = (user: User) => {
+    setEditingUser(user); // Masukkan data user yang diklik
+    setIsDialogOpen(true); // Buka dialognya
+  };
+
+  // ✅ TAMBAHAN: Fungsi untuk handle tambah user baru
+  const handleAddUser = () => {
+    setEditingUser(null); // Kosongkan data agar form bersih
+    setIsDialogOpen(true); // Buka dialognya
   };
 
   return (
@@ -27,8 +37,21 @@ const UserManagementPage = () => {
           <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
           <p className="text-sm text-gray-500">Manage system users and permissions</p>
         </div>
-        <UserFormDialog />
+        {/* ✅ Tombol Add User */}
+        <button
+          onClick={handleAddUser}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+        >
+          Add New User
+        </button>
       </div>
+
+      {/* ✅ DIALOG: Berikan props wajib yang diminta oleh TypeScript */}
+      <UserFormDialog 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen} 
+        user={editingUser || undefined} 
+      />
 
       {/* TABLE */}
       <div className="bg-white border rounded-xl overflow-hidden">
@@ -39,7 +62,6 @@ const UserManagementPage = () => {
               <th className="text-left p-3">Email</th>
               <th className="text-left p-3">Role</th>
               <th className="text-left p-3">Department</th>
-              {/* ✅ Tambahan Header Action */}
               <th className="text-right p-3">Action</th>
             </tr>
           </thead>
@@ -50,7 +72,7 @@ const UserManagementPage = () => {
                 <td className="p-3">{u.username}</td>
                 <td className="p-3">{u.email}</td>
                 
-                {/* ✅ Badge Role Berwarna */}
+                {/* Badge Role Berwarna */}
                 <td className="p-3">
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -71,7 +93,7 @@ const UserManagementPage = () => {
                 
                 <td className="p-3">{u.department || "-"}</td>
                 
-                {/* ✅ Tombol Edit Action */}
+                {/* Tombol Edit Action */}
                 <td className="p-3 text-right">
                   <button
                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm"

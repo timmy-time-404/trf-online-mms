@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner';
 
 const SuperAdminPage: React.FC = () => {
-  const { users, employees, trfs, resetStore } = useTRFStore();
+  const { users, employees, trfs } = useTRFStore();
   const { currentUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState('users');
 
@@ -220,16 +220,7 @@ const SuperAdminPage: React.FC = () => {
                         <td className="px-4 py-3 text-gray-600">{emp.department}</td>
                         <td className="px-4 py-3 text-gray-600">{emp.jobTitle}</td>
                         <td className="px-4 py-3">
-                          <Badge 
-                            variant="outline"
-                            className={
-                              emp.mcuStatus === 'VALID' ? 'text-green-600 border-green-300' :
-                              emp.mcuStatus === 'PENDING' ? 'text-amber-600 border-amber-300' :
-                              'text-red-600 border-red-300'
-                            }
-                          >
-                            {emp.mcuStatus}
-                          </Badge>
+                          
                         </td>
                       </tr>
                     ))}

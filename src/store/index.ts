@@ -20,13 +20,8 @@ import type {
   PMApproval,
   GAProcess
 } from '@/types';
-import {
-  mockEmployees,
-  mockTRFs,
-  mockStatusHistory,
-  referenceData,
-  mockUsers
-} from '@/mock/data';
+
+// ✅ MOCK DATA IMPORT TELAH DIBUMI-HANGUSKAN DARI SINI!
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
 
@@ -73,7 +68,7 @@ interface DBTRFRow {
   parallel_approval?: unknown; 
   pm_approval?: PMApproval;
   ga_process?: GAProcess;
-  ga_documents?: Record<string, unknown>; // ✅ Konsisten dengan tipe baru
+  ga_documents?: Record<string, unknown>;
   lumpsum_amount?: number;
   lumpsum_currency?: string;
   lumpsum_note?: string;
@@ -261,7 +256,8 @@ interface TRFState {
   statusHistory: StatusHistory[];
   employees: Employee[];
   users: User[];
-  referenceData: typeof referenceData;
+  // ✅ Tipe referensi diamankan
+  referenceData: Record<string, unknown>;
   isLoading: boolean;
   
   referenceMaster: {
@@ -295,11 +291,12 @@ interface TRFState {
   getTRFsForApproval: (role: UserRole, department?: string) => TRF[];
   getTRFsForProcessing: () => TRF[];
   getPendingApprovals: () => TRF[];
-submitTRF: (
-  id: string,
-  changedBy: string,
-  changedByName: string
-) => Promise<boolean>;  getStatusHistory: (trfId: string) => StatusHistory[];
+  submitTRF: (
+    id: string,
+    changedBy: string,
+    changedByName: string
+  ) => Promise<boolean>;  
+  getStatusHistory: (trfId: string) => StatusHistory[];
   addStatusHistory: (entry: Omit<StatusHistory, 'id' | 'changedAt'>) => Promise<void>;
   getEmployeeById: (id: string) => Employee | undefined;
   getEmployeesByType: (type: 'EMPLOYEE' | 'VISITOR') => Employee[];
@@ -316,11 +313,12 @@ submitTRF: (
 export const useTRFStore = create<TRFState>()(
   persist(
     (set, get) => ({
-      trfs: mockTRFs,
-      statusHistory: mockStatusHistory,
-      employees: mockEmployees,
-      users: mockUsers,
-      referenceData,
+      // ✅ STATE AWAL BERSIH DARI MOCK DATA
+      trfs: [],
+      statusHistory: [],
+      employees: [],
+      users: [],
+      referenceData: {},
       isLoading: false,
 
       referenceMaster: {
@@ -597,7 +595,6 @@ export const useTRFStore = create<TRFState>()(
           .map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
       },
 
-      // ✅ REVISI: error digunakan dalam catch blok
       handleVerify: async (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => {
         const trf = get().trfs.find((t) => t.id === trfId);
         if (!trf) return false;
@@ -617,7 +614,6 @@ export const useTRFStore = create<TRFState>()(
         }
       },
 
-      // ✅ REVISI: error digunakan dalam catch blok
       handleApproval: async (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => {
         const trf = get().trfs.find((t) => t.id === trfId);
         if (!trf) return false;

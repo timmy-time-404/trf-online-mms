@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Plane, Car, Train, User, Plus, Trash2, AlertCircle, Ship, Search, Loader2 } from 'lucide-react';
-import type { TravelArrangement, TravelType, TransportationType, ArrangementType } from '@/types';
+import type { TravelArrangement, TravelType, TransportationType } from '@/types';
 import { cn } from '@/lib/utils';
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'; 
 
@@ -14,6 +14,12 @@ interface TravelArrangementSectionProps {
   arrangements: TravelArrangement[];
   onChange: (arrangements: TravelArrangement[]) => void;
   disabled?: boolean;
+};
+interface LocationResult {
+  id?: string;
+  name: string;
+  type?: string;
+  [key: string]: unknown; // Jaring pengaman untuk properti tak terduga
 }
 
 // ============================================================================
@@ -38,8 +44,8 @@ const ArrangementItem = ({
   
   const [fromQuery, setFromQuery] = useState(arrangement.fromLocation || "");
   const [toQuery, setToQuery] = useState(arrangement.toLocation || "");
-  const [fromResults, setFromResults] = useState<any[]>([]);
-  const [toResults, setToResults] = useState<any[]>([]);
+  const [fromResults, setFromResults] = useState<LocationResult[]>([]);
+  const [toResults, setToResults] = useState<LocationResult[]>([]);
   const [isSearchingFrom, setIsSearchingFrom] = useState(false);
   const [isSearchingTo, setIsSearchingTo] = useState(false);
 
@@ -268,7 +274,9 @@ const ArrangementItem = ({
                     }}
                   >
                     <span className="text-sm font-medium text-gray-900">{loc.name}</span>
-                    <span className="text-xs text-gray-400">{loc.type.replace('_', ' ')}</span>
+                    <span className="text-xs text-gray-400">
+  {loc.type ? loc.type.replace('_', ' ') : ''}
+</span>
                   </div>
                 ))}
               </div>
@@ -307,7 +315,9 @@ const ArrangementItem = ({
                     }}
                   >
                     <span className="text-sm font-medium text-gray-900">{loc.name}</span>
-                    <span className="text-xs text-gray-400">{loc.type.replace('_', ' ')}</span>
+                    <span className="text-xs text-gray-400">
+  {loc.type ? loc.type.replace('_', ' ') : ''}
+</span>
                   </div>
                 ))}
               </div>

@@ -17,12 +17,6 @@ import type {
   PMApproval
 } from '@/types';
 
-import {
-  mockUsers,
-  mockEmployees,
-  mockTRFs
-} from '@/mock/data';
-
 /* =====================================================
    DATABASE ROW INTERFACES (100% BEBAS ANY)
 ===================================================== */
@@ -561,16 +555,17 @@ export const addStatusHistory = async (
 ===================================================== */
 
 export const getEmployees = async (): Promise<Employee[]> => {
-  if (!isSupabaseEnabled()) return mockEmployees;
+  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
+  if (!isSupabaseEnabled()) return [];
 
   const { data } = await supabase.from("employees").select("*");
-  // Ciptakan barikade tipe untuk meyakinkan TS bahwa tidak ada any yang lewat
   const rows = (data as DBEmployeeRow[]) || [];
   return rows.map(transformEmployeeFromDB);
 };
 
 export const getTRFs = async (): Promise<TRF[]> => {
-  if (!isSupabaseEnabled()) return mockTRFs;
+  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
+  if (!isSupabaseEnabled()) return [];
 
   const { data } = await supabase
     .from("trfs")
@@ -583,7 +578,8 @@ export const getTRFs = async (): Promise<TRF[]> => {
 };
 
 export const getUsers = async (): Promise<User[]> => {
-  if (!isSupabaseEnabled()) return mockUsers;
+  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
+  if (!isSupabaseEnabled()) return [];
 
   const { data, error } = await supabase
     .from("users")
@@ -591,7 +587,8 @@ export const getUsers = async (): Promise<User[]> => {
 
   if (error) {
     console.error("Error fetching users:", error);
-    return mockUsers;
+    // ✅ KEMBALIKAN ARRAY KOSONG SAAT ERROR
+    return [];
   }
 
   const rows = (data as DBUserRow[]) || [];

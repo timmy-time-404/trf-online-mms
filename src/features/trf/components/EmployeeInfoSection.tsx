@@ -10,13 +10,11 @@ import {
 } from '@/components/ui/select';
 import {
   User,
-  Briefcase,
   Building,
   MapPin,
   Calendar,
   Phone,
   Mail,
-  Shield,
   Loader2,
   AlertTriangle
 } from 'lucide-react';
@@ -28,6 +26,30 @@ interface EmployeeInfoSectionProps {
   disabled?: boolean;
 }
 
+/* ================= INFO ROW ================= */
+// ✅ REVISION: Moved InfoRow outside the main component to prevent re-creation on every render
+const InfoRow = ({
+  icon: Icon,
+  label,
+  value
+}: {
+  icon: React.ElementType;
+  label: string;
+  value?: string;
+}) => (
+  <div className="flex items-start gap-3">
+    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+      <Icon className="w-4 h-4 text-gray-500" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-sm font-medium text-gray-900 truncate">
+        {value || '-'}
+      </p>
+    </div>
+  </div>
+);
+
 const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
   selectedEmployeeId,
   onEmployeeChange,
@@ -37,32 +59,9 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
   const { currentUser } = useAuthStore();
 
   const selectedEmployee =
-  currentUser?.role === "EMPLOYEE"
-    ? employees.find(e => e.userId === currentUser.id)
-    : employees.find(e => e.id === selectedEmployeeId);
-
-  /* ================= INFO ROW ================= */
-  const InfoRow = ({
-    icon: Icon,
-    label,
-    value
-  }: {
-    icon: React.ElementType;
-    label: string;
-    value?: string;
-  }) => (
-    <div className="flex items-start gap-3">
-      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-        <Icon className="w-4 h-4 text-gray-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm font-medium text-gray-900 truncate">
-          {value || '-'}
-        </p>
-      </div>
-    </div>
-  );
+    currentUser?.role === "EMPLOYEE"
+      ? employees.find(e => e.userId === currentUser.id)
+      : employees.find(e => e.id === selectedEmployeeId);
 
   /* ================= UI ================= */
   return (
@@ -159,12 +158,12 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InfoRow icon={Building} label="Department" value={selectedEmployee.department}/>
-              <InfoRow icon={MapPin} label="Section" value={selectedEmployee.section}/>
-              <InfoRow icon={MapPin} label="Point of Hire" value={selectedEmployee.pointOfHire}/>
-              <InfoRow icon={Mail} label="Email" value={selectedEmployee.email}/>
-              <InfoRow icon={Phone} label="Phone" value={selectedEmployee.phone}/>
-              <InfoRow icon={Calendar} label="Date of Hire" value={selectedEmployee.dateOfHire}/>
+              <InfoRow icon={Building} label="Department" value={selectedEmployee.department || '-'} />
+              <InfoRow icon={MapPin} label="Section" value={selectedEmployee.section || '-'} />
+              <InfoRow icon={MapPin} label="Point of Hire" value={selectedEmployee.pointOfHire || '-'} />
+              <InfoRow icon={Mail} label="Email" value={selectedEmployee.email || '-'} />
+              <InfoRow icon={Phone} label="Phone" value={selectedEmployee.phone || '-'} />
+              <InfoRow icon={Calendar} label="Date of Hire" value={selectedEmployee.dateOfHire || '-'} />
             </div>
           </div>
         )}

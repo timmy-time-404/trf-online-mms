@@ -22,17 +22,22 @@ const RecentActivityTable: React.FC = () => {
     .slice(0, 5);
 
   const getActivityDescription = (trf: typeof recentTRFs[0]) => {
+    // ✅ Cari nama approver dari data yang ada, atau gunakan default "Manager"
+    const approverName = trf.pmApproval?.approverName || "Manager";
+
     switch (trf.status) {
       case 'DRAFT':
         return `Created by ${trf.employee?.employeeName}`;
       case 'SUBMITTED':
         return `Submitted by ${trf.employee?.employeeName}`;
-      case 'APPROVED':
-        return `Approved by ${trf.approverName}`;
+      case 'HOD_APPROVED':
+      case 'PM_APPROVED': // ✅ (Saya tambahkan ini jaga-jaga kalau statusnya PM_APPROVED)
+        return `Approved by ${approverName}`;
       case 'REJECTED':
-        return `Rejected by ${trf.approverName}`;
+        return `Rejected by ${approverName}`;
       case 'REVISED':
-        return `Returned for revision by ${trf.approverName}`;
+      case 'NEEDS_REVISION': // ✅ (Sama, jaga-jaga)
+        return `Returned for revision by ${approverName}`;
       default:
         return 'Updated';
     }

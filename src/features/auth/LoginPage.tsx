@@ -6,7 +6,6 @@ import { useAuthStore } from '@/store';
 import { ArrowRight, Loader2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
-import bcrypt from "bcryptjs";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -66,7 +65,7 @@ const LoginPage: React.FC = () => {
       toast.success(`Welcome back, ${user.username}!`);
       navigate("/");
 
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       toast.error("Login gagal. Pastikan koneksi internet stabil.");
     } finally {

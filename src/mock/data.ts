@@ -2,14 +2,9 @@
 
 import type {
   User,
-  Employee,
   TRF,
   StatusHistory,
-  DashboardStats,
-  RoomAvailability,
-  WeeklyTravel,
-  Activity,
-  ReferenceData
+  
 } from '@/types';
 
 /* =====================================================
@@ -83,28 +78,7 @@ export const mockUsers: User[] = [
    EMPLOYEES (UUID ONLY)
 ===================================================== */
 
-export const mockEmployees: Employee[] = [
-  {
-    id: "11111111-1111-1111-1111-111111111111",
-    employeeType: "EMPLOYEE",
-    employeeName: "John Doe",
-    jobTitle: "Mining Engineer",
-    department: "Operations",
-    section: "Production",
-    email: "john.doe@mining.com",
-    phone: "+62 812-3456-7890"
-  },
-  {
-    id: "22222222-2222-2222-2222-222222222222",
-    employeeType: "EMPLOYEE",
-    employeeName: "Jane Smith",
-    jobTitle: "Safety Officer",
-    department: "HSE",
-    section: "Safety",
-    email: "jane.smith@mining.com",
-    phone: "+62 813-9876-5432"
-  }
-];
+
 
 /* =====================================================
    IMPORTANT:
@@ -119,38 +93,9 @@ export const mockStatusHistory: StatusHistory[] = [];
    REFERENCE DATA
 ===================================================== */
 
-export const referenceData: ReferenceData = {
-  hotels: [
-    { code: "HTL001", name: "Grand Mining Hotel", location: "Site A" },
-    { code: "HTL002", name: "Camp Residence", location: "Site B" }
-  ],
-  locations: [
-    { code: "LOC001", name: "Site A", type: "SITE" },
-    { code: "LOC002", name: "Jakarta", type: "CITY" }
-  ],
-  purposes: [
-    { code: "PUR001", name: "Site Inspection" },
-    { code: "PUR002", name: "Training" }
-  ],
-  departments: [
-    { code: "DEPT001", name: "Operations" },
-    { code: "DEPT002", name: "HSE" }
-  ]
-};
+
 
 /* =====================================================
    DASHBOARD MOCK (SAFE)
 ===================================================== */
 
-export const dashboardStats: DashboardStats = {
-  totalTravelIn: 0,
-  totalTravelOut: 0,
-  siteEntry: 0,
-  onSiteActive: 0
-};
-
-export const roomAvailability: RoomAvailability[] = [];
-
-export const weeklyTravel: WeeklyTravel[] = [];
-
-export const recentActivities: Activity[] = [];

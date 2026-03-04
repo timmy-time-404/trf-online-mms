@@ -1,40 +1,45 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useTRFStore } from "@/store";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-// Fungsi untuk auto-generate username dari email
-const generateUsername = (email: string) => {
-  if (!email) return "";
-  return email.split("@")[0].toLowerCase().replace(/\s+/g, ".");
-};
+// ✅ 1. IMPORT TIPE USER
+import type { User, UserRole } from "@/types";
 
+// ✅ 2. HILANGKAN ANY PADA PROPS
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user?: any; // ✅ Kalau ada isinya, berarti mode Edit
+  user?: User | null; 
 }
 
 export default function UserFormDialog({ open, onOpenChange, user }: Props) {
-  const { createUser, updateUser, fetchUsers } = useTRFStore();
+  const { createUser, updateUser } = useTRFStore();
 
   const isEdit = !!user;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [form, setForm] = useState({
+  // ✅ 3. TIPE STATE FORM TEGAS AGAR USEEFFECT TIDAK ERROR
+  const [form, setForm] = useState<{
+    username: string;
+    email: string;
+    role: UserRole;
+    department: string;
+  }>({
     username: "",
     email: "",
     role: "EMPLOYEE",
     department: "",
   });
 
-  // ✅ Prefill saat mode edit
   useEffect(() => {
     if (user) {
       setForm({
@@ -44,7 +49,6 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
         department: user.department || "",
       });
     } else {
-      // Reset form jika ditutup/buka untuk Create
       setForm({
         username: "",
         email: "",
@@ -54,85 +58,100 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
     }
   }, [user, open]);
 
-  const submit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     try {
-      if (isEdit) {
+      if (isEdit && user) {
         await updateUser(user.id, form);
-        toast.success("User updated successfully");
+        toast.success("User updated successfully!");
       } else {
         await createUser(form);
-        toast.success("User created successfully");
+        toast.success("User created successfully!");
       }
-
-      await fetchUsers();
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save user");
+    } catch (error) { 
+      // ✅ 4. HILANGKAN ANY DI CATCH BLOCK!
+      console.error(error);
+      // Pengecekan tipe error yang aman ala Enterprise
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong!";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>
-            {isEdit ? "Edit User" : "Create New User"}
-          </DialogTitle>
+          <DialogTitle>{isEdit ? "Edit User" : "Add New User"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 mt-4">
-          <Input
-            className="w-full bg-gray-100"
-            placeholder="Username"
-            value={form.username}
-            readOnly
-          />
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Username</label>
+            <Input
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+              placeholder="johndoe"
+            />
+          </div>
 
-          <Input
-            className="w-full"
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => {
-              const email = e.target.value;
-              setForm({
-                ...form,
-                email,
-                // Hanya auto-generate username saat Create (bukan Edit)
-                username: isEdit ? form.username : generateUsername(email),
-              });
-            }}
-          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Email</label>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+              placeholder="john@example.com"
+              disabled={isEdit} 
+            />
+          </div>
 
-          <select
-            className="w-full border rounded-md p-2 text-sm"
-            value={form.role}
-            onChange={(e) =>
-              setForm({ ...form, role: e.target.value })
-            }
-          >
-            <option value="EMPLOYEE">Employee</option>
-            <option value="ADMIN_DEPT">Admin Dept</option>
-            <option value="HOD">HOD</option>
-            <option value="HR">HR</option>
-            <option value="PM">PM</option>
-            <option value="GA">GA</option>
-            <option value="SUPER_ADMIN">Super Admin</option>
-          </select>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Role</label>
+            <select
+              className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+            >
+              <option value="EMPLOYEE">EMPLOYEE</option>
+              <option value="ADMIN_DEPT">ADMIN_DEPT</option>
+              <option value="HOD">HOD</option>
+              <option value="HR">HR</option>
+              <option value="PM">PM</option>
+              <option value="GA">GA</option>
+              <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+            </select>
+          </div>
 
-          <Input
-            className="w-full"
-            placeholder="Department (optional)"
-            value={form.department}
-            onChange={(e) =>
-              setForm({ ...form, department: e.target.value })
-            }
-          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Department</label>
+            <Input
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              placeholder="e.g. IT, HR, Finance"
+            />
+          </div>
 
-          <Button className="w-full" onClick={submit}>
-            {isEdit ? "Save Changes" : "Create User"}
-          </Button>
-        </div>
+          <DialogFooter className="pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
-}
+} 

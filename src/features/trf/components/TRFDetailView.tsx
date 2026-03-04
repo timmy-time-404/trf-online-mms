@@ -26,9 +26,52 @@ import {
   Car,
   FileText,
   MessageSquare,
-  Download
+  Download,
+  Trash2 // ✅ Pastikan Trash2 di-import
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// ==========================================
+// ✅ KOMPONEN DIEVAKUASI KE LUAR AGAR LINTER DIAM
+// ==========================================
+const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string }) => (
+  <div className="flex items-start gap-3">
+    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+      <Icon className="w-4 h-4 text-gray-500" />
+    </div>
+    <div className="flex-1">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-sm font-medium text-gray-900">{value || '-'}</p>
+    </div>
+  </div>
+);
+
+const SectionCard = ({ 
+  title, 
+  icon: Icon, 
+  iconBg, 
+  iconColor, 
+  children 
+}: { 
+  title: string; 
+  icon: React.ElementType; 
+  iconBg: string; 
+  iconColor: string; 
+  children: React.ReactNode 
+}) => (
+  <Card className="border shadow-sm">
+    <CardHeader className="pb-4">
+      <div className="flex items-center gap-3">
+        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", iconBg)}>
+          <Icon className={cn("w-5 h-5", iconColor)} />
+        </div>
+        <CardTitle className="text-lg">{title}</CardTitle>
+      </div>
+    </CardHeader>
+    <CardContent>{children}</CardContent>
+  </Card>
+);
+// ==========================================
 
 interface TRFDetailViewProps {
   trf: TRF;
@@ -69,45 +112,6 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
     });
   };
 
-  const InfoRow = ({ icon: Icon, label, value }: { icon: any, label: string, value?: string }) => (
-    <div className="flex items-start gap-3">
-      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-        <Icon className="w-4 h-4 text-gray-500" />
-      </div>
-      <div className="flex-1">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="text-sm font-medium text-gray-900">{value || '-'}</p>
-      </div>
-    </div>
-  );
-
-  const SectionCard = ({ 
-    title, 
-    icon: Icon, 
-    iconBg, 
-    iconColor, 
-    children 
-  }: { 
-    title: string; 
-    icon: any; 
-    iconBg: string; 
-    iconColor: string; 
-    children: React.ReactNode 
-  }) => (
-    <Card className="border shadow-sm">
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", iconBg)}>
-            <Icon className={cn("w-5 h-5", iconColor)} />
-          </div>
-          <CardTitle className="text-lg">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-
-  // ✅ REVISI: Render approval timeline yang lebih akurat
   const renderApprovalTimeline = () => {
     const statusHierarchy = [
       'DRAFT',
@@ -213,7 +217,13 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
     );
   };
 
-  const filesList = (trf as any).gaFiles || trf.gaProcess?.files || [];
+  const rawDocs = trf.gaDocuments || {};
+  const filesList = Object.values(rawDocs).filter(
+    (val): val is { name: string; url: string } =>
+      typeof val === "object" && val !== null && "url" in val
+  );
+
+  const legacyTrf = (trf as unknown) as Record<string, string | undefined>;
 
   return (
     <div className="space-y-6">
@@ -247,6 +257,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
           )}
           {canDelete && onDelete && (
             <Button variant="destructive" onClick={onDelete}>
+              <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </Button>
           )}
@@ -285,14 +296,19 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InfoRow icon={Building} label="Department" value={trf.employee.department} />
-              <InfoRow icon={Briefcase} label="Tenant" value={trf.employee.tenant} />
-              <InfoRow icon={MapPin} label="Section" value={trf.employee.section} />
-              <InfoRow icon={MapPin} label="Point of Hire" value={trf.employee.pointOfHire} />
-              <InfoRow icon={Mail} label="Email" value={trf.employee.email} />
-              <InfoRow icon={Phone} label="Phone" value={trf.employee.phone} />
+              <InfoRow icon={Building} label="Department" value={trf.employee.department || '-'} />
+              <InfoRow icon={Briefcase} label="Tenant" value={trf.employee.tenant || '-'} />
+              <InfoRow icon={MapPin} label="Section" value={trf.employee.section || '-'} />
+              <InfoRow icon={MapPin} label="Point of Hire" value={trf.employee.pointOfHire || '-'} />
+              <InfoRow icon={Mail} label="Email" value={trf.employee.email || '-'} />
+              <InfoRow icon={Phone} label="Phone" value={trf.employee.phone || '-'} />
               <InfoRow icon={Calendar} label="Date of Hire" value={formatDate(trf.employee.dateOfHire)} />
-              <InfoRow icon={Shield} label="MCU Status" value={(trf.employee as any).mcuStatus} />
+              
+              <InfoRow 
+                icon={Shield} 
+                label="MCU Status" 
+                value={((trf.employee as unknown) as Record<string, string>)?.mcuStatus || '-'} 
+              />
             </div>
           </div>
         )}
@@ -447,7 +463,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         </SectionCard>
       )}
 
-      {/* VOUCHER SECTION - Only visible when GA_PROCESSED */}
+      {/* VOUCHER SECTION */}
       {canSeeVoucher && trf.gaProcess && (
         <SectionCard
           title="Travel Voucher & Tickets"
@@ -506,7 +522,6 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
               </div>
             )}
 
-            {/* 🔥 FILES - REAL DOWNLOAD LINKS 🔥 */}
             {filesList.length > 0 && (
               <div className="space-y-2 mt-4 pt-4 border-t border-gray-100">
                 <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -514,7 +529,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
                   Attachments (E-Tickets / Vouchers)
                 </p>
                 <div className="flex flex-col gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  {filesList.map((f: any, idx: number) => (
+                  {filesList.map((f, idx) => (
                     <a
                       key={f.url || idx}
                       href={f.url}
@@ -530,7 +545,6 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
               </div>
             )}
 
-            {/* Message from GA */}
             {trf.gaProcess.remarksToEmployee && (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
@@ -544,18 +558,17 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         </SectionCard>
       )}
 
-      {/* Legacy Approval Info (for backward compatibility) */}
-      {trf.approverName && !trf.pmApproval && (
+      {legacyTrf.approverName && !trf.pmApproval && (
         <Card className="border shadow-sm bg-gray-50">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-900">
-                  {trf.status === 'APPROVED' ? 'Approved by' : 'Processed by'}: {trf.approverName}
+                  {trf.status === 'PM_APPROVED' ? 'Approved by' : 'Processed by'}: {legacyTrf.approverName}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {formatDateTime(trf.approvedAt)}
+                  {formatDateTime(legacyTrf.approvedAt)}
                 </p>
               </div>
             </div>

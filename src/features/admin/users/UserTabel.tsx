@@ -1,4 +1,11 @@
-export default function UserTable({ users }) {
+import React from "react";
+import type { User } from "@/types";
+interface UserTableProps {
+  users: User[];
+}
+
+// ✅ 3. Pasangkan tipe UserTableProps ke komponen
+export default function UserTable({ users }: UserTableProps) {
   return (
     <div className="border rounded-lg">
       <table className="w-full">
@@ -12,7 +19,8 @@ export default function UserTable({ users }) {
         </thead>
 
         <tbody>
-          {users.map(u => (
+          {/* ✅ 4. Sekarang TypeScript tahu persis bahwa 'u' adalah sebuah 'User' */}
+          {users.map((u) => (
             <tr key={u.id} className="border-t">
               <td className="p-3">{u.username}</td>
               <td>{u.email}</td>
