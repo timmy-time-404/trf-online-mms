@@ -678,19 +678,3 @@ export const uploadGAFile = async (
   return data.publicUrl;
 };
 
-export const saveGAFileToTRF = async (
-  trfId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  fileUrl: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  fileName: string
-) => {
-  const { data: trf } = await supabase
-    .from("trfs")
-    .select("*, ga_documents")
-    .eq("id", trfId)
-    .single();
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const existing = trf?.ga_documents || {};
-};
