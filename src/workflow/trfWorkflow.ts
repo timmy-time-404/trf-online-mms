@@ -1,11 +1,25 @@
 import type { TRFStatus, UserRole } from '@/types';
 
 export type WorkflowAction = 'APPROVE' | 'REJECT' | 'REVISE' | 'VERIFY';
+
 export function getNextStatus(
   current: TRFStatus,
   role: UserRole,
-  action: 'APPROVE' | 'VERIFY' | 'REJECT'
+  action: WorkflowAction // Menggunakan type alias agar lebih rapi
 ): TRFStatus {
+
+  // ✅ TANGANI PENOLAKAN
+  if (action === 'REJECT') {
+    return 'REJECTED'; 
+  }
+
+  // ✅ TANGANI REVISI (Kembali ke Karyawan)
+  if (action === 'REVISE') {
+    // Biasanya kalau dikembalikan ke karyawan, statusnya jadi DRAFT atau REVISED.
+    // PENTING: Pastikan kata 'DRAFT' ini ada di dalam daftar TRFStatus di file types Anda!
+    // Jika namanya beda (misal 'RETURNED'), ganti kata 'DRAFT' di bawah ini.
+    return 'DRAFT'; 
+  }
 
   // ADMIN DEPT
   if (role === 'ADMIN_DEPT' && action === 'VERIFY') {

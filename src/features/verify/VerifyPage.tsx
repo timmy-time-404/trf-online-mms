@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent,} from '@/components/ui/card';  
+import { Card, CardContent } from '@/components/ui/card';  
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +36,7 @@ const VerifyPage: React.FC = () => {
   const { 
     getTRFsForVerification, 
     fetchTRFs, 
-    handleVerify // ✅ REVISI: Menggunakan fungsi sakti dari Mandor
+    handleVerify 
   } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
@@ -64,9 +64,8 @@ const VerifyPage: React.FC = () => {
   const confirmVerify = async () => {
     if (!selectedTRF || !currentUser || !verifyAction) return;
 
-    
-    const actionToEngine: WorkflowAction =
-  verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
+    // ✅ Perubahan diterapkan di sini:
+    const actionToEngine: WorkflowAction = verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
     
     // Panggil sang Mandor
     const success = await handleVerify(
