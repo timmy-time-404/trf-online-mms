@@ -60,14 +60,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 };
 
 function App() {
-  // ✅ Added fetchReferenceMaster
   const { fetchEmployees, fetchTRFs, fetchReferenceMaster } = useTRFStore();
   const { isAuthenticated, isLoading } = useAuthStore();
 
-  // Fetch data from Supabase when authenticated
   useEffect(() => {
     const loadData = async () => {
-      await fetchReferenceMaster(); // ⭐ LOAD MASTER DULU
+      await fetchReferenceMaster(); 
       await fetchEmployees();
       await fetchTRFs();      
     };

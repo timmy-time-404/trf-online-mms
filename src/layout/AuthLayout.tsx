@@ -9,7 +9,6 @@ const AuthLayout: React.FC = () => {
         <div className="text-center mb-8">
           
           {/* ✅ LOGO PERUSAHAAN */}
-          {/* Pastikan file logo Anda (misal: logo.png) berada di dalam folder "public" */}
           <img 
             src="src\assets\mms-color.png" 
             alt="Logo PT Merdeka Mining Servis" 

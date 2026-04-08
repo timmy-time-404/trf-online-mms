@@ -555,7 +555,7 @@ export const addStatusHistory = async (
 ===================================================== */
 
 export const getEmployees = async (): Promise<Employee[]> => {
-  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
+  
   if (!isSupabaseEnabled()) return [];
 
   const { data } = await supabase.from("employees").select("*");
@@ -564,7 +564,6 @@ export const getEmployees = async (): Promise<Employee[]> => {
 };
 
 export const getTRFs = async (): Promise<TRF[]> => {
-  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
   if (!isSupabaseEnabled()) return [];
 
   const { data } = await supabase
@@ -578,7 +577,6 @@ export const getTRFs = async (): Promise<TRF[]> => {
 };
 
 export const getUsers = async (): Promise<User[]> => {
-  // ✅ KEMBALIKAN ARRAY KOSONG JIKA TIDAK ADA DATABASE
   if (!isSupabaseEnabled()) return [];
 
   const { data, error } = await supabase
@@ -587,7 +585,6 @@ export const getUsers = async (): Promise<User[]> => {
 
   if (error) {
     console.error("Error fetching users:", error);
-    // ✅ KEMBALIKAN ARRAY KOSONG SAAT ERROR
     return [];
   }
 

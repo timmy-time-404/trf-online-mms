@@ -5,56 +5,54 @@ export type WorkflowAction = 'APPROVE' | 'REJECT' | 'REVISE' | 'VERIFY';
 export function getNextStatus(
   current: TRFStatus,
   role: UserRole,
-  action: WorkflowAction // Menggunakan type alias agar lebih rapi
+  action: WorkflowAction
 ): TRFStatus {
 
-  // ✅ TANGANI PENOLAKAN
+  // =============================
+  // 🔴 REJECT (VALIDATED)
+  // =============================
   if (action === 'REJECT') {
-    return 'REJECTED'; 
+    const allowedReject: Record<UserRole, TRFStatus[]> = {
+      ADMIN_DEPT: ['SUBMITTED'],
+      HOD: ['PENDING_APPROVAL'],
+      HR: ['HOD_APPROVED'],
+      PM: ['HR_APPROVED'],
+      GA: ['PM_APPROVED'],
+      EMPLOYEE: [],
+      SUPER_ADMIN: ['SUBMITTED','PENDING_APPROVAL','HOD_APPROVED','HR_APPROVED','PM_APPROVED']
+    };
+
+    if (!allowedReject[role]?.includes(current)) {
+      throw new Error(`❌ Reject not allowed: ${current} → ${role}`);
+    }
+
+    return 'REJECTED';
   }
 
-  // ✅ TANGANI REVISI (Kembali ke Karyawan)
+  // =============================
+  // 🟡 REVISE
+  // =============================
   if (action === 'REVISE') {
-    // Biasanya kalau dikembalikan ke karyawan, statusnya jadi DRAFT atau REVISED.
-    // PENTING: Pastikan kata 'DRAFT' ini ada di dalam daftar TRFStatus di file types Anda!
-    // Jika namanya beda (misal 'RETURNED'), ganti kata 'DRAFT' di bawah ini.
-    return 'DRAFT'; 
+    return 'NEEDS_REVISION';
   }
 
-  // ADMIN DEPT
-  if (role === 'ADMIN_DEPT' && action === 'VERIFY') {
-    if (current !== 'SUBMITTED')
-      throw new Error('Invalid workflow');
-    return 'PENDING_APPROVAL';
+  // =============================
+  // 🔵 MAIN FLOW
+  // =============================
+  const flow: Record<string, TRFStatus> = {
+    'ADMIN_DEPT_VERIFY_SUBMITTED': 'PENDING_APPROVAL',
+    'HOD_APPROVE_PENDING_APPROVAL': 'HOD_APPROVED',
+    'HR_APPROVE_HOD_APPROVED': 'HR_APPROVED',
+    'PM_APPROVE_HR_APPROVED': 'PM_APPROVED',
+    'GA_APPROVE_PM_APPROVED': 'GA_PROCESSED'
+  };
+
+  const key = `${role}_${action}_${current}`;
+  const next = flow[key];
+
+  if (!next) {
+    throw new Error(`❌ Invalid workflow: ${current} → ${role} → ${action}`);
   }
 
-  // HOD
-  if (role === 'HOD' && action === 'APPROVE') {
-    if (current !== 'PENDING_APPROVAL')
-      throw new Error('Invalid workflow');
-    return 'HOD_APPROVED';
-  }
-
-  // HR
-  if (role === 'HR' && action === 'APPROVE') {
-    if (current !== 'HOD_APPROVED')
-      throw new Error('Invalid workflow');
-    return 'HR_APPROVED';
-  }
-
-  // PM
-  if (role === 'PM' && action === 'APPROVE') {
-    if (current !== 'HR_APPROVED')
-      throw new Error('Invalid workflow');
-    return 'PM_APPROVED';
-  }
-
-  // GA
-  if (role === 'GA' && action === 'APPROVE') {
-    if (current !== 'PM_APPROVED')
-      throw new Error('Invalid workflow');
-    return 'GA_PROCESSED';
-  }
-
-  throw new Error('Action not allowed');
+  return next;
 }

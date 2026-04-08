@@ -21,7 +21,6 @@ import type {
   GAProcess
 } from '@/types';
 
-// ✅ MOCK DATA IMPORT TELAH DIBUMI-HANGUSKAN DARI SINI!
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
 
@@ -163,7 +162,9 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     lumpsumNote: dbTRF.lumpsum_note,
     lumpsumInputBy: dbTRF.lumpsum_input_by,
     lumpsumInputAt: dbTRF.lumpsum_input_at,
-    gaDocuments: (dbTRF.ga_documents ?? {}) as Record<string, GADocument>, 
+    gaDocuments: dbTRF.ga_documents 
+    ? (dbTRF.ga_documents as TRF['gaDocuments'])
+    : {},
     submittedAt: dbTRF.submitted_at,
     createdAt: dbTRF.created_at,
     updatedAt: dbTRF.updated_at
@@ -242,10 +243,6 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-export interface GADocument {
-  url: string;
-  name: string;
-}
 
 // ============================================
 // TRF STORE
@@ -256,7 +253,6 @@ interface TRFState {
   statusHistory: StatusHistory[];
   employees: Employee[];
   users: User[];
-  // ✅ Tipe referensi diamankan
   referenceData: Record<string, unknown>;
   isLoading: boolean;
   
@@ -313,7 +309,6 @@ interface TRFState {
 export const useTRFStore = create<TRFState>()(
   persist(
     (set, get) => ({
-      // ✅ STATE AWAL BERSIH DARI MOCK DATA
       trfs: [],
       statusHistory: [],
       employees: [],
@@ -600,7 +595,7 @@ export const useTRFStore = create<TRFState>()(
         if (!trf) return false;
 
         try {
-          const nextStatus = getNextStatus(trf.status, currentUser.role, action as Parameters<typeof getNextStatus>[2]);
+          const nextStatus = getNextStatus(trf.status, currentUser.role, action);
           
           await supabase.from('trfs').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', trfId);
           await get().addStatusHistory({ trfId, changedBy: currentUser.id, changedByName: 
