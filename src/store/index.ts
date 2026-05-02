@@ -741,6 +741,7 @@ interface DashboardState {
     siteEntry: number;
     onSiteActive: number;
   };
+  isLoadingStats: boolean;
   roomAvailability: {
     hotelName: string;
     total: number;
@@ -752,15 +753,17 @@ interface DashboardState {
     travelIn: number;
     travelOut: number;
   }[];
+  fetchDashboardStats: () => Promise<void>;
 }
-
-export const useDashboardStore = create<DashboardState>()(() => ({
+ 
+export const useDashboardStore = create<DashboardState>()((set) => ({
   stats: {
-    totalTravelIn: 156,
-    totalTravelOut: 142,
-    siteEntry: 23,
-    onSiteActive: 89
+    totalTravelIn: 0,
+    totalTravelOut: 0,
+    siteEntry: 0,
+    onSiteActive: 0
   },
+  isLoadingStats: false,
   roomAvailability: [
     { hotelName: 'Grand Mining Hotel', total: 120, occupied: 98, available: 22 },
     { hotelName: 'Camp Residence', total: 80, occupied: 45, available: 35 },
@@ -775,5 +778,78 @@ export const useDashboardStore = create<DashboardState>()(() => ({
     { day: 'Fri', travelIn: 18, travelOut: 14 },
     { day: 'Sat', travelIn: 5, travelOut: 6 },
     { day: 'Sun', travelIn: 3, travelOut: 4 }
-  ]
+  ],
+ 
+  fetchDashboardStats: async () => {
+    if (!isSupabaseEnabled()) return;
+ 
+    set({ isLoadingStats: true });
+ 
+    try {
+      // Ambil semua TRF yang sudah GA_PROCESSED
+      // Hanya butuh kolom: id, travel_arrangements, start_date, end_date
+      const { data, error } = await supabase
+        .from('trfs')
+        .select('id, travel_arrangements, start_date, end_date')
+        .eq('status', 'GA_PROCESSED');
+ 
+      if (error) {
+        console.error('Error fetching dashboard stats:', error);
+        return;
+      }
+ 
+      if (!data) return;
+ 
+      // Tanggal hari ini dalam format YYYY-MM-DD
+      // supaya bisa dibandingkan langsung dengan start_date & end_date
+      const today = new Date().toISOString().split('T')[0];
+ 
+      let totalTravelIn = 0;
+      let totalTravelOut = 0;
+      let onSiteActive = 0;
+ 
+      data.forEach((trf) => {
+        const arrangements: { travelType: string }[] = trf.travel_arrangements || [];
+ 
+        // --- TRAVEL IN ---
+        // 1 TRF = 1 hitungan meskipun ada 2 arrangement TRAVEL_IN di dalamnya
+        const hasTravelIn = arrangements.some(
+          (arr) => arr.travelType === 'TRAVEL_IN'
+        );
+        if (hasTravelIn) totalTravelIn++;
+ 
+        // --- TRAVEL OUT ---
+        const hasTravelOut = arrangements.some(
+          (arr) => arr.travelType === 'TRAVEL_OUT'
+        );
+        if (hasTravelOut) totalTravelOut++;
+ 
+        // --- ON SITE ACTIVE ---
+        // Karyawan dianggap on-site jika:
+        // startDate <= hari ini <= endDate
+        // Lepas dari kapan GA mengirim tiket,
+        // yang berlaku adalah tanggal di TRF
+        const startDate = trf.start_date; // format: YYYY-MM-DD
+        const endDate = trf.end_date;     // format: YYYY-MM-DD
+ 
+        if (startDate && endDate && startDate <= today && endDate >= today) {
+          onSiteActive++;
+        }
+      });
+ 
+      set({
+        stats: {
+          totalTravelIn,
+          totalTravelOut,
+          siteEntry: 0, // bisa diisi nanti jika ada definisinya
+          onSiteActive
+        },
+        isLoadingStats: false
+      });
+ 
+    } catch (err) {
+      console.error('fetchDashboardStats error:', err);
+      set({ isLoadingStats: false });
+    }
+  }
 }));
