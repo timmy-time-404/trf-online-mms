@@ -7,12 +7,12 @@ import { Plane, PlaneTakeoff, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const DashboardPage: React.FC = () => {
-  const { stats, isLoadingStats, fetchDashboardStats } = useDashboardStore();
+  const { stats, isLoadingStats, fetchDashboardStats, fetchWeeklyTravel } = useDashboardStore();
 
-  // Ambil data real dari Supabase setiap kali halaman dashboard dibuka
   useEffect(() => {
     fetchDashboardStats();
-  }, [fetchDashboardStats]);
+    fetchWeeklyTravel();
+  }, [fetchDashboardStats, fetchWeeklyTravel]);
 
   return (
     <div className="space-y-6">
@@ -25,7 +25,6 @@ const DashboardPage: React.FC = () => {
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
 
-        {/* Total Travel In */}
         {isLoadingStats ? (
           <Skeleton className="h-32 rounded-xl" />
         ) : (
@@ -38,7 +37,6 @@ const DashboardPage: React.FC = () => {
           />
         )}
 
-        {/* Total Travel Out */}
         {isLoadingStats ? (
           <Skeleton className="h-32 rounded-xl" />
         ) : (
@@ -51,7 +49,6 @@ const DashboardPage: React.FC = () => {
           />
         )}
 
-        {/* On Site Active */}
         {isLoadingStats ? (
           <Skeleton className="h-32 rounded-xl" />
         ) : (
@@ -66,7 +63,7 @@ const DashboardPage: React.FC = () => {
 
       </div>
 
-      {/* Charts */}
+      {/* Weekly Travel Chart */}
       <div className="w-full">
         <WeeklyTravelChart />
       </div>

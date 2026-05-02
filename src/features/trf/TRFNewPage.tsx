@@ -212,10 +212,10 @@ const TRFNewPage: React.FC = () => {
           Cancel
         </Button>
 
-        <Button variant="secondary" onClick={handleSaveDraft}>
+        {/* <Button variant="secondary" onClick={handleSaveDraft}>
           <Save className="w-4 h-4 mr-2" />
           Save as Draft
-        </Button>
+        </Button> */}
 
         <Button onClick={() => setSubmitDialogOpen(true)}>
           <Send className="w-4 h-4 mr-2" />

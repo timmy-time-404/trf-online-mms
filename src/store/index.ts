@@ -754,8 +754,9 @@ interface DashboardState {
     travelOut: number;
   }[];
   fetchDashboardStats: () => Promise<void>;
+  fetchWeeklyTravel: () => Promise<void>;
 }
- 
+
 export const useDashboardStore = create<DashboardState>()((set) => ({
   stats: {
     totalTravelIn: 0,
@@ -771,85 +772,189 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
     { hotelName: 'City Center Hotel', total: 40, occupied: 28, available: 12 }
   ],
   weeklyTravel: [
-    { day: 'Mon', travelIn: 12, travelOut: 8 },
-    { day: 'Tue', travelIn: 15, travelOut: 10 },
-    { day: 'Wed', travelIn: 8, travelOut: 12 },
-    { day: 'Thu', travelIn: 20, travelOut: 15 },
-    { day: 'Fri', travelIn: 18, travelOut: 14 },
-    { day: 'Sat', travelIn: 5, travelOut: 6 },
-    { day: 'Sun', travelIn: 3, travelOut: 4 }
+    { day: 'Mon', travelIn: 0, travelOut: 0 },
+    { day: 'Tue', travelIn: 0, travelOut: 0 },
+    { day: 'Wed', travelIn: 0, travelOut: 0 },
+    { day: 'Thu', travelIn: 0, travelOut: 0 },
+    { day: 'Fri', travelIn: 0, travelOut: 0 },
+    { day: 'Sat', travelIn: 0, travelOut: 0 },
+    { day: 'Sun', travelIn: 0, travelOut: 0 }
   ],
- 
+
+  // ============================================
+  // STAT CARDS: Travel In, Travel Out, On Site
+  // ============================================
   fetchDashboardStats: async () => {
     if (!isSupabaseEnabled()) return;
- 
+
     set({ isLoadingStats: true });
- 
+
     try {
-      // Ambil semua TRF yang sudah GA_PROCESSED
-      // Hanya butuh kolom: id, travel_arrangements, start_date, end_date
       const { data, error } = await supabase
         .from('trfs')
         .select('id, travel_arrangements, start_date, end_date')
         .eq('status', 'GA_PROCESSED');
- 
+
       if (error) {
         console.error('Error fetching dashboard stats:', error);
+        set({ isLoadingStats: false });
         return;
       }
- 
-      if (!data) return;
- 
-      // Tanggal hari ini dalam format YYYY-MM-DD
-      // supaya bisa dibandingkan langsung dengan start_date & end_date
+
+      if (!data) {
+        set({ isLoadingStats: false });
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
- 
+
       let totalTravelIn = 0;
       let totalTravelOut = 0;
       let onSiteActive = 0;
- 
+
       data.forEach((trf) => {
         const arrangements: { travelType: string }[] = trf.travel_arrangements || [];
- 
-        // --- TRAVEL IN ---
-        // 1 TRF = 1 hitungan meskipun ada 2 arrangement TRAVEL_IN di dalamnya
+
         const hasTravelIn = arrangements.some(
           (arr) => arr.travelType === 'TRAVEL_IN'
         );
         if (hasTravelIn) totalTravelIn++;
- 
-        // --- TRAVEL OUT ---
+
         const hasTravelOut = arrangements.some(
           (arr) => arr.travelType === 'TRAVEL_OUT'
         );
         if (hasTravelOut) totalTravelOut++;
- 
-        // --- ON SITE ACTIVE ---
-        // Karyawan dianggap on-site jika:
-        // startDate <= hari ini <= endDate
-        // Lepas dari kapan GA mengirim tiket,
-        // yang berlaku adalah tanggal di TRF
-        const startDate = trf.start_date; // format: YYYY-MM-DD
-        const endDate = trf.end_date;     // format: YYYY-MM-DD
- 
+
+        const startDate = trf.start_date;
+        const endDate = trf.end_date;
         if (startDate && endDate && startDate <= today && endDate >= today) {
           onSiteActive++;
         }
       });
- 
+
       set({
         stats: {
           totalTravelIn,
           totalTravelOut,
-          siteEntry: 0, // bisa diisi nanti jika ada definisinya
+          siteEntry: 0,
           onSiteActive
         },
         isLoadingStats: false
       });
- 
+
     } catch (err) {
       console.error('fetchDashboardStats error:', err);
       set({ isLoadingStats: false });
+    }
+  },
+
+  // ============================================
+  // WEEKLY TRAVEL CHART: Senin - Minggu berjalan
+  // Semua status TRF, berdasarkan travelDate di arrangement
+  // 1 TRF = 1 hitungan per hari per tipe
+  // ============================================
+  fetchWeeklyTravel: async () => {
+    if (!isSupabaseEnabled()) return;
+
+    try {
+      // Hitung Senin dan Minggu minggu berjalan
+      const now = new Date();
+
+      // getDay() = 0 (Sun) ... 6 (Sat)
+      // Kita ubah ke: 0 (Mon) ... 6 (Sun)
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      // Format ke YYYY-MM-DD untuk query Supabase
+      const mondayStr = monday.toISOString().split('T')[0];
+      const sundayStr = sunday.toISOString().split('T')[0];
+
+      // Ambil semua TRF (semua status), kolom yang dibutuhkan saja
+      const { data, error } = await supabase
+        .from('trfs')
+        .select('id, travel_arrangements');
+
+      if (error) {
+        console.error('Error fetching weekly travel:', error);
+        return;
+      }
+
+      if (!data) return;
+
+      // Buat struktur per hari: key = 'YYYY-MM-DD'
+      // value = { travelInTRFs: Set<trfId>, travelOutTRFs: Set<trfId> }
+      // Pakai Set agar 1 TRF hanya terhitung 1x per hari meski punya 2 arrangement
+      const dailyMap: Record<string, {
+        travelInTRFs: Set<string>;
+        travelOutTRFs: Set<string>;
+      }> = {};
+
+      // Inisialisasi map untuk Senin s/d Minggu
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const key = d.toISOString().split('T')[0];
+        dailyMap[key] = {
+          travelInTRFs: new Set(),
+          travelOutTRFs: new Set()
+        };
+      }
+
+      // Proses setiap TRF
+      data.forEach((trf) => {
+        const arrangements: { travelType: string; travelDate: string }[] =
+          trf.travel_arrangements || [];
+
+        arrangements.forEach((arr) => {
+          const travelDate = arr.travelDate; // format: YYYY-MM-DD
+
+          // Hanya hitung jika travelDate ada di rentang minggu ini
+          if (!travelDate || travelDate < mondayStr || travelDate > sundayStr) {
+            return;
+          }
+
+          if (!dailyMap[travelDate]) return;
+
+          if (arr.travelType === 'TRAVEL_IN') {
+            // Set otomatis abaikan duplikat —
+            // jadi 2 arrangement TRAVEL_IN di hari yang sama hanya = 1 hitungan
+            dailyMap[travelDate].travelInTRFs.add(trf.id);
+          }
+
+          if (arr.travelType === 'TRAVEL_OUT') {
+            dailyMap[travelDate].travelOutTRFs.add(trf.id);
+          }
+        });
+      });
+
+      // Konversi ke format yang dipakai WeeklyTravelChart
+      const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      const weeklyTravel = dayLabels.map((label, index) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + index);
+        const key = d.toISOString().split('T')[0];
+        const entry = dailyMap[key];
+
+        return {
+          day: label,
+          travelIn: entry ? entry.travelInTRFs.size : 0,
+          travelOut: entry ? entry.travelOutTRFs.size : 0
+        };
+      });
+
+      set({ weeklyTravel });
+
+    } catch (err) {
+      console.error('fetchWeeklyTravel error:', err);
     }
   }
 }));
