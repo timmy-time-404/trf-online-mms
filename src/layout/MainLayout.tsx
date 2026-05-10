@@ -175,7 +175,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
       <aside
         className={cn(
@@ -184,14 +184,14 @@ const MainLayout: React.FC = () => {
         )}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-gray-200">
+        <div className="flex items-center h-16 px-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">TRF</span>
+            <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 bg-blue-600 rounded-lg">
+              <span className="text-sm font-bold text-white">TRF</span>
             </div>
             {sidebarOpen && (
               <div className="overflow-hidden">
-                <h1 className="font-semibold text-gray-900 text-sm whitespace-nowrap">TRF Online</h1>
+                <h1 className="text-sm font-semibold text-gray-900 whitespace-nowrap">TRF Online</h1>
                 <p className="text-xs text-gray-500 whitespace-nowrap">Travel Request</p>
               </div>
             )}
@@ -217,10 +217,10 @@ const MainLayout: React.FC = () => {
                 )}
                 title={!sidebarOpen ? item.label : undefined}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className="flex-shrink-0 w-5 h-5" />
                 {sidebarOpen && (
                   <>
-                    <span className="text-sm font-medium flex-1">{item.label}</span>
+                    <span className="flex-1 text-sm font-medium">{item.label}</span>
                     {/* Badge indicator for action items */}
                     {(item.badge === 'verify' || item.badge === 'approval' || item.badge === 'process') && (
                       <span className="w-2 h-2 bg-red-500 rounded-full"></span>
@@ -236,7 +236,7 @@ const MainLayout: React.FC = () => {
       {/* Main Content */}
       <div className={cn('flex-1 transition-all duration-300', sidebarOpen ? 'ml-64' : 'ml-16')}>
         {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-10">
+        <header className="sticky top-0 z-10 flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"

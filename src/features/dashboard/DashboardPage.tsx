@@ -3,11 +3,12 @@ import { useDashboardStore } from '@/store';
 import StatCard from './components/StatCard';
 import WeeklyTravelChart from './components/WeeklyTravelChart';
 import RecentActivityTable from './components/RecentActivityTable';
-import { Plane, PlaneTakeoff, Users } from 'lucide-react';
+import { Plane, PlaneTakeoff, Users, Clock } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const DashboardPage: React.FC = () => {
-  const { stats, isLoadingStats, fetchDashboardStats, fetchWeeklyTravel } = useDashboardStore();
+  const { stats, isLoadingStats, fetchDashboardStats, fetchWeeklyTravel } =
+    useDashboardStore();
 
   useEffect(() => {
     fetchDashboardStats();
@@ -19,12 +20,13 @@ const DashboardPage: React.FC = () => {
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Overview of travel request activities</p>
+        <p className="mt-1 text-gray-500">
+          Overview of travel request activities
+        </p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {isLoadingStats ? (
           <Skeleton className="h-32 rounded-xl" />
         ) : (
@@ -61,6 +63,17 @@ const DashboardPage: React.FC = () => {
           />
         )}
 
+        {isLoadingStats ? (
+          <Skeleton className="h-32 rounded-xl" />
+        ) : (
+          <StatCard
+            title="Days In Site"
+            value={stats.daysInSite}
+            icon={Clock}
+            description="Total duration of current stay"
+            color="orange" // Menggunakan warna orange agar variatif
+          />
+        )}
       </div>
 
       {/* Weekly Travel Chart */}

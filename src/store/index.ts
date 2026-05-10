@@ -3,12 +3,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
-import bcrypt from "bcryptjs";
-import type { 
-  User, 
-  UserRole, 
-  TRF, 
-  TRFStatus, 
+import bcrypt from 'bcryptjs';
+import type {
+  User,
+  UserRole,
+  TRF,
+  TRFStatus,
   Employee,
   EmployeeType,
   StatusHistory,
@@ -18,9 +18,8 @@ import type {
   TravelArrangement,
   AdminDeptVerify,
   PMApproval,
-  GAProcess
+  GAProcess,
 } from '@/types';
-
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
 
@@ -64,7 +63,7 @@ interface DBTRFRow {
   accommodation?: Accommodation;
   travel_arrangements?: TravelArrangement[];
   admin_dept_verify?: AdminDeptVerify;
-  parallel_approval?: unknown; 
+  parallel_approval?: unknown;
   pm_approval?: PMApproval;
   ga_process?: GAProcess;
   ga_documents?: Record<string, unknown>;
@@ -112,7 +111,7 @@ const transformUserFromDB = (dbUser: DBUserRow): User => ({
   email: dbUser.email,
   role: dbUser.role as UserRole,
   employeeId: dbUser.employee_id,
-  department: dbUser.department
+  department: dbUser.department,
 });
 
 const transformEmployeeFromDB = (dbEmp: DBEmployeeRow): Employee => ({
@@ -126,7 +125,7 @@ const transformEmployeeFromDB = (dbEmp: DBEmployeeRow): Employee => ({
   email: dbEmp.email,
   phone: dbEmp.phone,
   dateOfHire: dbEmp.date_of_hire,
-  pointOfHire: dbEmp.point_of_hire
+  pointOfHire: dbEmp.point_of_hire,
 });
 
 const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
@@ -134,7 +133,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     id: dbTRF.id,
     trfNumber: dbTRF.trf_number,
     employeeId: dbTRF.employee_id,
-    employee: employees.find(e => e.id === dbTRF.employee_id) ?? {
+    employee: employees.find((e) => e.id === dbTRF.employee_id) ?? {
       id: dbTRF.employee_id,
       employeeName: 'Unknown Employee',
       employeeType: 'EMPLOYEE',
@@ -143,7 +142,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
       section: '-',
       email: '-',
       phone: '-',
-      pointOfHire: '-'
+      pointOfHire: '-',
     },
     department: dbTRF.department,
     travelPurpose: dbTRF.travel_purpose,
@@ -162,12 +161,12 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     lumpsumNote: dbTRF.lumpsum_note,
     lumpsumInputBy: dbTRF.lumpsum_input_by,
     lumpsumInputAt: dbTRF.lumpsum_input_at,
-    gaDocuments: dbTRF.ga_documents 
-    ? (dbTRF.ga_documents as TRF['gaDocuments'])
-    : {},
+    gaDocuments: dbTRF.ga_documents
+      ? (dbTRF.ga_documents as TRF['gaDocuments'])
+      : {},
     submittedAt: dbTRF.submitted_at,
     createdAt: dbTRF.created_at,
-    updatedAt: dbTRF.updated_at
+    updatedAt: dbTRF.updated_at,
   };
 };
 
@@ -192,18 +191,22 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
 
-      login: (user) => set({ currentUser: user, isAuthenticated: true, isLoading: false }),
-      
+      login: (user) =>
+        set({ currentUser: user, isAuthenticated: true, isLoading: false }),
+
       logout: () => {
         if (isSupabaseEnabled()) {
           supabase.auth.signOut();
         }
         set({ currentUser: null, isAuthenticated: false, isLoading: false });
       },
-      
-      switchRole: (role) => set((state) => ({
-        currentUser: state.currentUser ? { ...state.currentUser, role } : null
-      })),
+
+      switchRole: (role) =>
+        set((state) => ({
+          currentUser: state.currentUser
+            ? { ...state.currentUser, role }
+            : null,
+        })),
 
       loadUserFromSession: async () => {
         if (!isSupabaseEnabled()) {
@@ -211,8 +214,10 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
         if (session?.user) {
           const { data: userData } = await supabase
             .from('users')
@@ -228,21 +233,20 @@ export const useAuthStore = create<AuthState>()(
                 email: userData.email,
                 role: userData.role as UserRole,
                 employeeId: userData.employee_id,
-                department: userData.department
+                department: userData.department,
               },
               isAuthenticated: true,
-              isLoading: false
+              isLoading: false,
             });
           }
         } else {
           set({ isLoading: false });
         }
-      }
+      },
     }),
-    { name: 'trf-auth-storage' }
-  )
+    { name: 'trf-auth-storage' },
+  ),
 );
-
 
 // ============================================
 // TRF STORE
@@ -255,7 +259,7 @@ interface TRFState {
   users: User[];
   referenceData: Record<string, unknown>;
   isLoading: boolean;
-  
+
   referenceMaster: {
     departments: string[];
     purposes: string[];
@@ -263,18 +267,21 @@ interface TRFState {
     accommodations: string[];
   };
   fetchReferenceMaster: () => Promise<void>;
-  
+
   searchLocations: (keyword: string, type: string) => Promise<LocationRow[]>;
   fetchAllData: () => Promise<void>;
-  forceRefreshTRFs: () => Promise<void>; 
-  
+  forceRefreshTRFs: () => Promise<void>;
+
   fetchEmployees: () => Promise<void>;
   createEmployee: (payload: EmployeePayload) => Promise<void>;
-  updateEmployee: (id: string, payload: Partial<EmployeePayload>) => Promise<void>;
+  updateEmployee: (
+    id: string,
+    payload: Partial<EmployeePayload>,
+  ) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
-  
+
   fetchTRFs: () => Promise<void>;
-  
+
   getTRFById: (id: string) => TRF | undefined;
   getTRFsByEmployee: (employeeId: string) => TRF[];
   getTRFsByStatus: (status: TRFStatus) => TRF[];
@@ -290,16 +297,28 @@ interface TRFState {
   submitTRF: (
     id: string,
     changedBy: string,
-    changedByName: string
-  ) => Promise<boolean>;  
+    changedByName: string,
+  ) => Promise<boolean>;
   getStatusHistory: (trfId: string) => StatusHistory[];
-  addStatusHistory: (entry: Omit<StatusHistory, 'id' | 'changedAt'>) => Promise<void>;
+  addStatusHistory: (
+    entry: Omit<StatusHistory, 'id' | 'changedAt'>,
+  ) => Promise<void>;
   getEmployeeById: (id: string) => Employee | undefined;
   getEmployeesByType: (type: 'EMPLOYEE' | 'VISITOR') => Employee[];
   getUserById: (id: string) => User | undefined;
-  handleVerify: (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => Promise<boolean>;
-  handleApproval: (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => Promise<boolean>;
-  
+  handleVerify: (
+    trfId: string,
+    currentUser: User,
+    action: WorkflowAction,
+    remarks?: string,
+  ) => Promise<boolean>;
+  handleApproval: (
+    trfId: string,
+    currentUser: User,
+    action: WorkflowAction,
+    remarks?: string,
+  ) => Promise<boolean>;
+
   fetchUsers: () => Promise<void>;
   createUser: (payload: UserPayload) => Promise<void>;
   updateUser: (id: string, payload: Partial<UserPayload>) => Promise<void>;
@@ -320,19 +339,19 @@ export const useTRFStore = create<TRFState>()(
         departments: [],
         purposes: [],
         transports: [],
-        accommodations: []
+        accommodations: [],
       },
 
       fetchReferenceMaster: async () => {
         if (!isSupabaseEnabled()) return;
 
         const { data, error } = await supabase
-          .from("reference_master")
-          .select("*")
-          .eq("is_active", true);
+          .from('reference_master')
+          .select('*')
+          .eq('is_active', true);
 
         if (error) {
-          console.error("Reference load error:", error);
+          console.error('Reference load error:', error);
           return;
         }
 
@@ -340,21 +359,21 @@ export const useTRFStore = create<TRFState>()(
           departments: [] as string[],
           purposes: [] as string[],
           transports: [] as string[],
-          accommodations: [] as string[]
+          accommodations: [] as string[],
         };
 
         data?.forEach((item) => {
           switch (item.category) {
-            case "DEPARTMENT":
+            case 'DEPARTMENT':
               grouped.departments.push(item.name);
               break;
-            case "TRAVEL_PURPOSE":
+            case 'TRAVEL_PURPOSE':
               grouped.purposes.push(item.name);
               break;
-            case "TRANSPORT":
+            case 'TRANSPORT':
               grouped.transports.push(item.name);
               break;
-            case "ACCOMMODATION":
+            case 'ACCOMMODATION':
               grouped.accommodations.push(item.name);
               break;
           }
@@ -367,14 +386,14 @@ export const useTRFStore = create<TRFState>()(
         if (!isSupabaseEnabled()) return [];
 
         const { data, error } = await supabase
-          .from("locations")
-          .select("*")
-          .ilike("name", `%${keyword}%`)
-          .eq("type", type)
+          .from('locations')
+          .select('*')
+          .ilike('name', `%${keyword}%`)
+          .eq('type', type)
           .limit(10);
 
         if (error) {
-          console.error("Search locations error:", error);
+          console.error('Search locations error:', error);
           return [];
         }
 
@@ -390,7 +409,7 @@ export const useTRFStore = create<TRFState>()(
           await get().fetchTRFs();
           await get().fetchUsers();
         } catch (error) {
-          console.error("Fetch all data error:", error);
+          console.error('Fetch all data error:', error);
         } finally {
           set({ isLoading: false });
         }
@@ -411,7 +430,7 @@ export const useTRFStore = create<TRFState>()(
           .from('employees')
           .select('*')
           .eq('is_active', true)
-          .order('employee_name'); 
+          .order('employee_name');
 
         if (error) {
           console.error('Error fetching employees:', error);
@@ -426,17 +445,15 @@ export const useTRFStore = create<TRFState>()(
 
       createEmployee: async (payload) => {
         if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('employees')
-          .insert({
-            employee_name: payload.employeeName,
-            employee_code: payload.employeeCode,
-            department: payload.department,
-            section: payload.section,
-            job_title: payload.jobTitle,
-            email: payload.email,
-            phone: payload.phone
-          });
+        const { error } = await supabase.from('employees').insert({
+          employee_name: payload.employeeName,
+          employee_code: payload.employeeCode,
+          department: payload.department,
+          section: payload.section,
+          job_title: payload.jobTitle,
+          email: payload.email,
+          phone: payload.phone,
+        });
 
         if (error) throw error;
         await get().fetchEmployees();
@@ -452,7 +469,7 @@ export const useTRFStore = create<TRFState>()(
             section: payload.section,
             job_title: payload.jobTitle,
             email: payload.email,
-            phone: payload.phone
+            phone: payload.phone,
           })
           .eq('id', id);
 
@@ -477,56 +494,84 @@ export const useTRFStore = create<TRFState>()(
 
       fetchTRFs: async () => {
         if (!isSupabaseEnabled()) return;
-        const { data, error } = await supabase.from('trfs').select('*').order('created_at', { ascending: false });
-        
+        const { data, error } = await supabase
+          .from('trfs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
         if (error) {
-          console.error("Fetch TRFs error:", error);
+          console.error('Fetch TRFs error:', error);
           return;
         }
-        
+
         if (data) {
           const rows = data as DBTRFRow[];
           const employees = get().employees;
-          set({ trfs: rows.map(trf => transformTRFFromDB(trf, employees)) });
+          set({ trfs: rows.map((trf) => transformTRFFromDB(trf, employees)) });
         }
       },
 
       getTRFById: (id) => {
         const trf = get().trfs.find((t) => t.id === id);
-        return trf ? { ...trf, employee: get().employees.find((e) => e.id === trf.employeeId) } : undefined;
+        return trf
+          ? {
+              ...trf,
+              employee: get().employees.find((e) => e.id === trf.employeeId),
+            }
+          : undefined;
       },
 
       getTRFsByEmployee: (employeeId) => {
-        return get().trfs.filter((t) => t.employeeId === employeeId).map(t => ({...t, employee: get().employees.find((e) => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter((t) => t.employeeId === employeeId)
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       getTRFsByStatus: (status) => {
-        return get().trfs.filter((t) => t.status === status).map(t => ({...t, employee: get().employees.find((e) => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter((t) => t.status === status)
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       getTRFsByDepartment: (department) => {
-        return get().trfs.filter((t) => t.department === department).map(t => ({...t, employee: get().employees.find((e) => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter((t) => t.department === department)
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       createTRF: async (trfData) => {
         if (!isSupabaseEnabled()) return null;
-        const employee = get().employees.find(e => e.id === trfData.employeeId);
+        const employee = get().employees.find(
+          (e) => e.id === trfData.employeeId,
+        );
         const department = employee?.department ?? null;
 
         const { data, error } = await supabase
           .from('trfs')
-          .insert([{
-            employee_id: trfData.employeeId,
-            department: department,
-            travel_purpose: trfData.travelPurpose,
-            start_date: trfData.startDate,
-            end_date: trfData.endDate,
-            purpose_remarks: trfData.purposeRemarks || null,
-            status: 'SUBMITTED',
-            accommodation: trfData.accommodation || null,
-            travel_arrangements: trfData.travelArrangements || []
-          }])
-          .select().single();
+          .insert([
+            {
+              employee_id: trfData.employeeId,
+              department: department,
+              travel_purpose: trfData.travelPurpose,
+              start_date: trfData.startDate,
+              end_date: trfData.endDate,
+              purpose_remarks: trfData.purposeRemarks || null,
+              status: 'SUBMITTED',
+              accommodation: trfData.accommodation || null,
+              travel_arrangements: trfData.travelArrangements || [],
+            },
+          ])
+          .select()
+          .single();
 
         if (error || !data) return null;
 
@@ -535,26 +580,39 @@ export const useTRFStore = create<TRFState>()(
         const newTRF: TRF = {
           ...trfData,
           id: row.id,
-          department: department || undefined, 
+          department: department || undefined,
           trfNumber: row.trf_number,
-          status: 'SUBMITTED', 
+          status: 'SUBMITTED',
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          travelArrangements: trfData.travelArrangements || []
+          travelArrangements: trfData.travelArrangements || [],
         };
 
         set((state) => ({ trfs: [newTRF, ...state.trfs] }));
-        await get().addStatusHistory({ trfId: row.id, changedBy: trfData.employeeId, changedByName: "System", newStatus: "SUBMITTED", remarks: "TRF created" });
+        await get().addStatusHistory({
+          trfId: row.id,
+          changedBy: trfData.employeeId,
+          changedByName: 'System',
+          newStatus: 'SUBMITTED',
+          remarks: 'TRF created',
+        });
         return newTRF;
       },
 
       updateTRF: async (id, updates) => {
         if (!isSupabaseEnabled()) return false;
-        await supabase.from('trfs').update({
-          travel_purpose: updates.travelPurpose, start_date: updates.startDate, end_date: updates.endDate,
-          purpose_remarks: updates.purposeRemarks, accommodation: updates.accommodation,
-          travel_arrangements: updates.travelArrangements, status: updates.status
-        }).eq('id', id);
+        await supabase
+          .from('trfs')
+          .update({
+            travel_purpose: updates.travelPurpose,
+            start_date: updates.startDate,
+            end_date: updates.endDate,
+            purpose_remarks: updates.purposeRemarks,
+            accommodation: updates.accommodation,
+            travel_arrangements: updates.travelArrangements,
+            status: updates.status,
+          })
+          .eq('id', id);
         return true;
       },
 
@@ -566,63 +624,129 @@ export const useTRFStore = create<TRFState>()(
 
       getVisibleTRFs: (user) => {
         let filtered = get().trfs;
-        if (user.role === 'EMPLOYEE') filtered = get().getTRFsByEmployee(user.employeeId!);
-        if (user.role === 'ADMIN_DEPT' || user.role === 'HOD') filtered = get().getTRFsByDepartment(user.department!);
-        return filtered.map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+        if (user.role === 'EMPLOYEE')
+          filtered = get().getTRFsByEmployee(user.employeeId!);
+        if (user.role === 'ADMIN_DEPT' || user.role === 'HOD')
+          filtered = get().getTRFsByDepartment(user.department!);
+        return filtered.map((t) => ({
+          ...t,
+          employee: get().employees.find((e) => e.id === t.employeeId),
+        }));
       },
 
       getTRFsForVerification: (department: string) => {
-        return get().trfs.filter(t => t.department === department && t.status === 'SUBMITTED')
-          .map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter(
+            (t) => t.department === department && t.status === 'SUBMITTED',
+          )
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       getTRFsForApproval: (role: UserRole, department?: string) => {
-        return get().trfs.filter((trf) => {
-          if (role === 'HOD') return trf.status === 'PENDING_APPROVAL' && trf.department === department;
-          if (role === 'HR') return trf.status === 'HOD_APPROVED';
-          if (role === 'PM') return trf.status === 'HR_APPROVED';
-          return false;
-        }).map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter((trf) => {
+            if (role === 'HOD')
+              return (
+                trf.status === 'PENDING_APPROVAL' &&
+                trf.department === department
+              );
+            if (role === 'HR') return trf.status === 'HOD_APPROVED';
+            if (role === 'PM') return trf.status === 'HR_APPROVED';
+            return false;
+          })
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       getTRFsForProcessing: () => {
-        return get().trfs.filter((t) => t.status === 'PM_APPROVED')
-          .map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+        return get()
+          .trfs.filter((t) => t.status === 'PM_APPROVED')
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
-      handleVerify: async (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => {
+      handleVerify: async (
+        trfId: string,
+        currentUser: User,
+        action: WorkflowAction,
+        remarks?: string,
+      ) => {
         const trf = get().trfs.find((t) => t.id === trfId);
         if (!trf) return false;
 
         try {
-          const nextStatus = getNextStatus(trf.status, currentUser.role, action);
-          
-          await supabase.from('trfs').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', trfId);
-          await get().addStatusHistory({ trfId, changedBy: currentUser.id, changedByName: 
-            currentUser.username, oldStatus: trf.status, newStatus: nextStatus, remarks: remarks || `Verified by ${currentUser.role}` });
-          
+          const nextStatus = getNextStatus(
+            trf.status,
+            currentUser.role,
+            action,
+          );
+
+          await supabase
+            .from('trfs')
+            .update({
+              status: nextStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', trfId);
+          await get().addStatusHistory({
+            trfId,
+            changedBy: currentUser.id,
+            changedByName: currentUser.username,
+            oldStatus: trf.status,
+            newStatus: nextStatus,
+            remarks: remarks || `Verified by ${currentUser.role}`,
+          });
+
           await get().fetchAllData();
           return true;
         } catch (error) {
-          console.error("Verify Error:", error);
+          console.error('Verify Error:', error);
           return false;
         }
       },
 
-      handleApproval: async (trfId: string, currentUser: User, action: WorkflowAction, remarks?: string) => {
+      handleApproval: async (
+        trfId: string,
+        currentUser: User,
+        action: WorkflowAction,
+        remarks?: string,
+      ) => {
         const trf = get().trfs.find((t) => t.id === trfId);
         if (!trf) return false;
 
         try {
-          const nextStatus = getNextStatus(trf.status, currentUser.role, action as Parameters<typeof getNextStatus>[2]);
-          await supabase.from('trfs').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', trfId);
-          await get().addStatusHistory({ trfId, changedBy: currentUser.id, changedByName: currentUser.username,
-            oldStatus: trf.status, newStatus: nextStatus, remarks: remarks || `${action} by ${currentUser.role}` });
-          
+          const nextStatus = getNextStatus(
+            trf.status,
+            currentUser.role,
+            action as Parameters<typeof getNextStatus>[2],
+          );
+          await supabase
+            .from('trfs')
+            .update({
+              status: nextStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', trfId);
+          await get().addStatusHistory({
+            trfId,
+            changedBy: currentUser.id,
+            changedByName: currentUser.username,
+            oldStatus: trf.status,
+            newStatus: nextStatus,
+            remarks: remarks || `${action} by ${currentUser.role}`,
+          });
+
           await get().fetchAllData();
           return true;
         } catch (error) {
-          console.error("Workflow Error:", error);
+          console.error('Workflow Error:', error);
           return false;
         }
       },
@@ -656,24 +780,22 @@ export const useTRFStore = create<TRFState>()(
           .maybeSingle();
 
         if (existing) {
-          throw new Error("Email sudah memiliki akun");
+          throw new Error('Email sudah memiliki akun');
         }
 
-        const templatePassword = "mmspanicsmp123!";
+        const templatePassword = 'mmspanicsmp123!';
         const password_hash = await bcrypt.hash(templatePassword, 10);
 
-        const { error } = await supabase
-          .from("users")
-          .insert({
-            username: payload.username,
-            email: payload.email,
-            role: payload.role,
-            department: payload.department ?? null,
-            employee_id: payload.employee_id ?? null,
-            password_hash,
-            must_change_password: true,
-            is_active: true
-          });
+        const { error } = await supabase.from('users').insert({
+          username: payload.username,
+          email: payload.email,
+          role: payload.role,
+          department: payload.department ?? null,
+          employee_id: payload.employee_id ?? null,
+          password_hash,
+          must_change_password: true,
+          is_active: true,
+        });
 
         if (error) throw error;
         await get().fetchUsers();
@@ -688,7 +810,7 @@ export const useTRFStore = create<TRFState>()(
             email: payload.email,
             role: payload.role,
             department: payload.department,
-            employee_id: payload.employee_id
+            employee_id: payload.employee_id,
           })
           .eq('id', id);
 
@@ -711,23 +833,36 @@ export const useTRFStore = create<TRFState>()(
       submitTRF: async () => false,
 
       getStatusHistory: (trfId) => {
-        return get().statusHistory.filter((sh) => sh.trfId === trfId).sort((a, b) => new Date(b.changedAt || '').getTime() - new Date(a.changedAt || '').getTime());
+        return get()
+          .statusHistory.filter((sh) => sh.trfId === trfId)
+          .sort(
+            (a, b) =>
+              new Date(b.changedAt || '').getTime() -
+              new Date(a.changedAt || '').getTime(),
+          );
       },
 
       addStatusHistory: async (entry) => {
         if (!isSupabaseEnabled()) return;
-        await supabase.from('status_history').insert([{
-          trf_id: entry.trfId, changed_by: entry.changedBy, changed_by_name: entry.changedByName,
-          old_status: entry.oldStatus, new_status: entry.newStatus, remarks: entry.remarks
-        }]);
+        await supabase.from('status_history').insert([
+          {
+            trf_id: entry.trfId,
+            changed_by: entry.changedBy,
+            changed_by_name: entry.changedByName,
+            old_status: entry.oldStatus,
+            new_status: entry.newStatus,
+            remarks: entry.remarks,
+          },
+        ]);
       },
 
       getEmployeeById: (id) => get().employees.find((e) => e.id === id),
-      getEmployeesByType: (type) => get().employees.filter((e) => e.employeeType === type),
-      getUserById: (id) => get().users.find((u) => u.id === id)
+      getEmployeesByType: (type) =>
+        get().employees.filter((e) => e.employeeType === type),
+      getUserById: (id) => get().users.find((u) => u.id === id),
     }),
-    { name: 'trf-storage' }
-  )
+    { name: 'trf-storage' },
+  ),
 );
 
 // ============================================
@@ -740,6 +875,7 @@ interface DashboardState {
     totalTravelOut: number;
     siteEntry: number;
     onSiteActive: number;
+    daysInSite: number;
   };
   isLoadingStats: boolean;
   roomAvailability: {
@@ -762,14 +898,20 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
     totalTravelIn: 0,
     totalTravelOut: 0,
     siteEntry: 0,
-    onSiteActive: 0
+    onSiteActive: 0,
+    daysInSite: 0,
   },
   isLoadingStats: false,
   roomAvailability: [
-    { hotelName: 'Grand Mining Hotel', total: 120, occupied: 98, available: 22 },
+    {
+      hotelName: 'Grand Mining Hotel',
+      total: 120,
+      occupied: 98,
+      available: 22,
+    },
     { hotelName: 'Camp Residence', total: 80, occupied: 45, available: 35 },
     { hotelName: 'Site C Camp', total: 60, occupied: 52, available: 8 },
-    { hotelName: 'City Center Hotel', total: 40, occupied: 28, available: 12 }
+    { hotelName: 'City Center Hotel', total: 40, occupied: 28, available: 12 },
   ],
   weeklyTravel: [
     { day: 'Mon', travelIn: 0, travelOut: 0 },
@@ -778,7 +920,7 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
     { day: 'Thu', travelIn: 0, travelOut: 0 },
     { day: 'Fri', travelIn: 0, travelOut: 0 },
     { day: 'Sat', travelIn: 0, travelOut: 0 },
-    { day: 'Sun', travelIn: 0, travelOut: 0 }
+    { day: 'Sun', travelIn: 0, travelOut: 0 },
   ],
 
   // ============================================
@@ -811,17 +953,19 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
       let totalTravelIn = 0;
       let totalTravelOut = 0;
       let onSiteActive = 0;
+      let daysInSite = 0;
 
       data.forEach((trf) => {
-        const arrangements: { travelType: string }[] = trf.travel_arrangements || [];
+        const arrangements: { travelType: string }[] =
+          trf.travel_arrangements || [];
 
         const hasTravelIn = arrangements.some(
-          (arr) => arr.travelType === 'TRAVEL_IN'
+          (arr) => arr.travelType === 'TRAVEL_IN',
         );
         if (hasTravelIn) totalTravelIn++;
 
         const hasTravelOut = arrangements.some(
-          (arr) => arr.travelType === 'TRAVEL_OUT'
+          (arr) => arr.travelType === 'TRAVEL_OUT',
         );
         if (hasTravelOut) totalTravelOut++;
 
@@ -829,6 +973,16 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
         const endDate = trf.end_date;
         if (startDate && endDate && startDate <= today && endDate >= today) {
           onSiteActive++;
+
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          const diffTime = Math.abs(end.getTime() - start.getTime());
+          daysInSite = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          // Asumsi: Karena ini card global (semua role), kita ambil rata-rata
+          // atau nilai dari TRF terakhir. Jika ini untuk personal employee,
+          // biasanya nilainya diambil dari TRF milik user tersebut.
+          // daysInSite = diffDays;
         }
       });
 
@@ -837,11 +991,11 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
           totalTravelIn,
           totalTravelOut,
           siteEntry: 0,
-          onSiteActive
+          onSiteActive,
+          daysInSite,
         },
-        isLoadingStats: false
+        isLoadingStats: false,
       });
-
     } catch (err) {
       console.error('fetchDashboardStats error:', err);
       set({ isLoadingStats: false });
@@ -892,10 +1046,13 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
       // Buat struktur per hari: key = 'YYYY-MM-DD'
       // value = { travelInTRFs: Set<trfId>, travelOutTRFs: Set<trfId> }
       // Pakai Set agar 1 TRF hanya terhitung 1x per hari meski punya 2 arrangement
-      const dailyMap: Record<string, {
-        travelInTRFs: Set<string>;
-        travelOutTRFs: Set<string>;
-      }> = {};
+      const dailyMap: Record<
+        string,
+        {
+          travelInTRFs: Set<string>;
+          travelOutTRFs: Set<string>;
+        }
+      > = {};
 
       // Inisialisasi map untuk Senin s/d Minggu
       for (let i = 0; i < 7; i++) {
@@ -904,7 +1061,7 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
         const key = d.toISOString().split('T')[0];
         dailyMap[key] = {
           travelInTRFs: new Set(),
-          travelOutTRFs: new Set()
+          travelOutTRFs: new Set(),
         };
       }
 
@@ -947,14 +1104,13 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
         return {
           day: label,
           travelIn: entry ? entry.travelInTRFs.size : 0,
-          travelOut: entry ? entry.travelOutTRFs.size : 0
+          travelOut: entry ? entry.travelOutTRFs.size : 0,
         };
       });
 
       set({ weeklyTravel });
-
     } catch (err) {
       console.error('fetchWeeklyTravel error:', err);
     }
-  }
+  },
 }));
