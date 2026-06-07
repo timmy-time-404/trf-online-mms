@@ -29,6 +29,7 @@ import {
   Download,
   Trash2 // ✅ Pastikan Trash2 di-import
 } from 'lucide-react';
+// import ExportTRFButton from '@/components/common/ExportTRFButton';
 import { cn } from '@/lib/utils';
 
 // ==========================================
@@ -249,6 +250,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+           {/* <ExportTRFButton trf={trf} /> */}
           {canEdit && onEdit && (
             <Button variant="outline" onClick={onEdit}>
               <Edit className="w-4 h-4 mr-2" />
