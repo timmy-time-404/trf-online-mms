@@ -4,6 +4,7 @@ import TRFDetailView from './components/TRFDetailView';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore } from '@/store';
 import { toast } from 'sonner';
+import ExportTRFButton from '@/features/trf/components/ExportTRFButton';
 
 // ✅ IMPORT COMPONENT CARD
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -59,7 +60,9 @@ const TRFDetailPage: React.FC = () => {
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
-
+        <div className="flex justify-end max-w-4xl">
+        <ExportTRFButton trf={trf} />
+      </div>
       {/* ✅ KOTAK LUMPSUM (TAMBAHAN MAHA RAJA) */}
       {trf.lumpsumAmount !== undefined && trf.lumpsumAmount > 0 && (
         <Card className="max-w-4xl border shadow-sm">
