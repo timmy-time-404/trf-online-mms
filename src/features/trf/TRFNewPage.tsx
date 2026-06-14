@@ -2,149 +2,122 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
-import TravelPurposeSection from './components/TravelPurposeSection';
-import AccommodationSection from './components/AccommodationSection';
+import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
+import AccommodationSection, { createEmptyAccommodationEntry } from './components/AccommodationSection';
+import type { AccommodationEntry } from './components/AccommodationSection';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import type { CreateTRFInput, Accommodation, TravelArrangement } from '@/types';
-import { Save, Send, ArrowLeft } from 'lucide-react';
+import type { CreateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
+import { Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-// ✅ Tambahkan import supabase
-
 
 const TRFNewPage: React.FC = () => {
   const navigate = useNavigate();
-  
-  // ✅ Panggil currentUser dari Zustand Store
   const { currentUser } = useAuthStore();
-  // ✅ REVISI: Tambahkan employees dari store
   const { createTRF, submitTRF, fetchAllData, employees } = useTRFStore();
 
-  // ✅ REVISI: Initial state kosong, di-handle oleh useEffect di bawah
-  const [formData, setFormData] = useState<CreateTRFInput>({
-  employeeId: '',
-  department: '',
-  travelPurpose: '',
-  startDate: '',
-  endDate: '',
-  purposeRemarks: '',
-  accommodation: {
-    hotelName: '',
-    checkInDate: '',
-    checkOutDate: '',
-    remarks: ''
-  },
-  travelArrangements: []
-});
+  // ── State: multi-purpose entries ──────────────────────────
+  const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>([
+    createEmptyPurposeEntry(),
+  ]);
+
+  // ── State: multi-accommodation entries ────────────────────
+  const [accommodationEntries, setAccommodationEntries] = useState<AccommodationEntry[]>([]);
+
+  // ── State: travel arrangements (sudah multi dari sebelumnya) ─
+  const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>([]);
+
+  // ── State: employee ID ────────────────────────────────────
+  const [employeeId, setEmployeeId] = useState('');
+  const [department, setDepartment]  = useState('');
 
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting]         = useState(false);
 
-  // ✅ REVISI: Mencari data employee berdasarkan userId dan auto-fill form
+  // ── Auto-fill employee untuk role EMPLOYEE ────────────────
   useEffect(() => {
-    if (currentUser?.role === "EMPLOYEE") {
+    if (currentUser?.role === 'EMPLOYEE') {
       const emp = employees.find(e => e.userId === currentUser.id);
-
       if (emp) {
-        setFormData(prev => ({
-          ...prev,
-          employeeId: emp.id,
-          department: emp.department
-        }));
+        setEmployeeId(emp.id);
+        setDepartment(emp.department);
       }
     }
   }, [currentUser, employees]);
 
-  /* ================= HANDLERS ================= */
-  const handleEmployeeChange = (employeeId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      employeeId
-    }));
+  // ── Build CreateTRFInput dari state ───────────────────────
+  // Field lama diisi dari entry pertama untuk backward-compat dengan store.
+  const buildCreateInput = (): CreateTRFInput => {
+    const firstPurpose = purposeEntries[0];
+    const firstAccom   = accommodationEntries[0];
+
+    return {
+      employeeId,
+      department,
+
+      // Backward-compat: single fields dari entry pertama
+      travelPurpose : firstPurpose?.travelPurpose ?? '',
+      startDate     : firstPurpose?.startDate     ?? '',
+      endDate       : firstPurpose?.endDate       ?? '',
+      purposeRemarks: firstPurpose?.purposeRemarks ?? '',
+
+      // Multi entries (untuk PDF)
+      purposeEntries  : purposeEntries,
+      accommodations  : accommodationEntries.map(({ _id, ...rest }) => rest),
+
+      // Backward-compat: single accommodation
+      accommodation: firstAccom
+        ? {
+            hotelName   : firstAccom.hotelName,
+            checkInDate : firstAccom.checkInDate,
+            checkOutDate: firstAccom.checkOutDate,
+            remarks     : firstAccom.remarks,
+          }
+        : undefined,
+
+      travelArrangements,
+    };
   };
 
-  const handlePurposeChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAccommodationChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      accommodation: {
-        ...prev.accommodation,
-        [field]: value
-      } as Accommodation
-    }));
-  };
-
-  const handleArrangementsChange = (arrangements: TravelArrangement[]) => {
-    setFormData(prev => ({ ...prev, travelArrangements: arrangements }));
-  };
-
-  /* ================= DOWNLOAD FUNCTION ================= */
-  
-
-  /* ================= VALIDATION ================= */
+  // ── Validation ────────────────────────────────────────────
   const validateForm = (): boolean => {
-    if (!formData.employeeId) {
+    if (!employeeId) {
       toast.error('Akun employee tidak tertaut dengan sistem.');
       return false;
     }
-    if (!formData.travelPurpose) {
-      toast.error('Harap pilih tujuan perjalanan (Travel Purpose).');
-      return false;
+
+    // Cek semua purpose entries
+    for (let i = 0; i < purposeEntries.length; i++) {
+      const p = purposeEntries[i];
+      if (!p.travelPurpose) {
+        toast.error(`Travel Purpose #${i + 1}: Harap pilih tujuan perjalanan.`);
+        return false;
+      }
+      if (!p.startDate || !p.endDate) {
+        toast.error(`Travel Purpose #${i + 1}: Harap isi tanggal mulai dan selesai.`);
+        return false;
+      }
     }
-    if (!formData.startDate || !formData.endDate) {
-      toast.error('Harap pilih tanggal mulai dan selesai perjalanan.');
-      return false;
-    }
+
     return true;
   };
 
-  /* ================= SAVE DRAFT ================= */
-  const handleSaveDraft = async () => {
-    if (!validateForm()) return;
-
-    setIsSubmitting(true);
-    try {
-      await fetchAllData();
-      const newTRF = await createTRF(formData);
-
-      if (!newTRF) throw new Error("Gagal membuat data");
-
-      toast.success('TRF saved as draft');
-      navigate(`/trf/${newTRF.id}`);
-    } catch {
-      toast.error('Failed to save TRF draft');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  /* ================= SUBMIT ================= */
+  // ── Submit ────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!validateForm() || !currentUser) return;
 
     setIsSubmitting(true);
     try {
-      const newTRF = await createTRF(formData);
+      const input  = buildCreateInput();
+      const newTRF = await createTRF(input);
+      if (!newTRF) throw new Error('Gagal membuat data');
 
-      if (!newTRF) throw new Error("Gagal membuat data");
-
-      // Melakukan submit dan mengubah status
-      await submitTRF(
-        newTRF.id,
-        currentUser.id,
-        currentUser.username
-      );
-
-      // reload data dari Supabase
+      await submitTRF(newTRF.id, currentUser.id, currentUser.username);
       await fetchAllData();
 
       toast.success('TRF submitted successfully');
       navigate(`/trf/${newTRF.id}`);
-      
     } catch {
       toast.error('Failed to submit TRF');
     } finally {
@@ -153,71 +126,56 @@ const TRFNewPage: React.FC = () => {
     }
   };
 
-  /* ================= UI ================= */
-  
-
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mb-4 -ml-2 text-gray-500"
-            onClick={() => navigate('/trf')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to List
-          </Button>
-
-          <h1 className="text-2xl font-bold text-gray-900">
-            New Travel Request
-          </h1>
-
-          <p className="text-gray-500 mt-1">
-            Create a new travel request form
-          </p>
-        </div>
+      {/* Page header */}
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2 text-gray-500"
+          onClick={() => navigate('/trf')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back to List
+        </Button>
+        <h1 className="text-2xl font-bold text-gray-900">New Travel Request</h1>
+        <p className="text-gray-500 mt-1">Create a new travel request form</p>
       </div>
 
+      {/* Form sections */}
       <div className="space-y-6">
         <EmployeeInfoSection
-          selectedEmployeeId={formData.employeeId || ''}
-          onEmployeeChange={handleEmployeeChange}
-        />
-        <TravelPurposeSection
-          purpose={formData.travelPurpose || ''}
-          startDate={formData.startDate || ''}
-          endDate={formData.endDate || ''}
-          remarks={formData.purposeRemarks || ''}
-          onChange={handlePurposeChange}
-        />
-        <AccommodationSection
-          hotelName={formData.accommodation?.hotelName || ''}
-          checkInDate={formData.accommodation?.checkInDate || ''}
-          checkOutDate={formData.accommodation?.checkOutDate || ''}
-          remarks={formData.accommodation?.remarks || ''}
-          onChange={handleAccommodationChange}
-        />
-        <TravelArrangementSection
-          arrangements={formData.travelArrangements || []}
-          onChange={handleArrangementsChange}
+          selectedEmployeeId={employeeId}
+          onEmployeeChange={setEmployeeId}
         />
 
-        
+        {/* ── Multi Travel Purpose ── */}
+        <TravelPurposeSection
+          entries={purposeEntries}
+          onChange={setPurposeEntries}
+        />
+
+        {/* ── Multi Accommodation ── */}
+        <AccommodationSection
+          entries={accommodationEntries}
+          onChange={setAccommodationEntries}
+        />
+
+        {/* ── Travel Arrangement (sudah multi dari sebelumnya) ── */}
+        <TravelArrangementSection
+          arrangements={travelArrangements}
+          onChange={setTravelArrangements}
+        />
       </div>
 
+      {/* Action buttons */}
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
         <Button variant="outline" onClick={() => navigate('/trf')}>
           Cancel
         </Button>
-
-        {/* <Button variant="secondary" onClick={handleSaveDraft}>
-          <Save className="w-4 h-4 mr-2" />
-          Save as Draft
-        </Button> */}
-
-        <Button onClick={() => setSubmitDialogOpen(true)}>
+        <Button onClick={() => setSubmitDialogOpen(true)} disabled={isSubmitting}>
           <Send className="w-4 h-4 mr-2" />
           Submit TRF
         </Button>

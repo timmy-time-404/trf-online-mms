@@ -66,6 +66,13 @@ export interface Accommodation {
   checkOutDate: string;
   remarks?: string;
 }
+export interface TravelPurposeEntry {
+  id: string;          // uuid lokal untuk key React
+  travelPurpose: string;
+  startDate: string;
+  endDate: string;
+  purposeRemarks?: string;
+}
 
 export interface TravelArrangement {
   id?: string;
@@ -191,7 +198,9 @@ export interface CreateTRFInput {
   startDate: string;
   endDate: string;
   purposeRemarks?: string;
+  purposeEntries?: TravelPurposeEntry[];
   accommodation?: Accommodation;
+  accommodations?: Accommodation[];
   travelArrangements: TravelArrangement[];
 }
 
