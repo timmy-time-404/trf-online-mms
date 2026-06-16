@@ -19,6 +19,7 @@ import type {
   AdminDeptVerify,
   PMApproval,
   GAProcess,
+  TravelPurposeEntry, // Added via patch requirement
 } from '@/types';
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
@@ -76,6 +77,9 @@ interface DBTRFRow {
   submitted_at?: string;
   created_at: string;
   updated_at: string;
+  // ── NEW PATCH FIELDS ──
+  purpose_entries?: unknown[];
+  accommodations?: unknown[];
 }
 
 interface LocationRow {
@@ -170,6 +174,16 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     submittedAt: dbTRF.submitted_at,
     createdAt: dbTRF.created_at,
     updatedAt: dbTRF.updated_at,
+    purposeEntries: Array.isArray(dbTRF.purpose_entries)
+      ? dbTRF.purpose_entries
+      : dbTRF.purpose_entries
+        ? [dbTRF.purpose_entries]
+        : [],
+    accommodations: Array.isArray(dbTRF.accommodations)
+      ? dbTRF.accommodations
+      : dbTRF.accommodations
+        ? [dbTRF.accommodations]
+        : [],
   };
 };
 
@@ -577,6 +591,9 @@ export const useTRFStore = create<TRFState>()(
               status: 'SUBMITTED',
               accommodation: trfData.accommodation || null,
               travel_arrangements: trfData.travelArrangements || [],
+              // ── NEW PATCH FIELDS ──
+              purpose_entries: (trfData as any).purposeEntries || [],
+              accommodations: (trfData as any).accommodations || [],
             },
           ])
           .select()
@@ -595,6 +612,9 @@ export const useTRFStore = create<TRFState>()(
           createdAt: row.created_at,
           updatedAt: row.updated_at,
           travelArrangements: trfData.travelArrangements || [],
+          // ── NEW PATCH FIELDS ──
+          purposeEntries: (trfData as any).purposeEntries || [],
+          accommodations: (trfData as any).accommodations || [],
         };
 
         set((state) => ({ trfs: [newTRF, ...state.trfs] }));
@@ -857,7 +877,7 @@ export const useTRFStore = create<TRFState>()(
 
       fetchUsers: async () => {
         if (!isSupabaseEnabled()) return;
-        const { data, error } = await supabase
+        const { data, error = null } = await supabase
           .from('users')
           .select('*')
           // .eq('is_active', true)

@@ -27,9 +27,22 @@ import {
   FileText,
   MessageSquare,
   Download,
-  Trash2 // ✅ Pastikan Trash2 di-import
+  Trash2
 } from 'lucide-react';
 // import ExportTRFButton from '@/components/common/ExportTRFButton';
+import { getPurposeLabel } from '@/constants/travelPurposeOptions';
+
+// Parse travelPurpose: bisa string lama "TRAINING" atau JSON array baru '["FIELD_BREAK","TRAINING"]'
+const parsePurposes = (raw: string | string[] | undefined): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [raw];
+  } catch {
+    return [raw];
+  }
+};
 import { cn } from '@/lib/utils';
 
 // ==========================================
@@ -92,6 +105,25 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
   const canDelete = trf.status === 'DRAFT';
   const isEmployee = currentUser?.role === 'EMPLOYEE';
   const canSeeVoucher = trf.status === 'GA_PROCESSED' || (trf.gaProcess?.processed && isEmployee);
+
+  // Normalisasi data array dipindahkan ke scope atas komponen utama agar terbaca di return JSX
+  const purposeEntries = (
+    Array.isArray((trf as any).purposeEntries) && (trf as any).purposeEntries.length > 0
+      ? (trf as any).purposeEntries
+      : [{
+          id: 'legacy',
+          travelPurpose: trf.travelPurpose ?? '',
+          startDate: trf.startDate ?? '',
+          endDate: trf.endDate ?? '',
+          purposeRemarks: trf.purposeRemarks ?? '',
+        }]
+  ) as Array<{ id?: string; travelPurpose: string; startDate: string; endDate: string; purposeRemarks?: string }>;
+ 
+  const accommodationEntries = (
+    Array.isArray((trf as any).accommodations) && (trf as any).accommodations.length > 0
+      ? (trf as any).accommodations
+      : trf.accommodation ? [trf.accommodation] : []
+  ) as Array<{ hotelName?: string; checkInDate?: string; checkOutDate?: string; remarks?: string }>;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -324,69 +356,118 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
         iconColor="text-green-600"
       >
         <div className="space-y-4">
-          <div>
-            <p className="text-xs text-gray-500">Purpose</p>
-            <p className="text-lg font-medium text-gray-900">{trf.travelPurpose}</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Start Date</p>
-              <p className="text-sm font-medium text-gray-900">{formatDate(trf.startDate)}</p>
+          {purposeEntries.map((p, idx) => (
+            <div
+              key={p.id ?? idx}
+              className={`border rounded-lg p-4 ${
+                purposeEntries.length > 1
+                  ? 'border-green-200 bg-green-50/30'
+                  : 'border-gray-100'
+              }`}
+            >
+              {purposeEntries.length > 1 && (
+                <p className="text-xs font-semibold text-green-700 mb-3">
+                  Travel Purpose #{idx + 1}
+                </p>
+              )}
+              <div>
+                <p className="text-xs text-gray-500">Purpose</p>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {parsePurposes(p.travelPurpose).length > 0
+                    ? parsePurposes(p.travelPurpose).map(key => (
+                        <span
+                          key={key}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full
+                            bg-green-100 text-green-800 text-sm font-medium"
+                        >
+                          {getPurposeLabel(key)}
+                        </span>
+                      ))
+                    : <p className="text-lg font-medium text-gray-900">-</p>
+                  }
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                <div>
+                  <p className="text-xs text-gray-500">Start Date</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatDate(p.startDate)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">End Date</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatDate(p.endDate)}
+                  </p>
+                </div>
+              </div>
+              {p.purposeRemarks && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500">Remarks</p>
+                  <p className="text-sm text-gray-700 mt-0.5">{p.purposeRemarks}</p>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-gray-500">End Date</p>
-              <p className="text-sm font-medium text-gray-900">{formatDate(trf.endDate)}</p>
-            </div>
-          </div>
-
-          {trf.purposeRemarks && (
-            <div>
-              <p className="text-xs text-gray-500">Remarks</p>
-              <p className="text-sm text-gray-700 mt-1">{trf.purposeRemarks}</p>
-            </div>
-          )}
+          ))}
         </div>
       </SectionCard>
 
       {/* Accommodation */}
-      {trf.accommodation && (
-        <SectionCard
-          title="Accommodation"
-          icon={Hotel}
-          iconBg="bg-indigo-50"
-          iconColor="text-indigo-600"
-        >
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs text-gray-500">Hotel</p>
-              <p className="text-lg font-medium text-gray-900">{trf.accommodation.hotelName}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500">Check-in Date</p>
-                <p className="text-sm font-medium text-gray-900">
-                  {formatDate(trf.accommodation.checkInDate)}
-                </p>
+      <SectionCard
+        title="Accommodation"
+        icon={Hotel}
+        iconBg="bg-indigo-50"
+        iconColor="text-indigo-600"
+      >
+        <div className="space-y-4">
+          {accommodationEntries.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">No accommodation arranged.</p>
+          ) : (
+            accommodationEntries.map((a, idx) => (
+              <div
+                key={idx}
+                className={`border rounded-lg p-4 ${
+                  accommodationEntries.length > 1
+                    ? 'border-indigo-200 bg-indigo-50/20'
+                    : 'border-gray-100'
+                }`}
+              >
+                {accommodationEntries.length > 1 && (
+                  <p className="text-xs font-semibold text-indigo-700 mb-3">
+                    Accommodation #{idx + 1}
+                  </p>
+                )}
+                <div>
+                  <p className="text-xs text-gray-500">Hotel</p>
+                  <p className="text-lg font-medium text-gray-900">
+                    {a.hotelName ?? '-'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <p className="text-xs text-gray-500">Check-in Date</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDate(a.checkInDate)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Check-out Date</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDate(a.checkOutDate)}
+                    </p>
+                  </div>
+                </div>
+                {a.remarks && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500">Remarks</p>
+                    <p className="text-sm text-gray-700 mt-0.5">{a.remarks}</p>
+                  </div>
+                )}
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Check-out Date</p>
-                <p className="text-sm font-medium text-gray-900">
-                  {formatDate(trf.accommodation.checkOutDate)}
-                </p>
-              </div>
-            </div>
-
-            {trf.accommodation.remarks && (
-              <div>
-                <p className="text-xs text-gray-500">Remarks</p>
-                <p className="text-sm text-gray-700 mt-1">{trf.accommodation.remarks}</p>
-              </div>
-            )}
-          </div>
-        </SectionCard>
-      )}
+            ))
+          )}
+        </div>
+      </SectionCard>
 
       {/* Travel Arrangements */}
       {trf.travelArrangements.length > 0 && (

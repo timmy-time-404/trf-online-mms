@@ -12,52 +12,77 @@ import {
 import TRFListTable from './components/TRFListTable';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import type { TRFStatus } from '@/types';
-import { Plus, Search, FileText, Eye, Shield } from 'lucide-react';
-
+import { exportAllTRFsToExcel } from '@/utils/exportAllTRFsToExcel';
+import type { TRFStatus, UserRole } from '@/types';
+import {
+  Plus,
+  Search,
+  FileText,
+  Eye,
+  Shield,
+  FileSpreadsheet,
+  Loader2,
+} from 'lucide-react';
+ 
+// Role yang boleh export all
+const EXPORT_ALLOWED_ROLES: UserRole[] = ['HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
+ 
 const TRFListPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
+  const { currentUser }             = useAuthStore();
   const { deleteTRF, getVisibleTRFs } = useTRFStore();
-
-  const [searchQuery, setSearchQuery] = useState('');
+ 
+  const [searchQuery, setSearchQuery]   = useState('');
   const [statusFilter, setStatusFilter] = useState<TRFStatus | 'ALL'>('ALL');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [trfToDelete, setTrfToDelete] = useState<string | null>(null);
-
-  // Get TRFs based on user role visibility
+  const [trfToDelete, setTrfToDelete]   = useState<string | null>(null);
+  const [isExporting, setIsExporting]   = useState(false);
+ 
   const visibleTRFs = currentUser ? getVisibleTRFs(currentUser) : [];
-
-  // Filter TRFs
+ 
   const getFilteredTRFs = () => {
     let filtered = [...visibleTRFs];
-
-    // Status filter
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(trf => trf.status === statusFilter);
+      filtered = filtered.filter(t => t.status === statusFilter);
     }
-
-    // Search filter
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(trf =>
-        trf.trfNumber.toLowerCase().includes(query) ||
-        trf.employee?.employeeName.toLowerCase().includes(query) ||
-        trf.travelPurpose.toLowerCase().includes(query) ||
-        trf.department?.toLowerCase().includes(query)
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.trfNumber.toLowerCase().includes(q)             ||
+        t.employee?.employeeName.toLowerCase().includes(q)||
+        t.travelPurpose.toLowerCase().includes(q)         ||
+        t.department?.toLowerCase().includes(q)
       );
     }
-
     return filtered.sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   };
-
+ 
+  const filteredTRFs = getFilteredTRFs();
+ 
+  // ── Export All handler ────────────────────────────────────
+  const handleExportAll = async () => {
+    if (filteredTRFs.length === 0) {
+      return;
+    }
+    setIsExporting(true);
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      exportAllTRFsToExcel(filteredTRFs, currentUser?.role);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+ 
+  // ── Delete handlers ───────────────────────────────────────
   const handleDelete = (id: string) => {
     setTrfToDelete(id);
     setDeleteDialogOpen(true);
   };
-
+ 
   const confirmDelete = () => {
     if (trfToDelete) {
       deleteTRF(trfToDelete);
@@ -65,32 +90,23 @@ const TRFListPage: React.FC = () => {
       setDeleteDialogOpen(false);
     }
   };
-
-  const filteredTRFs = getFilteredTRFs();
-
-  // Get visibility info text
+ 
+  // ── Visibility text ───────────────────────────────────────
   const getVisibilityInfo = () => {
     if (!currentUser) return '';
-    
     switch (currentUser.role) {
-      case 'EMPLOYEE':
-        return 'Showing your TRFs only';
-      case 'ADMIN_DEPT':
-      case 'HOD':
-        return `Showing ${currentUser.department} department TRFs`;
-      case 'HR':
-      case 'PM':
-      case 'GA':
-      case 'SUPER_ADMIN':
-        return 'Showing all TRFs';
-      default:
-        return '';
+      case 'EMPLOYEE'   : return 'Showing your TRFs only';
+      case 'ADMIN_DEPT' :
+      case 'HOD'        : return `Showing ${currentUser.department} department TRFs`;
+      default           : return 'Showing all TRFs';
     }
   };
-
+ 
+  const canExportAll = currentUser && EXPORT_ALLOWED_ROLES.includes(currentUser.role);
+ 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Travel Request Forms</h1>
@@ -99,28 +115,50 @@ const TRFListPage: React.FC = () => {
             {getVisibilityInfo()}
           </p>
         </div>
-        {currentUser?.role === 'EMPLOYEE' && (
-          <Button onClick={() => navigate('/trf/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New TRF
-          </Button>
-        )}
+ 
+        <div className="flex items-center gap-2">
+          {/* Export All — hanya untuk HoD+ */}
+          {canExportAll && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportAll}
+              disabled={isExporting || filteredTRFs.length === 0}
+              className="gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400"
+            >
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              {isExporting ? 'Exporting...' : `Export Excel (${filteredTRFs.length})`}
+            </Button>
+          )}
+ 
+          {/* New TRF — hanya untuk employee */}
+          {currentUser?.role === 'EMPLOYEE' && (
+            <Button onClick={() => navigate('/trf/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              New TRF
+            </Button>
+          )}
+        </div>
       </div>
-
-      {/* Filters */}
+ 
+      {/* ── Filters ── */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             placeholder="Search by TRF number, employee, purpose..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
         <Select
           value={statusFilter}
-          onValueChange={(value) => setStatusFilter(value as TRFStatus | 'ALL')}
+          onValueChange={v => setStatusFilter(v as TRFStatus | 'ALL')}
         >
           <SelectTrigger className="w-48">
             <SelectValue placeholder="All Status" />
@@ -140,10 +178,10 @@ const TRFListPage: React.FC = () => {
           </SelectContent>
         </Select>
       </div>
-
-      {/* Stats Summary */}
+ 
+      {/* ── Stats ── */}
       <div className="flex flex-wrap gap-4">
-         {currentUser?.role !== 'EMPLOYEE' && (
+        {currentUser?.role !== 'EMPLOYEE' && (
           <>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full text-sm">
               <Shield className="w-4 h-4 text-blue-600" />
@@ -170,15 +208,40 @@ const TRFListPage: React.FC = () => {
           <span className="text-gray-700">Total: {filteredTRFs.length}</span>
         </div>
       </div>
-
-      {/* TRF List */}
-      <TRFListTable
-        trfs={filteredTRFs}
-        onDelete={currentUser?.role === 'EMPLOYEE' ? handleDelete : undefined}
-        // ✅ Prop onDownload dihapus karena tidak lagi diperlukan
-      />
-
-      {/* Delete Confirmation */}
+ 
+      {/* ── Empty state ── */}
+      {filteredTRFs.length === 0 && (
+        <div className="text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <FileText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700">No Travel Requests Found</h3>
+          <p className="text-gray-500 mt-1 text-sm">
+            {searchQuery || statusFilter !== 'ALL'
+              ? 'No TRFs match your current filters.'
+              : currentUser?.role === 'EMPLOYEE'
+              ? 'You haven\'t submitted any travel requests yet.'
+              : 'No travel requests have been submitted yet.'}
+          </p>
+          {currentUser?.role === 'EMPLOYEE' && !searchQuery && statusFilter === 'ALL' && (
+            <Button
+              className="mt-4"
+              onClick={() => navigate('/trf/new')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create your first TRF
+            </Button>
+          )}
+        </div>
+      )}
+ 
+      {/* ── Table ── */}
+      {filteredTRFs.length > 0 && (
+        <TRFListTable
+          trfs={filteredTRFs}
+          onDelete={currentUser?.role === 'EMPLOYEE' ? handleDelete : undefined}
+        />
+      )}
+ 
+      {/* ── Delete dialog ── */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -192,5 +255,5 @@ const TRFListPage: React.FC = () => {
     </div>
   );
 };
-
+ 
 export default TRFListPage;
