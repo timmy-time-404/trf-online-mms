@@ -43,6 +43,7 @@ export interface User {
   role: UserRole;
   employeeId?: string;
   department?: string;
+  is_active?: boolean;
 }
 
 export interface Employee {

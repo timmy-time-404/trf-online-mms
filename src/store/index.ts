@@ -34,6 +34,7 @@ interface DBUserRow {
   role: string;
   employee_id?: string;
   department?: string;
+  is_active?: boolean;
 }
 
 interface DBEmployeeRow {
@@ -100,6 +101,7 @@ interface UserPayload {
   role: string;
   department?: string;
   employee_id?: string;
+  is_active?: boolean;
 }
 
 // ============================================
@@ -112,6 +114,7 @@ const transformUserFromDB = (dbUser: DBUserRow): User => ({
   role: dbUser.role as UserRole,
   employeeId: dbUser.employee_id,
   department: dbUser.department,
+  is_active: dbUser.is_active,
 });
 
 const transformEmployeeFromDB = (dbEmp: DBEmployeeRow): Employee => ({
@@ -319,10 +322,16 @@ interface TRFState {
     remarks?: string,
   ) => Promise<boolean>;
 
+  findNextActiveStatus: (
+    targetStatus: string,
+    trfDepartment?: string,
+  ) => TRFStatus;
+
   fetchUsers: () => Promise<void>;
   createUser: (payload: UserPayload) => Promise<void>;
   updateUser: (id: string, payload: Partial<UserPayload>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  enableUser: (id: string) => Promise<void>;
 }
 
 export const useTRFStore = create<TRFState>()(
@@ -648,13 +657,35 @@ export const useTRFStore = create<TRFState>()(
       getTRFsForApproval: (role: UserRole, department?: string) => {
         return get()
           .trfs.filter((trf) => {
-            if (role === 'HOD')
+            // 🔑 LOGIKA DINAMIS: Cek apa status target berikutnya jika status dokumen saat ini diteruskan
+            // Kita gunakan helper findNextActiveStatus untuk mensimulasikan "Siapa jatah penanggung jawab dokumen ini sekarang"
+            const currentTargetStatus = get().findNextActiveStatus(
+              trf.status,
+              trf.department,
+            );
+
+            if (role === 'HOD') {
               return (
-                trf.status === 'PENDING_APPROVAL' &&
-                trf.department === department
+                trf.department === department &&
+                (trf.status === 'PENDING_APPROVAL' ||
+                  currentTargetStatus === 'PENDING_APPROVAL')
               );
-            if (role === 'HR') return trf.status === 'HOD_APPROVED';
-            if (role === 'PM') return trf.status === 'HR_APPROVED';
+            }
+
+            if (role === 'HR') {
+              return (
+                trf.status === 'HOD_APPROVED' ||
+                currentTargetStatus === 'HOD_APPROVED'
+              );
+            }
+
+            if (role === 'PM') {
+              return (
+                trf.status === 'HR_APPROVED' ||
+                currentTargetStatus === 'HR_APPROVED'
+              );
+            }
+
             return false;
           })
           .map((t) => ({
@@ -672,6 +703,9 @@ export const useTRFStore = create<TRFState>()(
           }));
       },
 
+      // ============================================
+      // LOGIKA WORKFLOW DYNAMIC APPROVAL (SKIP LOGIC)
+      // ============================================
       handleVerify: async (
         trfId: string,
         currentUser: User,
@@ -682,11 +716,13 @@ export const useTRFStore = create<TRFState>()(
         if (!trf) return false;
 
         try {
-          const nextStatus = getNextStatus(
-            trf.status,
-            currentUser.role,
-            action,
-          );
+          // 1. Dapatkan status dasar dari helper bawaan
+          let nextStatus = getNextStatus(trf.status, currentUser.role, action);
+
+          // 2. 🔑 SKIP LOGIC: Jika disetujui (APPROVED), lakukan pengecekan estafet status aktif
+          if (action === 'APPROVE' || action === 'VERIFY') {
+            nextStatus = get().findNextActiveStatus(nextStatus, trf.department);
+          }
 
           await supabase
             .from('trfs')
@@ -722,11 +758,18 @@ export const useTRFStore = create<TRFState>()(
         if (!trf) return false;
 
         try {
-          const nextStatus = getNextStatus(
+          // 1. Dapatkan status dasar dari helper bawaan
+          let nextStatus = getNextStatus(
             trf.status,
             currentUser.role,
             action as Parameters<typeof getNextStatus>[2],
           );
+
+          // 2. 🔑 SKIP LOGIC: Jika disetujui, lakukan pengecekan estafet status aktif
+          if (action === 'APPROVE' || action === 'VERIFY') {
+            nextStatus = get().findNextActiveStatus(nextStatus, trf.department);
+          }
+
           await supabase
             .from('trfs')
             .update({
@@ -751,6 +794,63 @@ export const useTRFStore = create<TRFState>()(
         }
       },
 
+      // ➕ TAMBAHKAN FUNGSI BARU INI DI BAWAH HANDLE_APPROVAL:
+      findNextActiveStatus: (
+        targetStatus: string,
+        trfDepartment?: string,
+      ): TRFStatus => {
+        const activeUsers = get().users;
+
+        // Pemetaan status approval terhadap ROLE yang wajib memprosesnya
+        const statusToRoleMap: Record<string, string> = {
+          PENDING_APPROVAL: 'HOD',
+          HOD_APPROVED: 'HR', // Mengarah ke tahap HR
+          HR_APPROVED: 'PM', // Mengarah ke tahap PM
+          PM_APPROVED: 'GA', // Mengarah ke tahap GA
+        };
+
+        let currentStatus = targetStatus;
+
+        // Loop estafet pengecekan status (Maksimal 5 tingkatan jalur untuk mencegah infinite loop)
+        for (let i = 0; i < 5; i++) {
+          const requiredRole = statusToRoleMap[currentStatus];
+          if (!requiredRole) break; // Jika status akhir (APPROVED penuh/REJECTED), hentikan loop
+
+          // Cari tahu apakah ada user aktif dengan role tersebut di departemen terkait
+          const isApproverActive = activeUsers.some((u) => {
+            const matchesRole = u.role === requiredRole;
+            const matchesDept =
+              requiredRole === 'HOD' || requiredRole === 'ADMIN_DEPT'
+                ? u.department === trfDepartment
+                : true; // Role global seperti HR, PM, GA tidak terikat departemen pemohon
+
+            return matchesRole && matchesDept && u.is_active !== false;
+          });
+
+          // 🔑 Jika atasan pemegang role tersebut DINONAKTIFKAN (is_active: false/tidak ditemukan)
+          if (!isApproverActive) {
+            console.warn(
+              `Role ${requiredRole} sedang tidak aktif. Mengalihkan approval otomatis...`,
+            );
+
+            // Lompatkan status secara paksa ke target penanganan berikutnya
+            if (currentStatus === 'PENDING_APPROVAL')
+              currentStatus = 'HOD_APPROVED';
+            else if (currentStatus === 'HOD_APPROVED')
+              currentStatus = 'HR_APPROVED';
+            else if (currentStatus === 'HR_APPROVED')
+              currentStatus = 'PM_APPROVED';
+            else if (currentStatus === 'PM_APPROVED')
+              currentStatus = 'APPROVED'; // Jika GA mati, langsung approve mutlak
+          } else {
+            // Jika atasannya ada dan aktif, proses berhenti di status ini untuk menunggu verifikasi manual
+            break;
+          }
+        }
+
+        return currentStatus as TRFStatus;
+      },
+
       // ============================================
       // USER MANAGEMENT (SUPER ADMIN)
       // ============================================
@@ -760,7 +860,7 @@ export const useTRFStore = create<TRFState>()(
         const { data, error } = await supabase
           .from('users')
           .select('*')
-          .eq('is_active', true)
+          // .eq('is_active', true)
           .order('created_at', { ascending: false });
 
         if (!error && data) {
@@ -823,6 +923,17 @@ export const useTRFStore = create<TRFState>()(
         const { error } = await supabase
           .from('users')
           .update({ is_active: false })
+          .eq('id', id);
+
+        if (error) throw error;
+        await get().fetchUsers();
+      },
+
+      enableUser: async (id) => {
+        if (!isSupabaseEnabled()) return;
+        const { error } = await supabase
+          .from('users')
+          .update({ is_active: true }) // 🔑 Mengubah kembali menjadi TRUE
           .eq('id', id);
 
         if (error) throw error;

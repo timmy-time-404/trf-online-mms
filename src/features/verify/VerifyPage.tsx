@@ -105,16 +105,16 @@ const VerifyPage: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Verify TRFs</h1>
-        <p className="text-gray-500 mt-1">
+        <p className="mt-1 text-gray-500">
           Verify travel requests for compliance and budget availability
         </p>
       </div>
 
       {/* Stats */}
       <div className="flex gap-4">
-        <Card className="flex-1 bg-purple-50 border-purple-200">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+        <Card className="flex-1 border-purple-200 bg-purple-50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-xl">
               <CheckSquare className="w-6 h-6 text-purple-600" />
             </div>
             <div>
@@ -126,11 +126,11 @@ const VerifyPage: React.FC = () => {
       </div>
 
       {/* Department Info */}
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+      <div className="flex items-start gap-3 p-4 border border-blue-200 rounded-lg bg-blue-50">
         <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
         <div>
           <p className="font-medium text-blue-900">Department: {currentUser?.department}</p>
-          <p className="text-sm text-blue-700 mt-1">
+          <p className="mt-1 text-sm text-blue-700">
             You can only verify TRFs from your department. Check dates, budget, and policy compliance.
           </p>
         </div>
@@ -140,27 +140,27 @@ const VerifyPage: React.FC = () => {
       {trfsForVerification.length === 0 ? (
         <Card className="border shadow-sm">
           <CardContent className="p-12 text-center">
-            <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <CheckCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-lg font-medium text-gray-900">No TRFs to Verify</h3>
-            <p className="text-gray-500 mt-1">All travel requests have been verified</p>
+            <p className="mt-1 text-gray-500">All travel requests have been verified</p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
           {trfsForVerification.map((trf) => (
-            <Card key={trf.id} className="border shadow-sm hover:shadow-md transition-shadow">
+            <Card key={trf.id} className="transition-shadow border shadow-sm hover:shadow-md">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       <FileText className="w-5 h-5 text-gray-400" />
                       <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}</h3>
-                      <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                      <Badge variant="outline" className="text-blue-700 bg-blue-100 border-blue-300">
                         SUBMITTED
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-3">
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-gray-400" />
                         <div>
@@ -187,7 +187,7 @@ const VerifyPage: React.FC = () => {
                     </div>
 
                     {trf.purposeRemarks && (
-                      <div className="p-3 bg-gray-50 rounded-lg mb-3">
+                      <div className="p-3 mb-3 rounded-lg bg-gray-50">
                         <p className="text-xs text-gray-500">Remarks</p>
                         <p className="text-sm text-gray-700">{trf.purposeRemarks}</p>
                       </div>
@@ -247,10 +247,10 @@ const VerifyPage: React.FC = () => {
                 <XCircle className="w-6 h-6 text-red-600" />
               )}
             </div>
-            <DialogTitle className="text-center text-xl">
+            <DialogTitle className="text-xl text-center">
               {verifyAction === 'YES' ? 'Verify TRF' : 'Return to Employee'}
             </DialogTitle>
-            <DialogDescription className="text-center text-base">
+            <DialogDescription className="text-base text-center">
               {verifyAction === 'YES' 
                 ? `Verify ${selectedTRF?.trfNumber} and send to approval process?`
                 : `Return ${selectedTRF?.trfNumber} to employee for revision?`
@@ -275,7 +275,7 @@ const VerifyPage: React.FC = () => {
             />
           </div>
 
-          <DialogFooter className="gap-3 sm:gap-0 mt-4">
+          <DialogFooter className="gap-3 mt-4 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setVerifyDialogOpen(false)}
