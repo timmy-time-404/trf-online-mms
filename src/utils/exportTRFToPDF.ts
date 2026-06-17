@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import type { TRF, TravelPurposeEntry, Accommodation } from '@/types';
+import type { TRF, TravelPurposeEntry, Accommodation, TRFStatus } from '@/types';
 import { TRAVEL_PURPOSE_OPTIONS, getPurposeLabel } from '@/constants/travelPurposeOptions';
 
 // ─────────────────────────────────────────────────────────────
@@ -111,6 +111,16 @@ const buildHTML = (trf: TRF): string => {
     arrRows.push({ date:'', type:'', from:'', to:'', transport:'', remarks:'' });
 
   // ── Approval ─────────────────────────────────────────────────
+  const statusOrder: TRFStatus[] = [
+    'SUBMITTED',
+    'ADMIN_DEPT_VERIFIED',
+    'PENDING_APPROVAL',
+    'HOD_APPROVED',
+    'HR_APPROVED',
+    'PM_APPROVED',
+    'GA_PROCESSED',
+  ];
+  const currentIdx = statusOrder.indexOf(trf.status);
   const hodApproved = trf.parallelApproval?.hod?.status === 'APPROVED';
   const hrApproved  = trf.parallelApproval?.hr?.status  === 'APPROVED';
   const pmApproved  = trf.pmApproval?.approved === true;

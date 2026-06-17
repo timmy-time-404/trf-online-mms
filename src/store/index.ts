@@ -581,9 +581,20 @@ export const useTRFStore = create<TRFState>()(
 
       getVisibleTRFs: (user) => {
         let filtered = get().trfs;
-        if (user.role === 'EMPLOYEE') filtered = get().getTRFsByEmployee(user.employeeId!);
-        if (user.role === 'ADMIN_DEPT' || user.role === 'HOD') filtered = get().getTRFsByDepartment(user.department!);
-        return filtered.map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+        if (user.role === 'EMPLOYEE') {
+          const myEmployee = get().employees.find((e) => e.userId === user.id);
+          filtered = myEmployee
+            ? get().trfs.filter((t) => t.employeeId === myEmployee.id)
+            : [];
+        }
+
+        if (user.role === 'ADMIN_DEPT' || user.role === 'HOD')
+          filtered = get().getTRFsByDepartment(user.department!);
+
+        return filtered.map((t) => ({
+          ...t,
+          employee: get().employees.find((e) => e.id === t.employeeId),
+        }));
       },
 
       getTRFsForVerification: (department: string) => {
