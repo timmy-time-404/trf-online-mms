@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import type { TRF, TravelPurposeEntry, Accommodation } from '@/types';
+import type { TRF, TravelPurposeEntry, Accommodation, TRFStatus } from '@/types';
 import { TRAVEL_PURPOSE_OPTIONS, getPurposeLabel } from '@/constants/travelPurposeOptions';
 
 // ─────────────────────────────────────────────────────────────
@@ -111,14 +111,38 @@ const buildHTML = (trf: TRF): string => {
     arrRows.push({ date:'', type:'', from:'', to:'', transport:'', remarks:'' });
 
   // ── Approval ─────────────────────────────────────────────────
-  const hodApproved = trf.parallelApproval?.hod?.status === 'APPROVED';
-  const hrApproved  = trf.parallelApproval?.hr?.status  === 'APPROVED';
-  const pmApproved  = trf.pmApproval?.approved === true;
+const statusOrder: TRFStatus[] = [
+    'SUBMITTED',
+    'ADMIN_DEPT_VERIFIED',
+    'PENDING_APPROVAL',
+    'HOD_APPROVED',
+    'HR_APPROVED',
+    'PM_APPROVED',
+    'GA_PROCESSED',
+  ];
+  const currentIdx = statusOrder.indexOf(trf.status);
+
+  const hodApproved = currentIdx >= statusOrder.indexOf('HOD_APPROVED');
+  const hrApproved  = currentIdx >= statusOrder.indexOf('HR_APPROVED');
+  const pmApproved  = currentIdx >= statusOrder.indexOf('PM_APPROVED');
   const gaProcessed = trf.status === 'GA_PROCESSED';
 
-  const approvedStamp  = `<div style="position:absolute;top:10px;left:50%;transform:translateX(-50%) rotate(-15deg);color:green;font-weight:bold;border:2px solid green;padding:2px 5px;border-radius:4px;opacity:0.6;font-size:10px;white-space:nowrap;">APPROVED</div>`;
-  const processedStamp = `<div style="position:absolute;top:10px;left:50%;transform:translateX(-50%) rotate(-15deg);color:blue;font-weight:bold;border:2px solid blue;padding:2px 5px;border-radius:4px;opacity:0.6;font-size:10px;white-space:nowrap;">PROCESSED</div>`;
+const buildApprovedStamp = (date?: string) => `
+  <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%) rotate(-15deg);
+    color:green;font-weight:bold;border:2px solid green;padding:2px 5px;border-radius:4px;
+    opacity:0.7;font-size:10px;white-space:nowrap;text-align:center;line-height:1.3;">
+    APPROVED
+    ${date ? `<div style="font-size:7px;font-weight:normal;">${fmtDate(date)}</div>` : ''}
+  </div>`;
 
+const buildProcessedStamp = (date?: string) => `
+  <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%) rotate(-15deg);
+    color:blue;font-weight:bold;border:2px solid blue;padding:2px 5px;border-radius:4px;
+    opacity:0.7;font-size:10px;white-space:nowrap;text-align:center;line-height:1.3;">
+    PROCESSED
+    ${date ? `<div style="font-size:7px;font-weight:normal;">${fmtDate(date)}</div>` : ''}
+  </div>`;
+  
   return `
     <div id="pdf-export-container" style="
       width:794px; padding:30px; font-family:Arial,sans-serif;
@@ -295,26 +319,26 @@ const buildHTML = (trf: TRF): string => {
               <b>${trf.employee?.employeeName ?? '________________'}</b><br/>
               <span style="font-size:9px;">${fmtDate(trf.submittedAt)}</span>
             </td>
-            <td style="height:60px;vertical-align:bottom;position:relative;">
-              ${hodApproved ? approvedStamp : ''}
-              <b>${trf.parallelApproval?.hod?.actionByName ?? '________________'}</b><br/>
-              <span style="font-size:9px;">${trf.parallelApproval?.hod?.actionAt ? fmtDate(trf.parallelApproval.hod.actionAt) : 'Date:'}</span>
-            </td>
-            <td style="height:60px;vertical-align:bottom;position:relative;">
-              ${hrApproved ? approvedStamp : ''}
-              <b>${trf.parallelApproval?.hr?.actionByName ?? '________________'}</b><br/>
-              <span style="font-size:9px;">${trf.parallelApproval?.hr?.actionAt ? fmtDate(trf.parallelApproval.hr.actionAt) : 'Date:'}</span>
-            </td>
-            <td style="height:60px;vertical-align:bottom;position:relative;">
-              ${pmApproved ? approvedStamp : ''}
-              <b>${trf.pmApproval?.approverName ?? '________________'}</b><br/>
-              <span style="font-size:9px;">${trf.pmApproval?.approvedAt ? fmtDate(trf.pmApproval.approvedAt) : 'Date:'}</span>
-            </td>
-            <td style="height:60px;vertical-align:bottom;position:relative;">
-              ${gaProcessed ? processedStamp : ''}
-              <b>${trf.gaProcess?.processorName ?? '________________'}</b><br/>
-              <span style="font-size:9px;">${trf.gaProcess?.processedAt ? fmtDate(trf.gaProcess.processedAt) : 'Date:'}</span>
-            </td>
+            <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
+  ${hodApproved ? buildApprovedStamp(trf.parallelApproval?.hod?.actionAt) : ''}
+  <b>${trf.parallelApproval?.hod?.actionByName ?? '________________'}</b><br/>
+  <span style="font-size:9px;">Status</span>
+</td>
+<td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
+  ${hrApproved ? buildApprovedStamp(trf.parallelApproval?.hr?.actionAt) : ''}
+  <b>${trf.parallelApproval?.hr?.actionByName ?? '________________'}</b><br/>
+  <span style="font-size:9px;">Status</span>
+</td>
+<td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
+  ${pmApproved ? buildApprovedStamp(trf.pmApproval?.approvedAt) : ''}
+  <b>${trf.pmApproval?.approverName ?? '________________'}</b><br/>
+  <span style="font-size:9px;">Status</span>
+</td>
+<td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
+  ${gaProcessed ? buildProcessedStamp(trf.gaProcess?.processedAt) : ''}
+  <b>${trf.gaProcess?.processorName ?? '________________'}</b><br/>
+  <span style="font-size:9px;">Status</span>
+</td>
           </tr>
         </table>
       </div>

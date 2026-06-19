@@ -14,6 +14,7 @@ import DashboardPage from '@/features/dashboard/DashboardPage';
 import TRFListPage from '@/features/trf/TRFListPage';
 import TRFNewPage from '@/features/trf/TRFNewPage';
 import TRFDetailPage from '@/features/trf/TRFDetailPage';
+import TRFEditPage from '@/features/trf/TRFEditPage';
 
 // Role-specific pages
 import VerifyPage from './features/verify/VerifyPage';           // Admin Dept
@@ -112,6 +113,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['EMPLOYEE', 'SUPER_ADMIN']}>
                 <TRFNewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/trf/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={['EMPLOYEE', 'SUPER_ADMIN']}>
+                <TRFEditPage />
               </ProtectedRoute>
             }
           />
