@@ -129,7 +129,10 @@ const ProcessPage: React.FC = () => {
 
   const confirmProcess = async () => {
     if (!selectedTRF || !currentUser) return;
-
+const gaEmployee = currentUser.employeeId
+    ? employees.find((e) => e.id === currentUser.employeeId)
+    : undefined;
+  const gaDisplayName = gaEmployee?.employeeName ?? currentUser.username;
     try {
       // ✅ REVISI FATAL: Ubah gaDocuments menjadi ga_documents agar masuk ke Supabase
       const { error } = await supabase
@@ -148,7 +151,7 @@ const ProcessPage: React.FC = () => {
       await gaProcessTRF(
         selectedTRF.id,
         currentUser.id,
-        currentUser.username,
+        gaDisplayName,
         {}, 
         remarksToEmployee
       );
