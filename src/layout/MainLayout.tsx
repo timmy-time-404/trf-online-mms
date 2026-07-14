@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
+import NotificationBell from '@/components/common/NotificationBell';
 
 const MainLayout: React.FC = () => {
   const { currentUser, logout, switchRole } = useAuthStore();
@@ -252,6 +253,9 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Notifications */}
+            <NotificationBell />
+
             {/* Role Switcher */}
             <Select value={currentUser?.role} onValueChange={(value) => handleRoleChange(value as UserRole)}>
               <SelectTrigger className={cn("w-44 h-9 text-sm border-2", getRoleColor(currentUser?.role as UserRole).replace('text-', 'border-').replace('bg-', 'bg-opacity-10 '))}>

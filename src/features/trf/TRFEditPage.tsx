@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
 import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
 import AccommodationSection, { createEmptyAccommodationEntry } from './components/AccommodationSection';
@@ -9,14 +10,14 @@ import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
 import type { UpdateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
-import { Send, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Send, ArrowLeft, AlertTriangle, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TRFEditPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { currentUser } = useAuthStore();
-  const { getTRFById, resubmitTRF, fetchAllData } = useTRFStore();
+  const { getTRFById, resubmitTRF, editAndApproveTRF, fetchAllData } = useTRFStore();
 
   const trf = id ? getTRFById(id) : undefined;
 
@@ -31,6 +32,15 @@ const TRFEditPage: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [noteToEmployee, setNoteToEmployee] = useState('');
+
+  // Mode HR/GA: mereka mengedit TRF milik employee lain lalu langsung approve
+  // (bukan alur "resubmit" seperti employee).
+  const isHREditApprove =
+    currentUser?.role === 'HR' && trf?.status === 'HOD_APPROVED';
+  const isGAEditApprove =
+    currentUser?.role === 'GA' && trf?.status === 'PM_APPROVED';
+  const isEditApproveMode = isHREditApprove || isGAEditApprove;
 
   useEffect(() => {
     if (!trf || isLoaded) return;
@@ -94,7 +104,8 @@ const TRFEditPage: React.FC = () => {
     );
   }
 
-  const isEditable = trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
+  const isEmployeeEditableStatus = trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
+  const isEditable = isEmployeeEditableStatus || isEditApproveMode;
 
   if (!isEditable) {
     return (
@@ -102,8 +113,14 @@ const TRFEditPage: React.FC = () => {
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-gray-900">TRF ini tidak dapat diedit</h2>
         <p className="text-gray-500 mt-2">
-          Status saat ini: <span className="font-medium">{trf.status}</span>. Hanya TRF dengan
-          status Draft atau Needs Revision yang dapat diedit.
+          Status saat ini: <span className="font-medium">{trf.status}</span>.{' '}
+          {currentUser?.role === 'HR' &&
+            'HR hanya dapat mengedit TRF dengan status HOD Approved.'}
+          {currentUser?.role === 'GA' &&
+            'GA hanya dapat mengedit TRF dengan status PM Approved.'}
+          {currentUser?.role !== 'HR' &&
+            currentUser?.role !== 'GA' &&
+            'Hanya TRF dengan status Draft atau Needs Revision yang dapat diedit.'}
         </p>
         <Button className="mt-6" variant="outline" onClick={() => navigate(`/trf/${trf.id}`)}>
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -151,6 +168,12 @@ const TRFEditPage: React.FC = () => {
         return false;
       }
     }
+
+    if (isEditApproveMode && !noteToEmployee.trim()) {
+      toast.error('Catatan untuk employee wajib diisi sebelum menyimpan & approve.');
+      return false;
+    }
+
     return true;
   };
 
@@ -160,6 +183,19 @@ const TRFEditPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const input = buildUpdateInput();
+
+      if (isEditApproveMode) {
+        const success = await editAndApproveTRF(trf.id, currentUser, input, noteToEmployee);
+        if (!success) throw new Error('Gagal menyimpan & approve TRF');
+
+        await fetchAllData();
+        toast.success(
+          'TRF berhasil diperbarui dan disetujui. Notifikasi telah dikirim ke employee.',
+        );
+        navigate(`/trf/${trf.id}`);
+        return;
+      }
+
       const success = await resubmitTRF(trf.id, currentUser.id, currentUser.username, input);
 
       if (!success) throw new Error('Gagal resubmit TRF');
@@ -168,7 +204,7 @@ const TRFEditPage: React.FC = () => {
       toast.success('TRF berhasil diperbarui dan dikirim ulang untuk verifikasi');
       navigate(`/trf/${trf.id}`);
     } catch {
-      toast.error('Gagal mengirim ulang TRF');
+      toast.error(isEditApproveMode ? 'Gagal menyimpan & approve TRF' : 'Gagal mengirim ulang TRF');
     } finally {
       setIsSubmitting(false);
       setSubmitDialogOpen(false);
@@ -188,7 +224,9 @@ const TRFEditPage: React.FC = () => {
           Back to Detail
         </Button>
 
-        <h1 className="text-2xl font-bold text-gray-900">Edit Travel Request</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isEditApproveMode ? 'Edit & Approve Travel Request' : 'Edit Travel Request'}
+        </h1>
 
         <p className="text-gray-500 mt-1">
           {trf.trfNumber} &middot; Status: <span className="font-medium">{trf.status}</span>
@@ -211,6 +249,22 @@ const TRFEditPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {isEditApproveMode && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+            {/* <CheckCircle2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-900">
+                Mode Edit & Approve ({currentUser?.role})
+              </p>
+              <p className="text-sm text-blue-800 mt-1">
+                Perubahan yang kamu simpan di sini akan langsung menyetujui TRF ini
+                (status akan maju ke tahap berikutnya) dan employee akan mendapat notifikasi
+                berisi catatan yang kamu tulis di bawah.
+              </p>
+            </div> */}
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -227,6 +281,29 @@ const TRFEditPage: React.FC = () => {
           arrangements={travelArrangements}
           onChange={setTravelArrangements}
         />
+
+        {isEditApproveMode && (
+          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-2">
+            <label className="text-sm font-medium flex items-center gap-2 text-gray-900">
+              <MessageSquare className="w-4 h-4 text-blue-600" />
+              Note to Employees: What Changes Have Been Made?
+            </label>
+            {/* <p className="text-xs text-gray-500">
+              Catatan ini akan dikirim sebagai notifikasi ke employee saat kamu menyimpan
+              perubahan.
+            </p> */}
+            <Textarea
+              // placeholder={
+              //   isHREditApprove
+              //     ? 'Contoh: Tanggal keberangkatan disesuaikan mengikuti jadwal HOD, mohon dicek kembali.'
+              //     : 'Contoh: Tiket & akomodasi sudah kami sesuaikan, silakan cek detail perjalanan terbaru.'
+              // }
+              value={noteToEmployee}
+              onChange={(e) => setNoteToEmployee(e.target.value)}
+              rows={4}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
@@ -234,19 +311,36 @@ const TRFEditPage: React.FC = () => {
           Cancel
         </Button>
 
-        <Button onClick={() => setSubmitDialogOpen(true)} disabled={isSubmitting}>
-          <Send className="w-4 h-4 mr-2" />
-          Resubmit TRF
+        <Button
+          onClick={() => setSubmitDialogOpen(true)}
+          disabled={isSubmitting}
+          className={isEditApproveMode ? 'bg-green-600 hover:bg-green-700' : ''}
+        >
+          {isEditApproveMode ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Simpan & Approve
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4 mr-2" />
+              Resubmit TRF
+            </>
+          )}
         </Button>
       </div>
 
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
-        title="Confirm Resubmission"
-        description="Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?"
+        title={isEditApproveMode ? 'Konfirmasi Simpan & Approve' : 'Confirm Resubmission'}
+        description={
+          isEditApproveMode
+            ? 'Perubahan akan disimpan, TRF akan langsung disetujui ke tahap berikutnya, dan notifikasi berisi catatanmu akan dikirim ke employee. Lanjutkan?'
+            : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
+        }
         onConfirm={handleSubmit}
-        confirmText="Resubmit"
+        confirmText={isEditApproveMode ? 'Simpan & Approve' : 'Resubmit'}
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}

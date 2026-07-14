@@ -119,7 +119,7 @@ function App() {
           <Route
             path="/trf/:id/edit"
             element={
-              <ProtectedRoute allowedRoles={['EMPLOYEE', 'SUPER_ADMIN']}>
+              <ProtectedRoute allowedRoles={['EMPLOYEE', 'HR', 'GA', 'SUPER_ADMIN']}>
                 <TRFEditPage />
               </ProtectedRoute>
             }

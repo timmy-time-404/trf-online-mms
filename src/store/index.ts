@@ -23,6 +23,7 @@ import type {
 } from '@/types';
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
+import { useNotificationStore } from '@/store/notificationStore';
 
 // ============================================
 // DATABASE ROW & PAYLOAD INTERFACES
@@ -311,6 +312,12 @@ interface TRFState {
   changedByName: string,
   updates: UpdateTRFInput,
 ) => Promise<boolean>;
+  editAndApproveTRF: (
+    id: string,
+    currentUser: User,
+    updates: UpdateTRFInput,
+    note: string,
+  ) => Promise<boolean>;
   deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
@@ -693,6 +700,137 @@ export const useTRFStore = create<TRFState>()(
     return false;
   }
 },
+
+      // ============================================
+      // HR / GA: EDIT TRF DIRECTLY + AUTO-APPROVE + NOTE
+      // ============================================
+      editAndApproveTRF: async (
+        id: string,
+        currentUser: User,
+        updates: UpdateTRFInput,
+        note: string,
+      ) => {
+        if (!isSupabaseEnabled()) return false;
+
+        const trf = get().trfs.find((t) => t.id === id);
+        if (!trf) return false;
+
+        // Only HR (at HOD_APPROVED) and GA (at PM_APPROVED) can use this
+        // edit-and-auto-approve shortcut.
+        let expectedStatus: TRFStatus;
+        let baseNextStatus: TRFStatus;
+
+        if (currentUser.role === 'HR') {
+          expectedStatus = 'HOD_APPROVED';
+          baseNextStatus = 'HR_APPROVED';
+        } else if (currentUser.role === 'GA') {
+          expectedStatus = 'PM_APPROVED';
+          baseNextStatus = 'GA_PROCESSED';
+        } else {
+          console.error('editAndApproveTRF: role tidak diizinkan', currentUser.role);
+          return false;
+        }
+
+        if (trf.status !== expectedStatus) {
+          console.error(
+            `editAndApproveTRF: status tidak sesuai. Expected ${expectedStatus}, got ${trf.status}`,
+          );
+          return false;
+        }
+
+        try {
+          const now = new Date().toISOString();
+
+          const nextStatus =
+            currentUser.role === 'HR'
+              ? get().findNextActiveStatus(baseNextStatus, trf.department)
+              : baseNextStatus;
+
+          const actorEmployee = currentUser.employeeId
+            ? get().employees.find((e) => e.id === currentUser.employeeId)
+            : undefined;
+          const actorDisplayName = actorEmployee?.employeeName ?? currentUser.username;
+
+          const updatePayload: Record<string, unknown> = {
+            travel_purpose: updates.travelPurpose,
+            start_date: updates.startDate,
+            end_date: updates.endDate,
+            purpose_remarks: updates.purposeRemarks,
+            accommodation: updates.accommodation,
+            travel_arrangements: updates.travelArrangements,
+            purpose_entries: (updates as any).purposeEntries || [],
+            accommodations: (updates as any).accommodations || [],
+            status: nextStatus,
+            updated_at: now,
+          };
+
+          if (currentUser.role === 'HR') {
+            updatePayload.parallel_approval = {
+              ...(trf.parallelApproval || {}),
+              hr: {
+                status: 'APPROVED' as const,
+                actionAt: now,
+                actionById: currentUser.id,
+                actionByName: actorDisplayName,
+                remarks: note || '',
+              },
+            };
+          } else if (currentUser.role === 'GA') {
+            updatePayload.ga_process = {
+              processed: true,
+              processedAt: now,
+              processorId: currentUser.id,
+              processorName: actorDisplayName,
+              voucherDetails: trf.gaProcess?.voucherDetails || {},
+              remarksToEmployee: note || '',
+            };
+          }
+
+          const { error } = await supabase
+            .from('trfs')
+            .update(updatePayload)
+            .eq('id', id);
+
+          if (error) throw error;
+
+          await get().addStatusHistory({
+            trfId: id,
+            changedBy: currentUser.id,
+            changedByName: actorDisplayName,
+            oldStatus: trf.status,
+            newStatus: nextStatus,
+            remarks:
+              note?.trim() ||
+              `TRF diedit dan disetujui otomatis oleh ${currentUser.role}`,
+          });
+
+          // Notify the employee who owns this TRF
+          const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
+          if (ownerEmployee?.userId) {
+            await useNotificationStore.getState().createNotification({
+              userId: ownerEmployee.userId,
+              trfId: id,
+              trfNumber: trf.trfNumber,
+              title: `TRF ${trf.trfNumber} diperbarui & disetujui oleh ${currentUser.role}`,
+              message:
+                note?.trim() ||
+                `${actorDisplayName} (${currentUser.role}) telah memperbarui dan menyetujui TRF ini.`,
+              createdBy: currentUser.id,
+              createdByName: actorDisplayName,
+            });
+          } else {
+            console.warn(
+              'editAndApproveTRF: employee tidak memiliki akun user, notifikasi tidak dikirim.',
+            );
+          }
+
+          await get().fetchAllData();
+          return true;
+        } catch (error) {
+          console.error('editAndApproveTRF error:', error);
+          return false;
+        }
+      },
 
       deleteTRF: async (id) => {
         if (!isSupabaseEnabled()) return false;

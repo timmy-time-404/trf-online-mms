@@ -28,7 +28,8 @@ import {
   Car,
   Ship,
   Send,
-  Loader2
+  Loader2,
+  Edit
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -37,7 +38,7 @@ const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   // ✅ MENGGUNAKAN forceRefreshTRFs agar UI lebih responsif
-  const { getTRFsForProcessing, forceRefreshTRFs } = useTRFStore();
+  const { getTRFsForProcessing, forceRefreshTRFs, employees } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
@@ -129,10 +130,10 @@ const ProcessPage: React.FC = () => {
 
   const confirmProcess = async () => {
     if (!selectedTRF || !currentUser) return;
-const gaEmployee = currentUser.employeeId
-    ? employees.find((e) => e.id === currentUser.employeeId)
-    : undefined;
-  const gaDisplayName = gaEmployee?.employeeName ?? currentUser.username;
+    const gaEmployee = currentUser.employeeId
+      ? employees.find((e) => e.id === currentUser.employeeId)
+      : undefined;
+    const gaDisplayName = gaEmployee?.employeeName ?? currentUser.username;
     try {
       // ✅ REVISI FATAL: Ubah gaDocuments menjadi ga_documents agar masuk ke Supabase
       const { error } = await supabase
@@ -252,6 +253,14 @@ const gaEmployee = currentUser.employeeId
                   <div className="flex items-center gap-2 ml-4">
                     <Button variant="outline" size="sm" onClick={() => navigate(`/trf/${trf.id}`)}>
                       <Eye className="w-4 h-4 mr-1" /> View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                      onClick={() => navigate(`/trf/${trf.id}/edit`)}
+                    >
+                      <Edit className="w-4 h-4 mr-1" /> Edit & Approve
                     </Button>
                     <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleProcessClick(trf)}>
                       <Plane className="w-4 h-4 mr-1" /> Process
