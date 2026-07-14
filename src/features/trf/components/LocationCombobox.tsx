@@ -23,7 +23,7 @@ export default function LocationCombobox({
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const transportMap: any = {
+  const transportMap: any = { 
     FLIGHT: "AIRPORT",
     TRAIN: "TRAIN_STATION",
     SHIP: "SEAPORT",

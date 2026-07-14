@@ -25,7 +25,8 @@ import {
   XCircle,
   RotateCcw,
   FileText,
-  Banknote
+  Banknote,
+  Edit
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -168,6 +169,19 @@ const ApprovalPage: React.FC = () => {
                   <Eye className="w-4 h-4 mr-1"/>
                   View
                 </Button>
+
+                {/* Tombol Edit & Approve - khusus HR */}
+                {userRole === 'HR' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                    onClick={() => navigate(`/trf/${trf.id}/edit`)}
+                  >
+                    <Edit className="w-4 h-4 mr-1"/>
+                    Edit & Approve
+                  </Button>
+                )}
 
                 {/* Tombol Approve */}
                 <Button

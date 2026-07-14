@@ -44,7 +44,6 @@ const ChangePasswordPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // 🔥 2. LOGIC DARI "MAHA DEWA CODING" DIMASUKKAN DI SINI
       const hash = await bcrypt.hash(newPassword, 10);
 
       const { error } = await supabase

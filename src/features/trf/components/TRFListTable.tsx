@@ -27,7 +27,7 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
   const navigate = useNavigate();
 
   const canEdit = (trf: TRF) => {
-    return trf.status === 'DRAFT' || trf.status === 'REVISED';
+    return trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
   };
 
   const canDelete = (trf: TRF) => {

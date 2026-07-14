@@ -151,6 +151,23 @@ export interface GADocument {
 }
 
 // ============================================
+// NOTIFICATIONS
+// ============================================
+
+export interface Notification {
+  id: string;
+  userId: string; // recipient (User.id)
+  trfId?: string;
+  trfNumber?: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt: string;
+}
+
+// ============================================
 // MAIN TRF OBJECT
 // ============================================
 
