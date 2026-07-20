@@ -1,5 +1,3 @@
-// TRF Online System - Zustand Store with Supabase Integration
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
@@ -19,11 +17,9 @@ import type {
   AdminDeptVerify,
   PMApproval,
   GAProcess,
-  TravelPurposeEntry, // Added via patch requirement
 } from '@/types';
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
-import { useNotificationStore } from '@/store/notificationStore';
 
 // ============================================
 // DATABASE ROW & PAYLOAD INTERFACES
@@ -312,12 +308,6 @@ interface TRFState {
   changedByName: string,
   updates: UpdateTRFInput,
 ) => Promise<boolean>;
-  editAndApproveTRF: (
-    id: string,
-    currentUser: User,
-    updates: UpdateTRFInput,
-    note: string,
-  ) => Promise<boolean>;
   deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
@@ -585,77 +575,148 @@ export const useTRFStore = create<TRFState>()(
       },
 
       createTRF: async (trfData) => {
-        if (!isSupabaseEnabled()) return null;
-        const employee = get().employees.find(
-          (e) => e.id === trfData.employeeId,
-        );
-        const department = employee?.department ?? null;
+        if (!isSupabaseEnabled()) {
+          console.error('Supabase is not enabled');
+          return null;
+        }
 
-        const { data, error } = await supabase
-          .from('trfs')
-          .insert([
-            {
-              employee_id: trfData.employeeId,
-              department: department,
-              travel_purpose: trfData.travelPurpose,
-              start_date: trfData.startDate,
-              end_date: trfData.endDate,
-              purpose_remarks: trfData.purposeRemarks || null,
-              status: 'SUBMITTED',
-              accommodation: trfData.accommodation || null,
-              travel_arrangements: trfData.travelArrangements || [],
-              // ── NEW PATCH FIELDS ──
-              purpose_entries: (trfData as any).purposeEntries || [],
-              accommodations: (trfData as any).accommodations || [],
-            },
-          ])
-          .select()
-          .single();
+        try {
+          const employee = get().employees.find(
+            (item) => item.id === trfData.employeeId,
+          );
 
-        if (error || !data) return null;
+          const department = employee?.department ?? null;
+          const submittedAt = new Date().toISOString();
 
-        const row = data as DBTRFRow;
+          const { data, error } = await supabase
+            .from('trfs')
+            .insert([
+              {
+                employee_id: trfData.employeeId,
+                department,
+                travel_purpose: trfData.travelPurpose,
+                start_date: trfData.startDate,
+                end_date: trfData.endDate,
+                purpose_remarks: trfData.purposeRemarks || null,
+                status: 'SUBMITTED',
 
-        const newTRF: TRF = {
-          ...trfData,
-          id: row.id,
-          department: department || undefined,
-          trfNumber: row.trf_number,
-          status: 'SUBMITTED',
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          travelArrangements: trfData.travelArrangements || [],
-          // ── NEW PATCH FIELDS ──
-          purposeEntries: (trfData as any).purposeEntries || [],
-          accommodations: (trfData as any).accommodations || [],
-        };
+                // Nama kolom database menggunakan snake_case.
+                submitted_at: submittedAt,
 
-        set((state) => ({ trfs: [newTRF, ...state.trfs] }));
-        await get().addStatusHistory({
-          trfId: row.id,
-          changedBy: trfData.employeeId,
-          changedByName: 'System',
-          newStatus: 'SUBMITTED',
-          remarks: 'TRF created',
-        });
-        return newTRF;
+                accommodation: trfData.accommodation || null,
+                travel_arrangements:
+                  trfData.travelArrangements || [],
+                purpose_entries:
+                  (trfData as any).purposeEntries || [],
+                accommodations:
+                  (trfData as any).accommodations || [],
+              },
+            ])
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Create TRF Supabase error:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code,
+            });
+            return null;
+          }
+
+          if (!data) {
+            console.error(
+              'Supabase did not return the newly created TRF.',
+            );
+            return null;
+          }
+
+          const row = data as DBTRFRow;
+
+          const newTRF: TRF = {
+            ...trfData,
+            id: row.id,
+            department: department ?? undefined,
+            trfNumber: row.trf_number,
+            status: 'SUBMITTED',
+            submittedAt: row.submitted_at ?? submittedAt,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            accommodation:
+              trfData.accommodation || undefined,
+            travelArrangements:
+              trfData.travelArrangements || [],
+            purposeEntries:
+              (trfData as any).purposeEntries || [],
+            accommodations:
+              (trfData as any).accommodations || [],
+          };
+
+          set((state) => ({
+            trfs: [newTRF, ...state.trfs],
+          }));
+
+          await get().addStatusHistory({
+            trfId: row.id,
+            changedBy: trfData.employeeId,
+            changedByName:
+              employee?.employeeName ?? 'System',
+            newStatus: 'SUBMITTED',
+            remarks: 'TRF created and submitted',
+          });
+
+          return newTRF;
+        } catch (error) {
+          console.error('Create TRF error:', error);
+          return null;
+        }
       },
 
       updateTRF: async (id, updates) => {
         if (!isSupabaseEnabled()) return false;
-        await supabase
-          .from('trfs')
-          .update({
+
+        try {
+          const updatePayload: Record<string, unknown> = {
             travel_purpose: updates.travelPurpose,
             start_date: updates.startDate,
             end_date: updates.endDate,
-            purpose_remarks: updates.purposeRemarks,
-            accommodation: updates.accommodation,
-            travel_arrangements: updates.travelArrangements,
-            status: updates.status,
-          })
-          .eq('id', id);
-        return true;
+            purpose_remarks:
+              updates.purposeRemarks || null,
+            accommodation:
+              updates.accommodation || null,
+            travel_arrangements:
+              updates.travelArrangements || [],
+            purpose_entries:
+              (updates as any).purposeEntries || [],
+            accommodations:
+              (updates as any).accommodations || [],
+            updated_at: new Date().toISOString(),
+          };
+
+          if (updates.status) {
+            updatePayload.status = updates.status;
+          }
+
+          const { error } = await supabase
+            .from('trfs')
+            .update(updatePayload)
+            .eq('id', id);
+
+          if (error) {
+            console.error(
+              'Update TRF Supabase error:',
+              error,
+            );
+            return false;
+          }
+
+          await get().fetchTRFs();
+          return true;
+        } catch (error) {
+          console.error('Update TRF error:', error);
+          return false;
+        }
       },
       resubmitTRF: async (
   id: string,
@@ -701,141 +762,34 @@ export const useTRFStore = create<TRFState>()(
   }
 },
 
-      // ============================================
-      // HR / GA: EDIT TRF DIRECTLY + AUTO-APPROVE + NOTE
-      // ============================================
-      editAndApproveTRF: async (
-        id: string,
-        currentUser: User,
-        updates: UpdateTRFInput,
-        note: string,
-      ) => {
-        if (!isSupabaseEnabled()) return false;
-
-        const trf = get().trfs.find((t) => t.id === id);
-        if (!trf) return false;
-
-        // Only HR (at HOD_APPROVED) and GA (at PM_APPROVED) can use this
-        // edit-and-auto-approve shortcut.
-        let expectedStatus: TRFStatus;
-        let baseNextStatus: TRFStatus;
-
-        if (currentUser.role === 'HR') {
-          expectedStatus = 'HOD_APPROVED';
-          baseNextStatus = 'HR_APPROVED';
-        } else if (currentUser.role === 'GA') {
-          expectedStatus = 'PM_APPROVED';
-          baseNextStatus = 'GA_PROCESSED';
-        } else {
-          console.error('editAndApproveTRF: role tidak diizinkan', currentUser.role);
-          return false;
-        }
-
-        if (trf.status !== expectedStatus) {
-          console.error(
-            `editAndApproveTRF: status tidak sesuai. Expected ${expectedStatus}, got ${trf.status}`,
-          );
-          return false;
-        }
-
-        try {
-          const now = new Date().toISOString();
-
-          const nextStatus =
-            currentUser.role === 'HR'
-              ? get().findNextActiveStatus(baseNextStatus, trf.department)
-              : baseNextStatus;
-
-          const actorEmployee = currentUser.employeeId
-            ? get().employees.find((e) => e.id === currentUser.employeeId)
-            : undefined;
-          const actorDisplayName = actorEmployee?.employeeName ?? currentUser.username;
-
-          const updatePayload: Record<string, unknown> = {
-            travel_purpose: updates.travelPurpose,
-            start_date: updates.startDate,
-            end_date: updates.endDate,
-            purpose_remarks: updates.purposeRemarks,
-            accommodation: updates.accommodation,
-            travel_arrangements: updates.travelArrangements,
-            purpose_entries: (updates as any).purposeEntries || [],
-            accommodations: (updates as any).accommodations || [],
-            status: nextStatus,
-            updated_at: now,
-          };
-
-          if (currentUser.role === 'HR') {
-            updatePayload.parallel_approval = {
-              ...(trf.parallelApproval || {}),
-              hr: {
-                status: 'APPROVED' as const,
-                actionAt: now,
-                actionById: currentUser.id,
-                actionByName: actorDisplayName,
-                remarks: note || '',
-              },
-            };
-          } else if (currentUser.role === 'GA') {
-            updatePayload.ga_process = {
-              processed: true,
-              processedAt: now,
-              processorId: currentUser.id,
-              processorName: actorDisplayName,
-              voucherDetails: trf.gaProcess?.voucherDetails || {},
-              remarksToEmployee: note || '',
-            };
-          }
-
-          const { error } = await supabase
-            .from('trfs')
-            .update(updatePayload)
-            .eq('id', id);
-
-          if (error) throw error;
-
-          await get().addStatusHistory({
-            trfId: id,
-            changedBy: currentUser.id,
-            changedByName: actorDisplayName,
-            oldStatus: trf.status,
-            newStatus: nextStatus,
-            remarks:
-              note?.trim() ||
-              `TRF diedit dan disetujui otomatis oleh ${currentUser.role}`,
-          });
-
-          // Notify the employee who owns this TRF
-          const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
-          if (ownerEmployee?.userId) {
-            await useNotificationStore.getState().createNotification({
-              userId: ownerEmployee.userId,
-              trfId: id,
-              trfNumber: trf.trfNumber,
-              title: `TRF ${trf.trfNumber} diperbarui & disetujui oleh ${currentUser.role}`,
-              message:
-                note?.trim() ||
-                `${actorDisplayName} (${currentUser.role}) telah memperbarui dan menyetujui TRF ini.`,
-              createdBy: currentUser.id,
-              createdByName: actorDisplayName,
-            });
-          } else {
-            console.warn(
-              'editAndApproveTRF: employee tidak memiliki akun user, notifikasi tidak dikirim.',
-            );
-          }
-
-          await get().fetchAllData();
-          return true;
-        } catch (error) {
-          console.error('editAndApproveTRF error:', error);
-          return false;
-        }
-      },
-
       deleteTRF: async (id) => {
         if (!isSupabaseEnabled()) return false;
-        await supabase.from('trfs').delete().eq('id', id);
-        return true;
+
+        try {
+          const { error } = await supabase
+            .from('trfs')
+            .delete()
+            .eq('id', id);
+
+          if (error) {
+            console.error(
+              'Delete TRF Supabase error:',
+              error,
+            );
+            return false;
+          }
+
+          set((state) => ({
+            trfs: state.trfs.filter(
+              (trf) => trf.id !== id,
+            ),
+          }));
+
+          return true;
+        } catch (error) {
+          console.error('Delete TRF error:', error);
+          return false;
+        }
       },
 
       getVisibleTRFs: (user) => {
@@ -925,7 +879,14 @@ handleVerify: async (
       };
     }
 
-    await supabase.from('trfs').update(updatePayload).eq('id', trfId);
+    const { error: updateError } = await supabase
+      .from('trfs')
+      .update(updatePayload)
+      .eq('id', trfId);
+
+    if (updateError) {
+      throw updateError;
+    }
 
     await get().addStatusHistory({
       trfId,
@@ -1008,7 +969,14 @@ handleApproval: async (
       }
     }
 
-    await supabase.from('trfs').update(updatePayload).eq('id', trfId);
+    const { error: updateError } = await supabase
+      .from('trfs')
+      .update(updatePayload)
+      .eq('id', trfId);
+
+    if (updateError) {
+      throw updateError;
+    }
 
     await get().addStatusHistory({
       trfId,
@@ -1175,16 +1143,26 @@ handleApproval: async (
 
       addStatusHistory: async (entry) => {
         if (!isSupabaseEnabled()) return;
-        await supabase.from('status_history').insert([
-          {
-            trf_id: entry.trfId,
-            changed_by: entry.changedBy,
-            changed_by_name: entry.changedByName,
-            old_status: entry.oldStatus,
-            new_status: entry.newStatus,
-            remarks: entry.remarks,
-          },
-        ]);
+
+        const { error } = await supabase
+          .from('status_history')
+          .insert([
+            {
+              trf_id: entry.trfId,
+              changed_by: entry.changedBy,
+              changed_by_name: entry.changedByName,
+              old_status: entry.oldStatus,
+              new_status: entry.newStatus,
+              remarks: entry.remarks,
+            },
+          ]);
+
+        if (error) {
+          console.error(
+            'Add status history error:',
+            error,
+          );
+        }
       },
 
       getEmployeeById: (id) => get().employees.find((e) => e.id === id),
@@ -1309,11 +1287,6 @@ export const useDashboardStore = create<DashboardState>()((set) => ({
           const end = new Date(endDate);
           const diffTime = Math.abs(end.getTime() - start.getTime());
           daysInSite = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-          // Asumsi: Karena ini card global (semua role), kita ambil rata-rata
-          // atau nilai dari TRF terakhir. Jika ini untuk personal employee,
-          // biasanya nilainya diambil dari TRF milik user tersebut.
-          // daysInSite = diffDays;
         }
       });
 
