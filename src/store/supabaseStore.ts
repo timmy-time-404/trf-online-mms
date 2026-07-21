@@ -1,4 +1,5 @@
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
+import { notifyEmployeeStatusChangeWA } from '@/lib/notifyStatusChangeWA';
 
 import type {
   User,
@@ -548,6 +549,16 @@ export const addStatusHistory = async (
       new_status: entry.newStatus,
       remarks: entry.remarks ?? "System update"
     }]);
+
+  // Notifikasi WA ke employee (fire-and-forget, tidak menghambat alur GA Process)
+  if (entry.oldStatus) {
+    void notifyEmployeeStatusChangeWA({
+      trfId: entry.trfId,
+      newStatus: entry.newStatus as TRFStatus,
+      actorName: entry.changedByName,
+      remarks: entry.remarks,
+    });
+  }
 };
 
 /* =====================================================

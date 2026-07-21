@@ -9,8 +9,9 @@ import type { AccommodationEntry } from './components/AccommodationSection';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
+import { saveHRLumpsum } from '@/store/supabaseStore';
 import type { UpdateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
-import { Send, ArrowLeft, AlertTriangle, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Send, ArrowLeft, AlertTriangle, MessageSquare, CheckCircle2, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TRFEditPage: React.FC = () => {
@@ -33,14 +34,14 @@ const TRFEditPage: React.FC = () => {
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [noteToEmployee, setNoteToEmployee] = useState('');
+  const [lumpsum, setLumpsum] = useState<number | ''>('');
+  const [lumpsumNote, setLumpsumNote] = useState('');
 
-  // Mode HR/GA: mereka mengedit TRF milik employee lain lalu langsung approve
-  // (bukan alur "resubmit" seperti employee).
   const isHREditApprove =
     currentUser?.role === 'HR' && trf?.status === 'HOD_APPROVED';
-  const isGAEditApprove =
+  const isGAEditOnly =
     currentUser?.role === 'GA' && trf?.status === 'PM_APPROVED';
-  const isEditApproveMode = isHREditApprove || isGAEditApprove;
+  const isEditApproveMode = isHREditApprove || isGAEditOnly;
 
   useEffect(() => {
     if (!trf || isLoaded) return;
@@ -185,14 +186,37 @@ const TRFEditPage: React.FC = () => {
       const input = buildUpdateInput();
 
       if (isEditApproveMode) {
+        // Sama seperti alur Approve biasa di ApprovalPage: HR wajib
+        // menyimpan lumpsum dulu sebelum TRF disetujui.
+        if (isHREditApprove) {
+          try {
+            await saveHRLumpsum(trf.id, Number(lumpsum) || 0, lumpsumNote, currentUser.id);
+          } catch {
+            toast.error('Gagal menyimpan data Lumpsum.');
+            setIsSubmitting(false);
+            setSubmitDialogOpen(false);
+            return;
+          }
+        }
+
         const success = await editAndApproveTRF(trf.id, currentUser, input, noteToEmployee);
-        if (!success) throw new Error('Gagal menyimpan & approve TRF');
+        if (!success) throw new Error('Gagal menyimpan perubahan TRF');
 
         await fetchAllData();
-        toast.success(
-          'TRF berhasil diperbarui dan disetujui. Notifikasi telah dikirim ke employee.',
-        );
-        navigate(`/trf/${trf.id}`);
+
+        if (isGAEditOnly) {
+          // GA TIDAK auto-approve: TRF masih PM_APPROVED, GA tetap harus
+          // upload dokumen lewat halaman Process untuk menyelesaikannya.
+          toast.success(
+            'Perubahan TRF tersimpan. TRF ini belum disetujui silakan lanjut upload dokumen di halaman Process.',
+          );
+          navigate('/process');
+        } else {
+          toast.success(
+            'TRF berhasil diperbarui dan disetujui. Notifikasi telah dikirim ke employee.',
+          );
+          navigate(`/trf/${trf.id}`);
+        }
         return;
       }
 
@@ -204,7 +228,7 @@ const TRFEditPage: React.FC = () => {
       toast.success('TRF berhasil diperbarui dan dikirim ulang untuk verifikasi');
       navigate(`/trf/${trf.id}`);
     } catch {
-      toast.error(isEditApproveMode ? 'Gagal menyimpan & approve TRF' : 'Gagal mengirim ulang TRF');
+      toast.error(isEditApproveMode ? 'Gagal menyimpan perubahan TRF' : 'Gagal mengirim ulang TRF');
     } finally {
       setIsSubmitting(false);
       setSubmitDialogOpen(false);
@@ -225,7 +249,11 @@ const TRFEditPage: React.FC = () => {
         </Button>
 
         <h1 className="text-2xl font-bold text-gray-900">
-          {isEditApproveMode ? 'Edit & Approve Travel Request' : 'Edit Travel Request'}
+          {isHREditApprove
+            ? 'Edit & Approve Travel Request'
+            : isGAEditOnly
+              ? 'Edit Travel Request (GA)'
+              : 'Edit Travel Request'}
         </h1>
 
         <p className="text-gray-500 mt-1">
@@ -252,17 +280,17 @@ const TRFEditPage: React.FC = () => {
 
         {isEditApproveMode && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
-            {/* <CheckCircle2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-blue-900">
-                Mode Edit & Approve ({currentUser?.role})
+                {isHREditApprove ? 'Mode Edit & Approve (HR)' : 'Mode Edit (GA)'}
               </p>
               <p className="text-sm text-blue-800 mt-1">
-                Perubahan yang kamu simpan di sini akan langsung menyetujui TRF ini
-                (status akan maju ke tahap berikutnya) dan employee akan mendapat notifikasi
-                berisi catatan yang kamu tulis di bawah.
+                {isHREditApprove
+                  ? 'Perubahan yang kamu simpan di sini akan langsung menyetujui TRF ini (status akan maju ke tahap berikutnya) dan employee akan mendapat notifikasi berisi catatan yang kamu tulis di bawah.'
+                  : 'Perubahan yang kamu simpan di sini TIDAK langsung menyetujui TRF ini. Employee akan mendapat notifikasi bahwa TRF-nya diedit, tapi kamu tetap harus upload dokumen (voucher/tiket) di halaman Process untuk benar-benar menyelesaikan TRF ini.'}
               </p>
-            </div> */}
+            </div>
           </div>
         )}
       </div>
@@ -282,22 +310,51 @@ const TRFEditPage: React.FC = () => {
           onChange={setTravelArrangements}
         />
 
+        {isHREditApprove && (
+          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+            <label className="text-sm font-medium flex items-center gap-2 text-gray-900">
+              <Banknote className="w-4 h-4 text-green-600" />
+              Lumpsum
+            </label>
+            <div>
+              <label className="text-xs text-gray-500">Nominal Lumpsum (Rp)</label>
+              <input
+                type="number"
+                min={0}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={lumpsum}
+                onChange={(e) => setLumpsum(e.target.value ? Number(e.target.value) : '')}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Catatan Lumpsum (opsional)</label>
+              <Textarea
+                placeholder="Tambahkan catatan terkait lumpsum..."
+                value={lumpsumNote}
+                onChange={(e) => setLumpsumNote(e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+        )}
+
         {isEditApproveMode && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-2">
             <label className="text-sm font-medium flex items-center gap-2 text-gray-900">
               <MessageSquare className="w-4 h-4 text-blue-600" />
-              Note to Employees: What Changes Have Been Made?
+              Catatan untuk Employee <span className="text-red-500">*</span>
             </label>
-            {/* <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500">
               Catatan ini akan dikirim sebagai notifikasi ke employee saat kamu menyimpan
               perubahan.
-            </p> */}
+            </p>
             <Textarea
-              // placeholder={
-              //   isHREditApprove
-              //     ? 'Contoh: Tanggal keberangkatan disesuaikan mengikuti jadwal HOD, mohon dicek kembali.'
-              //     : 'Contoh: Tiket & akomodasi sudah kami sesuaikan, silakan cek detail perjalanan terbaru.'
-              // }
+              placeholder={
+                isHREditApprove
+                  ? 'Contoh: Tanggal keberangkatan disesuaikan mengikuti jadwal HOD, mohon dicek kembali.'
+                  : 'Contoh: Tiket & akomodasi sudah kami sesuaikan, dokumen menyusul setelah diproses.'
+              }
               value={noteToEmployee}
               onChange={(e) => setNoteToEmployee(e.target.value)}
               rows={4}
@@ -316,10 +373,15 @@ const TRFEditPage: React.FC = () => {
           disabled={isSubmitting}
           className={isEditApproveMode ? 'bg-green-600 hover:bg-green-700' : ''}
         >
-          {isEditApproveMode ? (
+          {isHREditApprove ? (
             <>
               <CheckCircle2 className="w-4 h-4 mr-2" />
               Simpan & Approve
+            </>
+          ) : isGAEditOnly ? (
+            <>
+              <Send className="w-4 h-4 mr-2" />
+              Simpan Perubahan
             </>
           ) : (
             <>
@@ -333,14 +395,22 @@ const TRFEditPage: React.FC = () => {
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
-        title={isEditApproveMode ? 'Konfirmasi Simpan & Approve' : 'Confirm Resubmission'}
+        title={
+          isHREditApprove
+            ? 'Konfirmasi Simpan & Approve'
+            : isGAEditOnly
+              ? 'Konfirmasi Simpan Perubahan'
+              : 'Confirm Resubmission'
+        }
         description={
-          isEditApproveMode
+          isHREditApprove
             ? 'Perubahan akan disimpan, TRF akan langsung disetujui ke tahap berikutnya, dan notifikasi berisi catatanmu akan dikirim ke employee. Lanjutkan?'
-            : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
+            : isGAEditOnly
+              ? 'Perubahan akan disimpan dan employee akan mendapat notifikasi. TRF ini BELUM disetujui kamu akan diarahkan ke halaman Process untuk upload dokumen. Lanjutkan?'
+              : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
         }
         onConfirm={handleSubmit}
-        confirmText={isEditApproveMode ? 'Simpan & Approve' : 'Resubmit'}
+        confirmText={isHREditApprove ? 'Simpan & Approve' : isGAEditOnly ? 'Simpan Perubahan' : 'Resubmit'}
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}

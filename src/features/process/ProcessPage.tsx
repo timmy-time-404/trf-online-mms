@@ -13,7 +13,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import { gaProcessTRF } from '@/store/supabaseStore'; 
+import { gaProcessTRF } from '@/store/supabaseStore';
+import { notifyEmployeeTravelDocumentsWA } from '@/lib/notifyTravelDocumentsWA';
 import type { TRF } from '@/types';
 import {
   Plane,
@@ -45,7 +46,7 @@ const ProcessPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   
   // State dengan tipe data yang sangat spesifik
-  const [documents, setDocuments] = useState<Record<string, {name: string, url: string}>>({});
+  const [documents, setDocuments] = useState<Record<string, {name: string, url: string, path?: string}>>({});
   const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
 
@@ -63,7 +64,7 @@ const ProcessPage: React.FC = () => {
     // Ganti any menjadi unknown agar linter diam
     const rawDocs = (trf.gaDocuments as unknown) as Record<string, unknown> || {};
     
-    const parsedDocs: Record<string, { name: string; url: string }> = {};
+    const parsedDocs: Record<string, { name: string; url: string; path?: string }> = {};
     let parsedGroundInfo = '';
 
     // Filter dan ekstrak data dengan Type-Guard ketat
@@ -80,6 +81,7 @@ const ProcessPage: React.FC = () => {
         parsedDocs[key] = {
           name: String(docValue.name || 'Document'),
           url: String(docValue.url),
+          path: typeof docValue.path === 'string' ? docValue.path : undefined,
         };
       }
     });
@@ -114,7 +116,8 @@ const ProcessPage: React.FC = () => {
         ...prev,
         [type]: {
           name: file.name,
-          url: data.publicUrl
+          url: data.publicUrl,
+          path,
         }
       }));
       
@@ -130,6 +133,15 @@ const ProcessPage: React.FC = () => {
 
   const confirmProcess = async () => {
     if (!selectedTRF || !currentUser) return;
+
+    const hasAtLeastOneDocument = Object.entries(documents).some(
+      ([key, doc]) => key !== 'groundInfo' && doc?.url,
+    );
+    if (!hasAtLeastOneDocument) {
+      toast.error('Upload minimal 1 dokumen (voucher/tiket) sebelum memproses TRF ini.');
+      return;
+    }
+
     const gaEmployee = currentUser.employeeId
       ? employees.find((e) => e.id === currentUser.employeeId)
       : undefined;
@@ -156,6 +168,18 @@ const ProcessPage: React.FC = () => {
         {}, 
         remarksToEmployee
       );
+
+      const ownerEmployee = employees.find((e) => e.id === selectedTRF.employeeId);
+      const documentsToSend = Object.entries(documents)
+        .filter(([key]) => key !== 'groundInfo')
+        .map(([type, doc]) => ({ type, name: doc.name, url: doc.url, path: doc.path }));
+
+      void notifyEmployeeTravelDocumentsWA({
+        employeePhone: ownerEmployee?.phone,
+        employeeName: ownerEmployee?.employeeName ?? 'Employee',
+        trfNumber: selectedTRF.trfNumber,
+        documents: documentsToSend,
+      });
 
       // ✅ Pakai fungsi sakti untuk merefresh UI seketika
       await forceRefreshTRFs();
@@ -260,7 +284,7 @@ const ProcessPage: React.FC = () => {
                       className="text-blue-600 border-blue-300 hover:bg-blue-50"
                       onClick={() => navigate(`/trf/${trf.id}/edit`)}
                     >
-                      <Edit className="w-4 h-4 mr-1" /> Edit & Approve
+                      <Edit className="w-4 h-4 mr-1" /> Edit TRF
                     </Button>
                     <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleProcessClick(trf)}>
                       <Plane className="w-4 h-4 mr-1" /> Process

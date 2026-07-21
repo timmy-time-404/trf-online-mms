@@ -20,6 +20,8 @@ import type {
 } from '@/types';
 
 import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
+import { useNotificationStore } from '@/store/notificationStore';
+import { notifyEmployeeStatusChangeWA } from '@/lib/notifyStatusChangeWA';
 
 // ============================================
 // DATABASE ROW & PAYLOAD INTERFACES
@@ -765,26 +767,151 @@ export const useTRFStore = create<TRFState>()(
       deleteTRF: async (id) => {
         if (!isSupabaseEnabled()) return false;
 
-        try {
-          const { error } = await supabase
-            .from('trfs')
-            .delete()
-            .eq('id', id);
+        const trf = get().trfs.find((t) => t.id === id);
+        if (!trf) return false;
 
-          if (error) {
-            console.error(
-              'Delete TRF Supabase error:',
-              error,
-            );
-            return false;
+        if (currentUser.role !== 'HR' && currentUser.role !== 'GA') {
+          console.error('editAndApproveTRF: role tidak diizinkan', currentUser.role);
+          return false;
+        }
+
+        const expectedStatus: TRFStatus =
+          currentUser.role === 'HR' ? 'HOD_APPROVED' : 'PM_APPROVED';
+
+        if (trf.status !== expectedStatus) {
+          console.error(
+            `editAndApproveTRF: status tidak sesuai. Expected ${expectedStatus}, got ${trf.status}`,
+          );
+          return false;
+        }
+
+        try {
+          const now = new Date().toISOString();
+
+          const actorEmployee = currentUser.employeeId
+            ? get().employees.find((e) => e.id === currentUser.employeeId)
+            : undefined;
+          const actorDisplayName = actorEmployee?.employeeName ?? currentUser.username;
+
+          const baseUpdatePayload: Record<string, unknown> = {
+            travel_purpose: updates.travelPurpose,
+            start_date: updates.startDate,
+            end_date: updates.endDate,
+            purpose_remarks: updates.purposeRemarks,
+            accommodation: updates.accommodation,
+            travel_arrangements: updates.travelArrangements,
+            purpose_entries: (updates as any).purposeEntries || [],
+            accommodations: (updates as any).accommodations || [],
+            updated_at: now,
+          };
+
+          // ============================================
+          // HR: edit TRF DAN langsung approve ke tahap berikutnya
+          // (lumpsum sudah disimpan terpisah oleh pemanggil sebelum ini).
+          // ============================================
+          if (currentUser.role === 'HR') {
+            const nextStatus = get().findNextActiveStatus('HR_APPROVED', trf.department);
+
+            const { error } = await supabase
+              .from('trfs')
+              .update({
+                ...baseUpdatePayload,
+                status: nextStatus,
+                parallel_approval: {
+                  ...(trf.parallelApproval || {}),
+                  hr: {
+                    status: 'APPROVED' as const,
+                    actionAt: now,
+                    actionById: currentUser.id,
+                    actionByName: actorDisplayName,
+                    remarks: note || '',
+                  },
+                },
+              })
+              .eq('id', id);
+
+            if (error) throw error;
+
+            await get().addStatusHistory({
+              trfId: id,
+              changedBy: currentUser.id,
+              changedByName: actorDisplayName,
+              oldStatus: trf.status,
+              newStatus: nextStatus,
+              remarks: note?.trim() || `TRF diedit dan disetujui otomatis oleh HR`,
+            });
+
+            const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
+            if (ownerEmployee?.userId) {
+              await useNotificationStore.getState().createNotification({
+                userId: ownerEmployee.userId,
+                trfId: id,
+                trfNumber: trf.trfNumber,
+                title: `TRF ${trf.trfNumber} diperbarui & disetujui oleh HR`,
+                message:
+                  note?.trim() ||
+                  `${actorDisplayName} (HR) telah memperbarui dan menyetujui TRF ini.`,
+                createdBy: currentUser.id,
+                createdByName: actorDisplayName,
+              });
+            }
+
+            await get().fetchAllData();
+            return true;
           }
 
-          set((state) => ({
-            trfs: state.trfs.filter(
-              (trf) => trf.id !== id,
-            ),
-          }));
+          // ============================================
+          // GA: edit TRF SAJA, TIDAK auto-approve. Status tetap PM_APPROVED.
+          // GA tetap wajib upload dokumen lewat halaman Process untuk benar-benar
+          // menyelesaikan (approve) TRF-nya.
+          // ============================================
+          const { error } = await supabase
+            .from('trfs')
+            .update(baseUpdatePayload)
+            .eq('id', id);
 
+          if (error) throw error;
+
+          // Audit trail: status tidak berubah, ini murni pencatatan edit.
+          await supabase.from('status_history').insert([
+            {
+              trf_id: id,
+              changed_by: currentUser.id,
+              changed_by_name: actorDisplayName,
+              old_status: trf.status,
+              new_status: trf.status,
+              remarks:
+                note?.trim() ||
+                `Detail TRF diedit oleh GA (${actorDisplayName}), menunggu proses dokumen.`,
+            },
+          ]);
+
+          // Notifikasi WA + in-app: "diedit", BUKAN "disetujui" — supaya
+          // employee tidak salah kira TRF-nya sudah final.
+          void notifyEmployeeStatusChangeWA({
+            trfId: id,
+            newStatus: trf.status,
+            actorName: actorDisplayName,
+            remarks: note,
+            editedOnly: true,
+          });
+
+          const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
+          if (ownerEmployee?.userId) {
+            await useNotificationStore.getState().createNotification({
+              userId: ownerEmployee.userId,
+              trfId: id,
+              trfNumber: trf.trfNumber,
+              title: `TRF ${trf.trfNumber} diedit oleh GA`,
+              message:
+                note?.trim() ||
+                `${actorDisplayName} (GA) memperbarui detail TRF ini. TRF masih menunggu proses dokumen (voucher/tiket) sebelum final disetujui.`,
+              createdBy: currentUser.id,
+              createdByName: actorDisplayName,
+            });
+          }
+
+          await get().fetchAllData();
           return true;
         } catch (error) {
           console.error('Delete TRF error:', error);
@@ -1162,6 +1289,19 @@ handleApproval: async (
             'Add status history error:',
             error,
           );
+        }
+
+        // Kirim notifikasi WA ke employee untuk setiap transisi status nyata
+        // (verify, approve, reject, revise, edit&approve). Dilewati untuk
+        // penciptaan TRF awal (oldStatus belum ada). Sengaja tidak di-await
+        // supaya latensi WA/Fonnte tidak menghambat alur approval utama.
+        if (entry.oldStatus) {
+          void notifyEmployeeStatusChangeWA({
+            trfId: entry.trfId,
+            newStatus: entry.newStatus as TRFStatus,
+            actorName: entry.changedByName,
+            remarks: entry.remarks,
+          });
         }
       },
 
