@@ -310,6 +310,12 @@ interface TRFState {
   changedByName: string,
   updates: UpdateTRFInput,
 ) => Promise<boolean>;
+  editAndApproveTRF: (
+    id: string,
+    currentUser: User,
+    updates: UpdateTRFInput,
+    note?: string,
+  ) => Promise<boolean>;
   deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
@@ -764,7 +770,13 @@ export const useTRFStore = create<TRFState>()(
   }
 },
 
-      deleteTRF: async (id) => {
+      // ============================================
+      // EDIT & APPROVE (khusus HR / GA)
+      // HR: edit lalu langsung approve ke tahap berikutnya.
+      // GA: edit saja, TIDAK auto-approve — approve final tetap lewat
+      //     halaman Process (upload dokumen/voucher).
+      // ============================================
+      editAndApproveTRF: async (id, currentUser, updates, note) => {
         if (!isSupabaseEnabled()) return false;
 
         const trf = get().trfs.find((t) => t.id === id);
@@ -909,6 +921,46 @@ export const useTRFStore = create<TRFState>()(
               createdBy: currentUser.id,
               createdByName: actorDisplayName,
             });
+          }
+
+          await get().fetchAllData();
+          return true;
+        } catch (error) {
+          console.error('Edit and approve TRF error:', error);
+          return false;
+        }
+      },
+
+      // ============================================
+      // DELETE TRF
+      // NOTE: Implementasi asli fungsi ini sempat tertimpa oleh logic
+      // editAndApproveTRF akibat conflict resolution yang salah. Versi di
+      // bawah ini adalah rekonstruksi standar (soft delete via status,
+      // hard delete via penghapusan baris) — mohon dicek ulang / dibandingkan
+      // dengan riwayat git kalau ada implementasi asli yang lebih spesifik,
+      // terutama terkait status "DELETED" apakah memang ada di enum TRFStatus
+      // dan di getVisibleTRFs / getTRFsByStatus dsb, supaya TRF yang di-soft-delete
+      // benar-benar tersembunyi dari listing lain.
+      // ============================================
+      deleteTRF: async (id, hardDelete = false) => {
+        if (!isSupabaseEnabled()) return false;
+
+        const trf = get().trfs.find((t) => t.id === id);
+        if (!trf) return false;
+
+        try {
+          if (hardDelete) {
+            const { error } = await supabase.from('trfs').delete().eq('id', id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase
+              .from('trfs')
+              .update({
+                status: 'DELETED' as TRFStatus,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', id);
+            if (error) throw error;
           }
 
           await get().fetchAllData();
