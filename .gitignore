@@ -1,4 +1,8 @@
-node_modules/
-dist/
-build/
+# Environment
 .env
+.env.*
+!.env.example
+
+# Production build
+dist/
+node_modules
