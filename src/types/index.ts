@@ -178,11 +178,13 @@ export interface TRF {
   employee?: Employee;
   department?: string;
   travelPurpose: string;
+  purposeEntries?: TravelPurposeEntry[];
   startDate: string;
   endDate: string;
   purposeRemarks?: string;
   status: TRFStatus;
   accommodation?: Accommodation;
+  accommodations?: Accommodation[];
   travelArrangements: TravelArrangement[];
   
   // Legacy / Nested Workflow Data (Jika masih dipakai)

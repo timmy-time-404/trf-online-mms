@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
 import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
-import AccommodationSection, { createEmptyAccommodationEntry } from './components/AccommodationSection';
+import AccommodationSection from './components/AccommodationSection';
 import type { AccommodationEntry } from './components/AccommodationSection';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';

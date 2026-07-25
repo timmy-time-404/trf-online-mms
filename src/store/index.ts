@@ -77,8 +77,8 @@ interface DBTRFRow {
   created_at: string;
   updated_at: string;
   // ── NEW PATCH FIELDS ──
-  purpose_entries?: unknown[];
-  accommodations?: unknown[];
+  purpose_entries?: NonNullable<TRF['purposeEntries']>;
+  accommodations?: NonNullable<TRF['accommodations']>;
 }
 
 interface LocationRow {
@@ -173,16 +173,8 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     submittedAt: dbTRF.submitted_at,
     createdAt: dbTRF.created_at,
     updatedAt: dbTRF.updated_at,
-    purposeEntries: Array.isArray(dbTRF.purpose_entries)
-      ? dbTRF.purpose_entries
-      : dbTRF.purpose_entries
-        ? [dbTRF.purpose_entries]
-        : [],
-    accommodations: Array.isArray(dbTRF.accommodations)
-      ? dbTRF.accommodations
-      : dbTRF.accommodations
-        ? [dbTRF.accommodations]
-        : [],
+    purposeEntries: dbTRF.purpose_entries ?? [],
+    accommodations: dbTRF.accommodations ?? [],
   };
 };
 
@@ -1000,14 +992,26 @@ export const useTRFStore = create<TRFState>()(
           }));
       },
 
-      getTRFsForApproval: (role: UserRole, department?: string) => {
-        return get().trfs.filter((trf) => {
-          // HOD bersifat general, bisa approve TRF dari department manapun
-          if (role === 'HOD') return trf.status === 'PENDING_APPROVAL';
-          if (role === 'HR') return trf.status === 'HOD_APPROVED';
-          if (role === 'PM') return trf.status === 'HR_APPROVED';
-          return false;
-        }).map(t => ({...t, employee: get().employees.find(e => e.id === t.employeeId)}));
+            getTRFsForApproval: (role: UserRole, department?: string) => {
+        return get()
+          .trfs
+          .filter((trf) => {
+            if (role === 'HOD') {
+              return (
+                trf.status === 'PENDING_APPROVAL' &&
+                !!department &&
+                trf.department === department
+              );
+            }
+
+            if (role === 'HR') return trf.status === 'HOD_APPROVED';
+            if (role === 'PM') return trf.status === 'HR_APPROVED';
+            return false;
+          })
+          .map((t) => ({
+            ...t,
+            employee: get().employees.find((e) => e.id === t.employeeId),
+          }));
       },
 
       getTRFsForProcessing: () => {

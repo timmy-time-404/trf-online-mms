@@ -1,8 +1,7 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { TRF, TravelPurposeEntry, Accommodation, TRFStatus } from '@/types';
-import { TRAVEL_PURPOSE_OPTIONS, getPurposeLabel } from '@/constants/travelPurposeOptions';
-
+import { getPurposeLabel } from '@/constants/travelPurposeOptions';
 // ─────────────────────────────────────────────────────────────
 // 1. HELPERS
 // ─────────────────────────────────────────────────────────────
@@ -93,10 +92,8 @@ const buildHTML = (trf: TRF): string => {
   // ── Travel arrangement rows ──────────────────────────────────
   // Menambahkan properti 'type' (Travel In / Travel Out) sesuai permintaan
   const arrRows = (trf.travelArrangements ?? []).map(a => {
-    let typeLabel = '-';
-    if (a.travelType === 'TRAVEL_IN') typeLabel = 'Travel In';
-    else if (a.travelType === 'TRAVEL_OUT') typeLabel = 'Travel Out';
-    else if (a.travelType) typeLabel = a.travelType.replace(/_/g, ' ');
+    const typeLabel =
+      a.travelType === 'TRAVEL_IN' ? 'Travel In' : 'Travel Out';
 
     return {
       date     : fmtDate(a.travelDate),
