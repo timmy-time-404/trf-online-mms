@@ -2,7 +2,7 @@
  * ExportTRFButton.tsx
  *
  * Dua tombol export bersebelahan: Export Excel + Export PDF.
- * Hanya tampil untuk role: HOD, HR, PM, GA, SUPER_ADMIN.
+ * Tampil untuk semua role: EMPLOYEE, ADMIN_DEPT, HOD, HR, PM, GA, SUPER_ADMIN.
  *
  * Cara pakai:
  *   import ExportTRFButton from '@/features/trf/components/ExportTRFButton';
@@ -18,7 +18,7 @@ import { exportTRFToPDF } from '@/utils/exportTRFToPDF';
 import type { TRF, UserRole } from '@/types';
 
 // Role yang diizinkan export
-const ALLOWED_ROLES: UserRole[] = ['HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
+const ALLOWED_ROLES: UserRole[] = ['EMPLOYEE', 'ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
 
 interface ExportTRFButtonProps {
   trf: TRF;

@@ -33,14 +33,15 @@ interface DBUserRow {
 interface DBEmployeeRow {
   id: string;
   user_id?: string;
-  employee_type: string;
+  employee_code: string;
+  employee_type?: string;
   employee_name: string;
   job_title: string;
   department: string;
   section: string;
-  email: string;
+  email?: string;
   phone: string;
-  date_of_hire?: string;
+  join_date?: string;
   point_of_hire: string;
 }
 
@@ -617,14 +618,15 @@ export const getUsers = async (): Promise<User[]> => {
 const transformEmployeeFromDB = (db: DBEmployeeRow): Employee => ({
   id: db.id,
   userId: db.user_id || undefined,
-  employeeType: db.employee_type as EmployeeType,
+  employeeCode: db.employee_code,
+  employeeType: (db.employee_type as EmployeeType) || 'EMPLOYEE',
   employeeName: db.employee_name,
   jobTitle: db.job_title,
   department: db.department,
   section: db.section,
-  email: db.email,
+  email: db.email ?? '',
   phone: db.phone,
-  dateOfHire: db.date_of_hire,
+  dateOfHire: db.join_date,
   pointOfHire: db.point_of_hire
 });
 
@@ -634,6 +636,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => ({
   employeeId: dbTRF.employee_id,
   employee: employees.find(e => e.id === dbTRF.employee_id) ?? {
     id: dbTRF.employee_id,
+    employeeCode: '-',
     employeeName: 'Unknown Employee',
     employeeType: 'EMPLOYEE' as EmployeeType,
     jobTitle: '-',

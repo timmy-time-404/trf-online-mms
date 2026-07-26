@@ -142,6 +142,16 @@ const buildProcessedStamp = (date?: string) => `
     PROCESSED
     ${date ? `<div style="font-size:7px;font-weight:normal;">${fmtDate(date)}</div>` : ''}
   </div>`;
+
+// Stamp "TTD" employee — dipakai di kolom "Requested By" sebagai penanda
+// employee sudah submit/konfirmasi TRF ini (setara tanda tangan digital).
+const buildSubmittedStamp = (date?: string) => `
+  <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%) rotate(-15deg);
+    color:#444;font-weight:bold;border:2px solid #444;padding:2px 5px;border-radius:4px;
+    opacity:0.7;font-size:10px;white-space:nowrap;text-align:center;line-height:1.3;">
+    SUBMITTED
+    ${date ? `<div style="font-size:7px;font-weight:normal;">${fmtDate(date)}</div>` : ''}
+  </div>`;
   
   return `
     <div id="pdf-export-container" style="
@@ -183,7 +193,7 @@ const buildProcessedStamp = (date?: string) => `
             <b>Employee ID</b><span class="sub-label">ID Karyawan</span>
           </td>
           <td style="width:30%;font-weight:bold;">
-            ${(trf.employee as any)?.employeeCode ?? trf.employee?.id?.slice(0,7) ?? '-'}
+            ${trf.employee?.employeeCode ?? trf.employee?.id?.slice(0,7) ?? '-'}
           </td>
           <td style="width:20%;background-color:#f9f9f9;">
             <b>Name</b><span class="sub-label">Nama</span>
@@ -315,7 +325,8 @@ const buildProcessedStamp = (date?: string) => `
             <th style="width:20%;text-align:center;">Processed By<br/><span class="sub-label">Admin / GA</span></th>
           </tr>
           <tr>
-            <td style="height:60px;vertical-align:bottom;position:relative;">
+            <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
+              ${trf.submittedAt ? buildSubmittedStamp(trf.submittedAt) : ''}
               <b>${trf.employee?.employeeName ?? '________________'}</b><br/>
               <span style="font-size:9px;">${fmtDate(trf.submittedAt)}</span>
             </td>

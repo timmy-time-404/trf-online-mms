@@ -13,12 +13,11 @@ const fmtDate = (d?: string): string => {
 
 export const exportTRFToExcel = (trf: TRF): void => {
   // Pisahkan jadwal perjalanan keberangkatan (Out) dan kepulangan (In)
-  // Asumsi tipe perjalanan menggunakan standar kata 'DEPARTURE' dan 'RETURN'
   const travelOut = trf.travelArrangements?.find(
-    (arr) => arr.travelType === 'DEPARTURE' || arr.travelType === 'OUTBOUND'
+    (arr) => arr.travelType === 'TRAVEL_OUT'
   );
   const travelIn = trf.travelArrangements?.find(
-    (arr) => arr.travelType === 'RETURN' || arr.travelType === 'INBOUND'
+    (arr) => arr.travelType === 'TRAVEL_IN'
   );
 
   // Ambil tipe arrangement umum (jika ada)
@@ -59,7 +58,7 @@ export const exportTRFToExcel = (trf: TRF): void => {
   // ── 2. PETAKAN DATA TRF KE DALAM BARIS (ROW) ───────────────────────────
   const row = [
     trf.employee?.tenant ?? '-',
-    (trf.employee as any)?.employeeId ?? '-', // Sesuaikan dengan properti ID di backend Anda
+    trf.employee?.employeeCode ?? trf.employee?.id ?? '-',
     trf.employee?.employeeName ?? '-',
     trf.employee?.department ?? '-',
     trf.employee?.section ?? '-',

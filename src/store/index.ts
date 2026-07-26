@@ -40,15 +40,17 @@ interface DBUserRow {
 interface DBEmployeeRow {
   id: string;
   user_id?: string;
-  employee_type: string;
+  employee_code: string;
+  employee_type?: string; // kolom ini TIDAK ada di skema DB asli, selalu undefined
   employee_name: string;
   job_title: string;
   department: string;
   section: string;
-  email: string;
+  email?: string; // kolom ini TIDAK ada di skema DB asli, selalu undefined
   phone: string;
-  date_of_hire?: string;
+  join_date?: string; // nama kolom asli di DB (bukan date_of_hire)
   point_of_hire: string;
+  employee_level?: string;
 }
 
 interface DBTRFRow {
@@ -123,15 +125,17 @@ const transformUserFromDB = (dbUser: DBUserRow): User => ({
 const transformEmployeeFromDB = (dbEmp: DBEmployeeRow): Employee => ({
   id: dbEmp.id,
   userId: dbEmp.user_id || undefined,
-  employeeType: dbEmp.employee_type as EmployeeType,
+  employeeCode: dbEmp.employee_code,
+  employeeType: (dbEmp.employee_type as EmployeeType) || 'EMPLOYEE',
   employeeName: dbEmp.employee_name,
   jobTitle: dbEmp.job_title,
   department: dbEmp.department,
   section: dbEmp.section,
-  email: dbEmp.email,
+  email: dbEmp.email ?? '',
   phone: dbEmp.phone,
-  dateOfHire: dbEmp.date_of_hire,
+  dateOfHire: dbEmp.join_date,
   pointOfHire: dbEmp.point_of_hire,
+  employeeLevel: dbEmp.employee_level,
 });
 
 const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
@@ -141,6 +145,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => {
     employeeId: dbTRF.employee_id,
     employee: employees.find((e) => e.id === dbTRF.employee_id) ?? {
       id: dbTRF.employee_id,
+      employeeCode: '-',
       employeeName: 'Unknown Employee',
       employeeType: 'EMPLOYEE',
       jobTitle: '-',
@@ -310,13 +315,13 @@ interface TRFState {
   changedByName: string,
   updates: UpdateTRFInput,
 ) => Promise<boolean>;
+  deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   editAndApproveTRF: (
     id: string,
     currentUser: User,
     updates: UpdateTRFInput,
-    note?: string,
+    note: string,
   ) => Promise<boolean>;
-  deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
   getTRFsForApproval: (role: UserRole, department?: string) => TRF[];
@@ -485,7 +490,6 @@ export const useTRFStore = create<TRFState>()(
           department: payload.department,
           section: payload.section,
           job_title: payload.jobTitle,
-          email: payload.email,
           phone: payload.phone,
         });
 
@@ -502,7 +506,6 @@ export const useTRFStore = create<TRFState>()(
             department: payload.department,
             section: payload.section,
             job_title: payload.jobTitle,
-            email: payload.email,
             phone: payload.phone,
           })
           .eq('id', id);
@@ -770,12 +773,12 @@ export const useTRFStore = create<TRFState>()(
   }
 },
 
-      // ============================================
-      // EDIT & APPROVE (khusus HR / GA)
-      // HR: edit lalu langsung approve ke tahap berikutnya.
-      // GA: edit saja, TIDAK auto-approve — approve final tetap lewat
-      //     halaman Process (upload dokumen/voucher).
-      // ============================================
+      deleteTRF: async (id) => {
+        if (!isSupabaseEnabled()) return false;
+        await supabase.from('trfs').delete().eq('id', id);
+        return true;
+      },
+
       editAndApproveTRF: async (id, currentUser, updates, note) => {
         if (!isSupabaseEnabled()) return false;
 
@@ -926,47 +929,7 @@ export const useTRFStore = create<TRFState>()(
           await get().fetchAllData();
           return true;
         } catch (error) {
-          console.error('Edit and approve TRF error:', error);
-          return false;
-        }
-      },
-
-      // ============================================
-      // DELETE TRF
-      // NOTE: Implementasi asli fungsi ini sempat tertimpa oleh logic
-      // editAndApproveTRF akibat conflict resolution yang salah. Versi di
-      // bawah ini adalah rekonstruksi standar (soft delete via status,
-      // hard delete via penghapusan baris) — mohon dicek ulang / dibandingkan
-      // dengan riwayat git kalau ada implementasi asli yang lebih spesifik,
-      // terutama terkait status "DELETED" apakah memang ada di enum TRFStatus
-      // dan di getVisibleTRFs / getTRFsByStatus dsb, supaya TRF yang di-soft-delete
-      // benar-benar tersembunyi dari listing lain.
-      // ============================================
-      deleteTRF: async (id, hardDelete = false) => {
-        if (!isSupabaseEnabled()) return false;
-
-        const trf = get().trfs.find((t) => t.id === id);
-        if (!trf) return false;
-
-        try {
-          if (hardDelete) {
-            const { error } = await supabase.from('trfs').delete().eq('id', id);
-            if (error) throw error;
-          } else {
-            const { error } = await supabase
-              .from('trfs')
-              .update({
-                status: 'DELETED' as TRFStatus,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', id);
-            if (error) throw error;
-          }
-
-          await get().fetchAllData();
-          return true;
-        } catch (error) {
-          console.error('Delete TRF error:', error);
+          console.error('editAndApproveTRF error:', error);
           return false;
         }
       },
