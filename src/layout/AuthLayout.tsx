@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
+import mmsLogo from '@/assets/mms-color.png';
 
 const AuthLayout: React.FC = () => {
   return (
@@ -10,7 +11,7 @@ const AuthLayout: React.FC = () => {
           
           {/* ✅ LOGO PERUSAHAAN */}
           <img 
-            src="src\assets\mms-color.png" 
+            src={mmsLogo}
             alt="Logo PT Merdeka Mining Servis" 
             className="h-20 w-auto mx-auto mb-4 object-contain"
           />
