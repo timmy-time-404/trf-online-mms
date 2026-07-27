@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
  
 // Role yang boleh export all
-const EXPORT_ALLOWED_ROLES: UserRole[] = ['HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
+const EXPORT_ALLOWED_ROLES: UserRole[] = ['EMPLOYEE', 'ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
  
 const TRFListPage: React.FC = () => {
   const navigate = useNavigate();

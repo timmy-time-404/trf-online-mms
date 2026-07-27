@@ -49,6 +49,7 @@ export interface User {
 export interface Employee {
   id: string;
   userId?: string;
+  employeeCode: string; // = employees.employee_code di DB, ini "Employee ID" yang benar
   employeeType: EmployeeType;
   employeeName: string;
   jobTitle: string;
@@ -56,8 +57,9 @@ export interface Employee {
   section: string;
   email: string;
   phone: string;
-  dateOfHire?: string;
+  dateOfHire?: string; // = employees.join_date di DB
   pointOfHire: string;
+  employeeLevel?: string;
   tenant?: string; // Optional tambahan jika ada
 }
 

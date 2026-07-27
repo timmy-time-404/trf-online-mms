@@ -89,7 +89,7 @@ function buildRowsForTRF(trf: TRF): (string | number)[][] {
 
     return [
       // Employee info
-      val(trf.employee?.id ?? trf.employeeId),
+      val(trf.employee?.employeeCode ?? trf.employee?.id ?? trf.employeeId),
       val(trf.employee?.employeeName),
       val(trf.employee?.jobTitle),
       val(trf.employee?.department ?? trf.department),
