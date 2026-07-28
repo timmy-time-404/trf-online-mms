@@ -76,7 +76,7 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
               Employee Information
             </CardTitle>
             <p className="text-sm text-gray-500">
-              Select Employee
+              Pilih dan Periksa Informasi Karyawan
             </p>
           </div>
         </div>

@@ -927,22 +927,76 @@ export const useTRFStore = create<TRFState>()(
       },
 
       getVisibleTRFs: (user) => {
-        let filtered = get().trfs;
-        if (user.role === 'EMPLOYEE') {
-          const myEmployee = get().employees.find((e) => e.userId === user.id);
-          filtered = myEmployee
-            ? get().trfs.filter((t) => t.employeeId === myEmployee.id)
-            : [];
-        }
+  const allTRFs = get().trfs;
+  const employees = get().employees;
 
-        if (user.role === 'ADMIN_DEPT' || user.role === 'HOD')
-          filtered = get().getTRFsByDepartment(user.department!);
+  let filtered: TRF[] = [];
 
-        return filtered.map((t) => ({
-          ...t,
-          employee: get().employees.find((e) => e.id === t.employeeId),
-        }));
-      },
+  switch (user.role) {
+    /*
+     * EMPLOYEE:
+     * hanya dapat melihat TRF milik employee_id
+     * yang terhubung ke personal account tersebut.
+     */
+    case 'EMPLOYEE': {
+      const employeeId =
+        user.employeeId ??
+        employees.find(
+          (employee) => employee.userId === user.id,
+        )?.id;
+
+      filtered = employeeId
+        ? allTRFs.filter(
+            (trf) => trf.employeeId === employeeId,
+          )
+        : [];
+
+      break;
+    }
+
+    /*
+     * ADMIN_DEPT & HOD:
+     * hanya dapat melihat TRF dari department akun.
+     */
+    case 'ADMIN_DEPT':
+    case 'HOD': {
+      const userDepartment =
+        user.department?.trim().toLowerCase();
+
+      filtered = userDepartment
+        ? allTRFs.filter(
+            (trf) =>
+              trf.department
+                ?.trim()
+                .toLowerCase() === userDepartment,
+          )
+        : [];
+
+      break;
+    }
+
+    /*
+     * HR, PM, GA, SUPER_ADMIN:
+     * dapat melihat seluruh department.
+     */
+    case 'HR':
+    case 'PM':
+    case 'GA':
+    case 'SUPER_ADMIN':
+      filtered = allTRFs;
+      break;
+
+    default:
+      filtered = [];
+  }
+
+  return filtered.map((trf) => ({
+    ...trf,
+    employee: employees.find(
+      (employee) => employee.id === trf.employeeId,
+    ),
+  }));
+},
 
       getTRFsForVerification: (department: string) => {
         return get()
@@ -1337,6 +1391,16 @@ handleApproval: async (
 // DASHBOARD STORE
 // ============================================
 
+interface DashboardTRFRow {
+  id: string;
+  employee_id: string;
+  department?: string | null;
+  status?: string;
+  travel_arrangements?: TravelArrangement[] | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
 interface DashboardState {
   stats: {
     totalTravelIn: number;
@@ -1345,227 +1409,507 @@ interface DashboardState {
     onSiteActive: number;
     daysInSite: number;
   };
+
   isLoadingStats: boolean;
+
   roomAvailability: {
     hotelName: string;
     total: number;
     occupied: number;
     available: number;
   }[];
+
   weeklyTravel: {
     day: string;
     travelIn: number;
     travelOut: number;
   }[];
-  fetchDashboardStats: () => Promise<void>;
-  fetchWeeklyTravel: () => Promise<void>;
+
+  fetchDashboardStats: (
+    user: User,
+  ) => Promise<void>;
+
+  fetchWeeklyTravel: (
+    user: User,
+  ) => Promise<void>;
 }
 
-export const useDashboardStore = create<DashboardState>()((set) => ({
-  stats: {
-    totalTravelIn: 0,
-    totalTravelOut: 0,
-    siteEntry: 0,
-    onSiteActive: 0,
-    daysInSite: 0,
-  },
-  isLoadingStats: false,
-  roomAvailability: [
-    {
-      hotelName: 'Grand Mining Hotel',
-      total: 120,
-      occupied: 98,
-      available: 22,
-    },
-    { hotelName: 'Camp Residence', total: 80, occupied: 45, available: 35 },
-    { hotelName: 'Site C Camp', total: 60, occupied: 52, available: 8 },
-    { hotelName: 'City Center Hotel', total: 40, occupied: 28, available: 12 },
-  ],
-  weeklyTravel: [
-    { day: 'Mon', travelIn: 0, travelOut: 0 },
-    { day: 'Tue', travelIn: 0, travelOut: 0 },
-    { day: 'Wed', travelIn: 0, travelOut: 0 },
-    { day: 'Thu', travelIn: 0, travelOut: 0 },
-    { day: 'Fri', travelIn: 0, travelOut: 0 },
-    { day: 'Sat', travelIn: 0, travelOut: 0 },
-    { day: 'Sun', travelIn: 0, travelOut: 0 },
-  ],
+const EMPTY_DASHBOARD_STATS = {
+  totalTravelIn: 0,
+  totalTravelOut: 0,
+  siteEntry: 0,
+  onSiteActive: 0,
+  daysInSite: 0,
+};
 
-  // ============================================
-  // STAT CARDS: Travel In, Travel Out, On Site
-  // ============================================
-  fetchDashboardStats: async () => {
-    if (!isSupabaseEnabled()) return;
+const createEmptyWeeklyTravel = () => [
+  { day: 'Mon', travelIn: 0, travelOut: 0 },
+  { day: 'Tue', travelIn: 0, travelOut: 0 },
+  { day: 'Wed', travelIn: 0, travelOut: 0 },
+  { day: 'Thu', travelIn: 0, travelOut: 0 },
+  { day: 'Fri', travelIn: 0, travelOut: 0 },
+  { day: 'Sat', travelIn: 0, travelOut: 0 },
+  { day: 'Sun', travelIn: 0, travelOut: 0 },
+];
 
-    set({ isLoadingStats: true });
+export const useDashboardStore =
+  create<DashboardState>()((set) => ({
+    stats: EMPTY_DASHBOARD_STATS,
 
-    try {
-      const { data, error } = await supabase
-        .from('trfs')
-        .select('id, travel_arrangements, start_date, end_date')
-        .eq('status', 'GA_PROCESSED');
+    isLoadingStats: false,
 
-      if (error) {
-        console.error('Error fetching dashboard stats:', error);
-        set({ isLoadingStats: false });
+    roomAvailability: [
+      {
+        hotelName: 'Grand Mining Hotel',
+        total: 120,
+        occupied: 98,
+        available: 22,
+      },
+      {
+        hotelName: 'Camp Residence',
+        total: 80,
+        occupied: 45,
+        available: 35,
+      },
+      {
+        hotelName: 'Site C Camp',
+        total: 60,
+        occupied: 52,
+        available: 8,
+      },
+      {
+        hotelName: 'City Center Hotel',
+        total: 40,
+        occupied: 28,
+        available: 12,
+      },
+    ],
+
+    weeklyTravel: createEmptyWeeklyTravel(),
+
+    // ============================================
+    // STAT CARDS
+    // ============================================
+
+    fetchDashboardStats: async (user) => {
+      if (!isSupabaseEnabled()) {
         return;
       }
 
-      if (!data) {
-        set({ isLoadingStats: false });
-        return;
-      }
+      set({ isLoadingStats: true });
 
-      const today = new Date().toISOString().split('T')[0];
+      try {
+        /*
+         * Query starts with GA_PROCESSED because these
+         * cards represent completed/processed travel.
+         */
+        let query = supabase
+          .from('trfs')
+          .select(
+            `
+              id,
+              employee_id,
+              department,
+              status,
+              travel_arrangements,
+              start_date,
+              end_date
+            `,
+          )
+          .eq('status', 'GA_PROCESSED');
 
-      let totalTravelIn = 0;
-      let totalTravelOut = 0;
-      let onSiteActive = 0;
-      let daysInSite = 0;
+        /*
+         * EMPLOYEE:
+         * only own employee_id.
+         */
+        if (user.role === 'EMPLOYEE') {
+          if (!user.employeeId) {
+            set({
+              stats: EMPTY_DASHBOARD_STATS,
+              isLoadingStats: false,
+            });
 
-      data.forEach((trf) => {
-        const arrangements: { travelType: string }[] =
-          trf.travel_arrangements || [];
-
-        const hasTravelIn = arrangements.some(
-          (arr) => arr.travelType === 'TRAVEL_IN',
-        );
-        if (hasTravelIn) totalTravelIn++;
-
-        const hasTravelOut = arrangements.some(
-          (arr) => arr.travelType === 'TRAVEL_OUT',
-        );
-        if (hasTravelOut) totalTravelOut++;
-
-        const startDate = trf.start_date;
-        const endDate = trf.end_date;
-        if (startDate && endDate && startDate <= today && endDate >= today) {
-          onSiteActive++;
-
-          const start = new Date(startDate);
-          const end = new Date(endDate);
-          const diffTime = Math.abs(end.getTime() - start.getTime());
-          daysInSite = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-      });
-
-      set({
-        stats: {
-          totalTravelIn,
-          totalTravelOut,
-          siteEntry: 0,
-          onSiteActive,
-          daysInSite,
-        },
-        isLoadingStats: false,
-      });
-    } catch (err) {
-      console.error('fetchDashboardStats error:', err);
-      set({ isLoadingStats: false });
-    }
-  },
-
-  // ============================================
-  // WEEKLY TRAVEL CHART: Senin - Minggu berjalan
-  // Semua status TRF, berdasarkan travelDate di arrangement
-  // 1 TRF = 1 hitungan per hari per tipe
-  // ============================================
-  fetchWeeklyTravel: async () => {
-    if (!isSupabaseEnabled()) return;
-
-    try {
-      // Hitung Senin dan Minggu minggu berjalan
-      const now = new Date();
-
-      // getDay() = 0 (Sun) ... 6 (Sat)
-      // Kita ubah ke: 0 (Mon) ... 6 (Sun)
-      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-      const monday = new Date(now);
-      monday.setDate(now.getDate() + diffToMonday);
-      monday.setHours(0, 0, 0, 0);
-
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      sunday.setHours(23, 59, 59, 999);
-
-      // Format ke YYYY-MM-DD untuk query Supabase
-      const mondayStr = monday.toISOString().split('T')[0];
-      const sundayStr = sunday.toISOString().split('T')[0];
-
-      // Ambil semua TRF (semua status), kolom yang dibutuhkan saja
-      const { data, error } = await supabase
-        .from('trfs')
-        .select('id, travel_arrangements');
-
-      if (error) {
-        console.error('Error fetching weekly travel:', error);
-        return;
-      }
-
-      if (!data) return;
-
-      const dailyMap: Record<string, {
-        travelInTRFs: Set<string>;
-        travelOutTRFs: Set<string>;
-      }> = {};
-
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        const key = d.toISOString().split('T')[0];
-        dailyMap[key] = {
-          travelInTRFs: new Set(),
-          travelOutTRFs: new Set(),
-        };
-      }
-
-      // Proses setiap TRF
-      data.forEach((trf) => {
-        const arrangements: { travelType: string; travelDate: string }[] =
-          trf.travel_arrangements || [];
-
-        arrangements.forEach((arr) => {
-          const travelDate = arr.travelDate; // format: YYYY-MM-DD
-
-          // Hanya hitung jika travelDate ada di rentang minggu ini
-          if (!travelDate || travelDate < mondayStr || travelDate > sundayStr) {
             return;
           }
 
-          if (!dailyMap[travelDate]) return;
+          query = query.eq(
+            'employee_id',
+            user.employeeId,
+          );
+        }
 
-          if (arr.travelType === 'TRAVEL_IN') {
-            // Set otomatis abaikan duplikat —
-            // jadi 2 arrangement TRAVEL_IN di hari yang sama hanya = 1 hitungan
-            dailyMap[travelDate].travelInTRFs.add(trf.id);
+        /*
+         * ADMIN_DEPT & HOD:
+         * only their department.
+         */
+        if (
+          user.role === 'ADMIN_DEPT' ||
+          user.role === 'HOD'
+        ) {
+          if (!user.department) {
+            set({
+              stats: EMPTY_DASHBOARD_STATS,
+              isLoadingStats: false,
+            });
+
+            return;
           }
 
-          if (arr.travelType === 'TRAVEL_OUT') {
-            dailyMap[travelDate].travelOutTRFs.add(trf.id);
+          query = query.eq(
+            'department',
+            user.department,
+          );
+        }
+
+        /*
+         * HR, PM, GA, SUPER_ADMIN:
+         * no additional filter = all departments.
+         */
+        const { data, error } = await query;
+
+        if (error) {
+          console.error(
+            'Error fetching dashboard stats:',
+            error,
+          );
+
+          set({
+            stats: EMPTY_DASHBOARD_STATS,
+            isLoadingStats: false,
+          });
+
+          return;
+        }
+
+        const rows =
+          (data ?? []) as DashboardTRFRow[];
+
+        const today =
+          new Date().toISOString().split('T')[0];
+
+        let totalTravelIn = 0;
+        let totalTravelOut = 0;
+        let onSiteActive = 0;
+        let daysInSite = 0;
+
+        rows.forEach((trf) => {
+          const arrangements =
+            trf.travel_arrangements ?? [];
+
+          const hasTravelIn =
+            arrangements.some(
+              (arrangement) =>
+                arrangement.travelType ===
+                'TRAVEL_IN',
+            );
+
+          const hasTravelOut =
+            arrangements.some(
+              (arrangement) =>
+                arrangement.travelType ===
+                'TRAVEL_OUT',
+            );
+
+          if (hasTravelIn) {
+            totalTravelIn += 1;
+          }
+
+          if (hasTravelOut) {
+            totalTravelOut += 1;
+          }
+
+          const startDate = trf.start_date;
+          const endDate = trf.end_date;
+
+          if (
+            startDate &&
+            endDate &&
+            startDate <= today &&
+            endDate >= today
+          ) {
+            onSiteActive += 1;
+
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            const diffTime = Math.max(
+              0,
+              end.getTime() - start.getTime(),
+            );
+
+            daysInSite += Math.ceil(
+              diffTime /
+                (1000 * 60 * 60 * 24),
+            );
           }
         });
-      });
 
-      const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        set({
+          stats: {
+            totalTravelIn,
+            totalTravelOut,
+            siteEntry: 0,
+            onSiteActive,
+            daysInSite,
+          },
+          isLoadingStats: false,
+        });
+      } catch (error) {
+        console.error(
+          'fetchDashboardStats error:',
+          error,
+        );
 
-      const weeklyTravel = dayLabels.map((label, index) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + index);
-        const key = d.toISOString().split('T')[0];
-        const entry = dailyMap[key];
+        set({
+          stats: EMPTY_DASHBOARD_STATS,
+          isLoadingStats: false,
+        });
+      }
+    },
 
-        return {
-          day: label,
-          travelIn: entry ? entry.travelInTRFs.size : 0,
-          travelOut: entry ? entry.travelOutTRFs.size : 0,
-        };
-      });
+    // ============================================
+    // WEEKLY TRAVEL CHART
+    // ============================================
 
-      set({ weeklyTravel });
-    } catch (err) {
-      console.error('fetchWeeklyTravel error:', err);
-    }
-  },
-}));
+    fetchWeeklyTravel: async (user) => {
+      if (!isSupabaseEnabled()) {
+        return;
+      }
+
+      try {
+        const now = new Date();
+
+        /*
+         * getDay():
+         * 0 = Sunday
+         * 1 = Monday
+         * ...
+         * 6 = Saturday
+         */
+        const dayOfWeek = now.getDay();
+
+        const diffToMonday =
+          dayOfWeek === 0
+            ? -6
+            : 1 - dayOfWeek;
+
+        const monday = new Date(now);
+
+        monday.setDate(
+          now.getDate() + diffToMonday,
+        );
+
+        monday.setHours(0, 0, 0, 0);
+
+        const sunday = new Date(monday);
+
+        sunday.setDate(
+          monday.getDate() + 6,
+        );
+
+        sunday.setHours(
+          23,
+          59,
+          59,
+          999,
+        );
+
+        const mondayStr =
+          monday.toISOString().split('T')[0];
+
+        const sundayStr =
+          sunday.toISOString().split('T')[0];
+
+        let query = supabase
+          .from('trfs')
+          .select(
+            `
+              id,
+              employee_id,
+              department,
+              travel_arrangements
+            `,
+          );
+
+        /*
+         * EMPLOYEE:
+         * only own employee_id.
+         */
+        if (user.role === 'EMPLOYEE') {
+          if (!user.employeeId) {
+            set({
+              weeklyTravel:
+                createEmptyWeeklyTravel(),
+            });
+
+            return;
+          }
+
+          query = query.eq(
+            'employee_id',
+            user.employeeId,
+          );
+        }
+
+        /*
+         * ADMIN_DEPT & HOD:
+         * only their department.
+         */
+        if (
+          user.role === 'ADMIN_DEPT' ||
+          user.role === 'HOD'
+        ) {
+          if (!user.department) {
+            set({
+              weeklyTravel:
+                createEmptyWeeklyTravel(),
+            });
+
+            return;
+          }
+
+          query = query.eq(
+            'department',
+            user.department,
+          );
+        }
+
+        /*
+         * HR, PM, GA, SUPER_ADMIN:
+         * no additional filter.
+         */
+        const { data, error } = await query;
+
+        if (error) {
+          console.error(
+            'Error fetching weekly travel:',
+            error,
+          );
+
+          set({
+            weeklyTravel:
+              createEmptyWeeklyTravel(),
+          });
+
+          return;
+        }
+
+        const rows =
+          (data ?? []) as DashboardTRFRow[];
+
+        const dailyMap: Record<
+          string,
+          {
+            travelInTRFs: Set<string>;
+            travelOutTRFs: Set<string>;
+          }
+        > = {};
+
+        for (let index = 0; index < 7; index++) {
+          const date = new Date(monday);
+
+          date.setDate(
+            monday.getDate() + index,
+          );
+
+          const key =
+            date.toISOString().split('T')[0];
+
+          dailyMap[key] = {
+            travelInTRFs: new Set<string>(),
+            travelOutTRFs: new Set<string>(),
+          };
+        }
+
+        rows.forEach((trf) => {
+          const arrangements =
+            trf.travel_arrangements ?? [];
+
+          arrangements.forEach(
+            (arrangement) => {
+              const travelDate =
+                arrangement.travelDate;
+
+              if (
+                !travelDate ||
+                travelDate < mondayStr ||
+                travelDate > sundayStr
+              ) {
+                return;
+              }
+
+              const dayEntry =
+                dailyMap[travelDate];
+
+              if (!dayEntry) {
+                return;
+              }
+
+              if (
+                arrangement.travelType ===
+                'TRAVEL_IN'
+              ) {
+                dayEntry.travelInTRFs.add(
+                  trf.id,
+                );
+              }
+
+              if (
+                arrangement.travelType ===
+                'TRAVEL_OUT'
+              ) {
+                dayEntry.travelOutTRFs.add(
+                  trf.id,
+                );
+              }
+            },
+          );
+        });
+
+        const dayLabels = [
+          'Mon',
+          'Tue',
+          'Wed',
+          'Thu',
+          'Fri',
+          'Sat',
+          'Sun',
+        ];
+
+        const weeklyTravel = dayLabels.map(
+          (day, index) => {
+            const date = new Date(monday);
+
+            date.setDate(
+              monday.getDate() + index,
+            );
+
+            const key =
+              date.toISOString().split('T')[0];
+
+            const entry = dailyMap[key];
+
+            return {
+              day,
+              travelIn:
+                entry?.travelInTRFs.size ?? 0,
+              travelOut:
+                entry?.travelOutTRFs.size ?? 0,
+            };
+          },
+        );
+
+        set({ weeklyTravel });
+      } catch (error) {
+        console.error(
+          'fetchWeeklyTravel error:',
+          error,
+        );
+
+        set({
+          weeklyTravel:
+            createEmptyWeeklyTravel(),
+        });
+      }
+    },
+  }));

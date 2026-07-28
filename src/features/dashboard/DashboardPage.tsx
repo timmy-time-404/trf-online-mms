@@ -1,32 +1,123 @@
 import React, { useEffect } from 'react';
-import { useDashboardStore } from '@/store';
+import {
+  Clock,
+  Plane,
+  PlaneTakeoff,
+  Users,
+} from 'lucide-react';
+
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  useAuthStore,
+  useDashboardStore,
+  useTRFStore,
+} from '@/store';
+
+import RecentActivityTable from './components/RecentActivityTable';
 import StatCard from './components/StatCard';
 import WeeklyTravelChart from './components/WeeklyTravelChart';
-import RecentActivityTable from './components/RecentActivityTable';
-import { Plane, PlaneTakeoff, Users, Clock } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+
+const getScopeDescription = (
+  role?: string,
+  department?: string,
+) => {
+  switch (role) {
+    case 'EMPLOYEE':
+      return 'Menampilkan data Travel Request milik Anda.';
+
+    case 'ADMIN_DEPT':
+    case 'HOD':
+      return department
+        ? `Menampilkan data Department ${department}.`
+        : 'Department akun belum ditentukan.';
+
+    case 'HR':
+    case 'PM':
+    case 'GA':
+    case 'SUPER_ADMIN':
+      return 'Menampilkan data dari seluruh department.';
+
+    default:
+      return 'Ringkasan aktivitas Travel Request.';
+  }
+};
 
 const DashboardPage: React.FC = () => {
-  const { stats, isLoadingStats, fetchDashboardStats, fetchWeeklyTravel } =
-    useDashboardStore();
+  const currentUser = useAuthStore(
+    (state) => state.currentUser,
+  );
+
+  const {
+    stats,
+    isLoadingStats,
+    fetchDashboardStats,
+    fetchWeeklyTravel,
+  } = useDashboardStore();
+
+  const fetchAllData = useTRFStore(
+    (state) => state.fetchAllData,
+  );
 
   useEffect(() => {
-    fetchDashboardStats();
-    fetchWeeklyTravel();
-  }, [fetchDashboardStats, fetchWeeklyTravel]);
+    if (!currentUser) {
+      return;
+    }
+
+    /*
+     * Dashboard statistics and weekly chart are fetched
+     * using the current user's visibility scope.
+     *
+     * TRF data is also refreshed for Recent Activity.
+     */
+    void Promise.all([
+      fetchDashboardStats(currentUser),
+      fetchWeeklyTravel(currentUser),
+      fetchAllData(),
+    ]);
+  }, [
+    currentUser,
+    fetchAllData,
+    fetchDashboardStats,
+    fetchWeeklyTravel,
+  ]);
+
+  if (!currentUser) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-16 w-full rounded-xl" />
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton
+              key={index}
+              className="h-32 rounded-xl"
+            />
+          ))}
+        </div>
+
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-gray-500">
-          Overview of travel request activities
+        <h1 className="text-2xl font-bold text-gray-900">
+          Dashboard
+        </h1>
+
+        <p className="mt-1 text-sm text-gray-500 sm:text-base">
+          {getScopeDescription(
+            currentUser.role,
+            currentUser.department,
+          )}
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isLoadingStats ? (
           <Skeleton className="h-32 rounded-xl" />
         ) : (
@@ -34,7 +125,7 @@ const DashboardPage: React.FC = () => {
             title="Total Travel In"
             value={stats.totalTravelIn}
             icon={Plane}
-            description="All time approved travel in"
+            description="Total Travel In yang telah selesai diproses"
             color="blue"
           />
         )}
@@ -46,7 +137,7 @@ const DashboardPage: React.FC = () => {
             title="Total Travel Out"
             value={stats.totalTravelOut}
             icon={PlaneTakeoff}
-            description="All time approved travel out"
+            description="Total Travel Out yang telah selesai diproses"
             color="green"
           />
         )}
@@ -58,7 +149,7 @@ const DashboardPage: React.FC = () => {
             title="On Site Active"
             value={stats.onSiteActive}
             icon={Users}
-            description="Employees currently on site today"
+            description="Karyawan yang sedang aktif berada di site"
             color="purple"
           />
         )}
@@ -70,8 +161,8 @@ const DashboardPage: React.FC = () => {
             title="Days In Site"
             value={stats.daysInSite}
             icon={Clock}
-            description="Total duration of current stay"
-            color="orange" // Menggunakan warna orange agar variatif
+            description="Total durasi perjalanan aktif di site"
+            color="orange"
           />
         )}
       </div>
@@ -82,7 +173,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Recent Activity */}
-      <RecentActivityTable />
+      <RecentActivityTable user={currentUser} />
     </div>
   );
 };

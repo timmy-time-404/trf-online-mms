@@ -1,9 +1,23 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Hotel,
+  Calendar,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+
 import {
   Select,
   SelectContent,
@@ -11,220 +25,394 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Hotel, Calendar, Plus, Trash2 } from 'lucide-react';
-import { useTRFStore } from '@/store';
+
 import type { Accommodation } from '@/types';
- 
-// ─────────────────────────────────────────────────────────────
-// Accommodation sudah punya interface di types/index.ts.
-// Kita tambahkan field internal `_id` untuk key React.
-// ─────────────────────────────────────────────────────────────
+
+
+/* ============================================================
+   TYPES
+   ============================================================ */
+
 export interface AccommodationEntry extends Accommodation {
   _id: string;
 }
- 
-const genId = () => `accom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
- 
-export const createEmptyAccommodationEntry = (): AccommodationEntry => ({
-  _id         : genId(),
-  hotelName   : '',
-  checkInDate : '',
-  checkOutDate: '',
-  remarks     : '',
-});
- 
-// ─────────────────────────────────────────────────────────────
-// Props
-// ─────────────────────────────────────────────────────────────
+
 interface AccommodationSectionProps {
-  entries   : AccommodationEntry[];
-  onChange  : (entries: AccommodationEntry[]) => void;
-  disabled ?: boolean;
+  entries: AccommodationEntry[];
+  onChange: (entries: AccommodationEntry[]) => void;
+  disabled?: boolean;
 }
- 
-// ─────────────────────────────────────────────────────────────
-// Single entry card
-// ─────────────────────────────────────────────────────────────
+
 interface EntryCardProps {
-  entry       : AccommodationEntry;
-  index       : number;
-  canRemove   : boolean;
-  disabled   ?: boolean;
-  hotelList   : string[];
-  onChange    : (id: string, field: keyof Accommodation, value: string) => void;
-  onRemove    : (id: string) => void;
+  entry: AccommodationEntry;
+  index: number;
+  canRemove: boolean;
+  disabled?: boolean;
+
+  onChange: (
+    id: string,
+    field: keyof Accommodation,
+    value: string,
+  ) => void;
+
+  onRemove: (id: string) => void;
 }
- 
-const EntryCard: React.FC<EntryCardProps> = ({
-  entry, index, canRemove, disabled, hotelList, onChange, onRemove,
-}) => (
-  <div className="border border-gray-200 rounded-xl p-4 space-y-4 bg-gray-50/40">
-    {/* Header */}
-    <div className="flex items-center justify-between">
-      <span className="text-sm font-semibold text-gray-700">
-        Accommodation #{index + 1}
-      </span>
-      {canRemove && !disabled && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onRemove(entry._id)}
-          className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7 px-2"
+
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+const generateAccommodationId = () =>
+  `accommodation-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+
+
+export const createEmptyAccommodationEntry =
+  (): AccommodationEntry => ({
+    _id: generateAccommodationId(),
+    hotelName: '',
+    checkInDate: '',
+    checkOutDate: '',
+    remarks: '',
+  });
+
+
+/* ============================================================
+   SINGLE ACCOMMODATION CARD
+   ============================================================ */
+
+const AccommodationCard: React.FC<EntryCardProps> = ({
+  entry,
+  index,
+  canRemove,
+  disabled = false,
+  onChange,
+  onRemove,
+}) => {
+  return (
+    <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50/40 p-4">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+
+        <span className="text-sm font-semibold text-gray-700">
+          Accommodation #{index + 1}
+        </span>
+
+        {canRemove && !disabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(entry._id)}
+            className="h-7 px-2 text-red-500 hover:bg-red-50 hover:text-red-700"
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Remove
+          </Button>
+        )}
+
+      </div>
+
+
+      {/* Accommodation Arrangement */}
+      <div className="space-y-1.5">
+
+        <Label>Accommodation Arrangement</Label>
+
+        <Select
+          value={entry.hotelName}
+          onValueChange={(value) =>
+            onChange(
+              entry._id,
+              'hotelName',
+              value,
+            )
+          }
+          disabled={disabled}
         >
-          <Trash2 className="w-3.5 h-3.5 mr-1" />
-          Remove
-        </Button>
-      )}
-    </div>
- 
-    {/* Hotel selector */}
-    <div className="space-y-1.5">
-      <Label>Accommodation / Hotel</Label>
-      <Select
-        value={entry.hotelName}
-        onValueChange={val => onChange(entry._id, 'hotelName', val)}
-        disabled={disabled}
-      >
-        <SelectTrigger className="w-full bg-white">
-          <SelectValue placeholder="Select accommodation" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="By Site Service">By Site Service</SelectItem>
-          {hotelList.map(h => (
-            <SelectItem key={h} value={h}>{h}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
- 
-    {/* Check-in / Check-out */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="space-y-1.5">
-        <Label>Check-in Date</Label>
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            type="date"
-            value={entry.checkInDate}
-            onChange={e => onChange(entry._id, 'checkInDate', e.target.value)}
-            disabled={disabled}
-            className="pl-10 bg-white"
-          />
-        </div>
+
+          <SelectTrigger className="w-full bg-white">
+            <SelectValue placeholder="Select accommodation arrangement" />
+          </SelectTrigger>
+
+          <SelectContent>
+
+            <SelectItem value="By Site Service">
+              By Site Service
+            </SelectItem>
+
+            <SelectItem value="Self Arrangement">
+              Self Arrangement
+            </SelectItem>
+
+          </SelectContent>
+
+        </Select>
+
       </div>
-      <div className="space-y-1.5">
-        <Label>Check-out Date</Label>
-        <div className="relative">
-          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            type="date"
-            value={entry.checkOutDate}
-            onChange={e => onChange(entry._id, 'checkOutDate', e.target.value)}
-            disabled={disabled}
-            className="pl-10 bg-white"
-            min={entry.checkInDate}
-          />
+
+
+      {/* Check-in / Check-out */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+        {/* Check-in */}
+        <div className="space-y-1.5">
+
+          <Label>Check-in Date</Label>
+
+          <div className="relative">
+
+            <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <Input
+              type="date"
+              value={entry.checkInDate}
+              onChange={(event) =>
+                onChange(
+                  entry._id,
+                  'checkInDate',
+                  event.target.value,
+                )
+              }
+              disabled={disabled}
+              className="bg-white pl-10"
+            />
+
+          </div>
+
         </div>
+
+
+        {/* Check-out */}
+        <div className="space-y-1.5">
+
+          <Label>Check-out Date</Label>
+
+          <div className="relative">
+
+            <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <Input
+              type="date"
+              value={entry.checkOutDate}
+              onChange={(event) =>
+                onChange(
+                  entry._id,
+                  'checkOutDate',
+                  event.target.value,
+                )
+              }
+              disabled={disabled}
+              min={entry.checkInDate}
+              className="bg-white pl-10"
+            />
+
+          </div>
+
+        </div>
+
       </div>
+
+
+      {/* Remarks */}
+      <div className="space-y-1.5">
+
+        <Label>Remarks</Label>
+
+        <Textarea
+          placeholder="Special requests or additional information..."
+          value={entry.remarks ?? ''}
+          onChange={(event) =>
+            onChange(
+              entry._id,
+              'remarks',
+              event.target.value,
+            )
+          }
+          disabled={disabled}
+          rows={2}
+          className="resize-none bg-white"
+        />
+
+      </div>
+
     </div>
- 
-    {/* Remarks */}
-    <div className="space-y-1.5">
-      <Label>Remarks</Label>
-      <Textarea
-        placeholder="Special requests or additional information..."
-        value={entry.remarks ?? ''}
-        onChange={e => onChange(entry._id, 'remarks', e.target.value)}
-        disabled={disabled}
-        rows={2}
-        className="resize-none bg-white"
-      />
-    </div>
-  </div>
-);
- 
-// ─────────────────────────────────────────────────────────────
-// Main component
-// ─────────────────────────────────────────────────────────────
-const AccommodationSection: React.FC<AccommodationSectionProps> = ({
+  );
+};
+
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
+
+const AccommodationSection: React.FC<
+  AccommodationSectionProps
+> = ({
   entries,
   onChange,
   disabled = false,
 }) => {
-  const { referenceMaster } = useTRFStore();
- 
+
+  /* ----------------------------------------------------------
+     UPDATE
+     ---------------------------------------------------------- */
+
   const handleChange = (
-    id    : string,
-    field : keyof Accommodation,
-    value : string,
+    id: string,
+    field: keyof Accommodation,
+    value: string,
   ) => {
-    onChange(entries.map(e => e._id === id ? { ...e, [field]: value } : e));
+
+    const updatedEntries = entries.map((entry) => {
+
+      if (entry._id !== id) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        [field]: value,
+      };
+
+    });
+
+    onChange(updatedEntries);
   };
- 
+
+
+  /* ----------------------------------------------------------
+     ADD
+     ---------------------------------------------------------- */
+
   const handleAdd = () => {
-    onChange([...entries, createEmptyAccommodationEntry()]);
+
+    onChange([
+      ...entries,
+      createEmptyAccommodationEntry(),
+    ]);
+
   };
- 
+
+
+  /* ----------------------------------------------------------
+     REMOVE
+     ---------------------------------------------------------- */
+
   const handleRemove = (id: string) => {
-    onChange(entries.filter(e => e._id !== id));
+
+    const updatedEntries = entries.filter(
+      (entry) => entry._id !== id,
+    );
+
+    onChange(updatedEntries);
+
   };
- 
+
+
+  /* ----------------------------------------------------------
+     RENDER
+     ---------------------------------------------------------- */
+
   return (
+
     <Card className="border shadow-sm">
+
+      {/* Header */}
       <CardHeader className="pb-4">
+
         <div className="flex items-center justify-between">
+
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
-              <Hotel className="w-5 h-5 text-indigo-600" />
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
+              <Hotel className="h-5 w-5 text-indigo-600" />
             </div>
+
             <div>
-              <CardTitle className="text-lg">Accommodation</CardTitle>
-              <p className="text-sm text-gray-500">Booking details</p>
+
+              <CardTitle className="text-lg">
+                Accommodation
+              </CardTitle>
+
+              <p className="text-sm text-gray-500">
+                Booking details
+              </p>
+
             </div>
+
           </div>
- 
+
+
           {!disabled && (
+
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={handleAdd}
-              className="text-indigo-700 border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400 gap-1.5"
+              className="gap-1.5 border-indigo-300 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50"
             >
-              <Plus className="w-4 h-4" />
+
+              <Plus className="h-4 w-4" />
+
               Add Accommodation
+
             </Button>
+
           )}
+
         </div>
+
       </CardHeader>
- 
+
+
+      {/* Content */}
       <CardContent className="space-y-4">
+
+        {/* Empty state */}
         {entries.length === 0 && (
-          <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-            <Hotel className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">No accommodation added yet.</p>
-            <p className="text-gray-400 text-xs mt-1">
+
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8 text-center">
+
+            <Hotel className="mx-auto mb-2 h-10 w-10 text-gray-300" />
+
+            <p className="text-sm text-gray-500">
+              No accommodation added yet.
+            </p>
+
+            <p className="mt-1 text-xs text-gray-400">
               Click "Add Accommodation" or leave empty if none needed.
             </p>
+
           </div>
+
         )}
- 
-        {entries.map((entry, idx) => (
-          <EntryCard
+
+
+        {/* Accommodation entries */}
+        {entries.map((entry, index) => (
+
+          <AccommodationCard
             key={entry._id}
             entry={entry}
-            index={idx}
-            canRemove={true}
+            index={index}
+            canRemove
             disabled={disabled}
-            hotelList={referenceMaster.accommodations}
             onChange={handleChange}
             onRemove={handleRemove}
           />
+
         ))}
+
       </CardContent>
+
     </Card>
+
   );
 };
- 
+
+
 export default AccommodationSection;

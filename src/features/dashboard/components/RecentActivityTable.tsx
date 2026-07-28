@@ -1,5 +1,13 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Clock, FileText } from 'lucide-react';
+
+import StatusBadge from '@/components/common/StatusBadge';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -8,122 +16,221 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import StatusBadge from '@/components/common/StatusBadge';
-import { useTRFStore } from '@/store';
-import { Clock, FileText } from 'lucide-react';
 import { format } from '@/lib/utils';
+import { useTRFStore } from '@/store';
+import type { TRF, User } from '@/types';
 
-const RecentActivityTable: React.FC = () => {
-  const { trfs } = useTRFStore();
+interface RecentActivityTableProps {
+  user: User;
+}
 
-  // Get recent TRFs sorted by updatedAt
-  const recentTRFs = [...trfs]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5);
+const RecentActivityTable: React.FC<
+  RecentActivityTableProps
+> = ({ user }) => {
+  const trfs = useTRFStore((state) => state.trfs);
+  const employees = useTRFStore(
+    (state) => state.employees,
+  );
+  const getVisibleTRFs = useTRFStore(
+    (state) => state.getVisibleTRFs,
+  );
 
-  const getActivityDescription = (trf: typeof recentTRFs[0]) => {
-    // ✅ Cari nama approver dari data yang ada, atau gunakan default "Manager"
-    const approverName = trf.pmApproval?.approverName || "Manager";
+  /*
+   * Recent Activity must use the same role-based visibility
+   * as the Travel Request list.
+   */
+  const recentTRFs = React.useMemo(() => {
+    return [...getVisibleTRFs(user)]
+      .sort(
+        (first, second) =>
+          new Date(second.updatedAt).getTime() -
+          new Date(first.updatedAt).getTime(),
+      )
+      .slice(0, 5);
+  }, [
+    employees,
+    getVisibleTRFs,
+    trfs,
+    user,
+  ]);
+
+  const getActivityDescription = (trf: TRF) => {
+    const employeeName =
+      trf.employee?.employeeName ?? 'Karyawan';
+
+    const approverName =
+      trf.pmApproval?.approverName ?? 'Approver';
 
     switch (trf.status) {
       case 'DRAFT':
-        return `Created by ${trf.employee?.employeeName}`;
+        return `Dibuat oleh ${employeeName}`;
+
       case 'SUBMITTED':
-        return `Submitted by ${trf.employee?.employeeName}`;
+        return `Diajukan oleh ${employeeName}`;
+
+      case 'ADMIN_DEPT_VERIFIED':
+        return 'Telah diverifikasi oleh Admin Department';
+
+      case 'PENDING_APPROVAL':
+        return 'Menunggu persetujuan Head of Department';
+
       case 'HOD_APPROVED':
-      case 'PM_APPROVED': // ✅ (Saya tambahkan ini jaga-jaga kalau statusnya PM_APPROVED)
-        return `Approved by ${approverName}`;
+        return 'Telah disetujui oleh Head of Department';
+
+      case 'HR_APPROVED':
+        return 'Telah disetujui oleh HR';
+
+      case 'PM_APPROVED':
+        return `Telah disetujui oleh ${approverName}`;
+
+      case 'GA_PROCESSED':
+        return 'Dokumen perjalanan telah diproses oleh GA';
+
       case 'REJECTED':
-        return `Rejected by ${approverName}`;
+        return `Ditolak oleh ${approverName}`;
+
       case 'REVISED':
-      case 'NEEDS_REVISION': // ✅ (Sama, jaga-jaga)
-        return `Returned for revision by ${approverName}`;
+      case 'NEEDS_REVISION':
+        return `Dikembalikan untuk revisi oleh ${approverName}`;
+
       default:
-        return 'Updated';
+        return 'TRF diperbarui';
     }
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+    const diffInHours =
+      (now.getTime() - date.getTime()) /
+      (1000 * 60 * 60);
 
     if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)} hours ago`;
-    } else {
-      return format(date, 'MMM dd, yyyy HH:mm');
+      return 'Baru saja';
     }
+
+    if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)} jam lalu`;
+    }
+
+    return format(date, 'MMM dd, yyyy HH:mm');
   };
 
   return (
     <Card className="border shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-orange-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50">
+            <Clock className="h-5 w-5 text-orange-600" />
           </div>
+
           <div>
-            <CardTitle className="text-lg">Recent Activity</CardTitle>
-            <p className="text-sm text-gray-500">Latest TRF updates</p>
+            <CardTitle className="text-lg">
+              Recent Activity
+            </CardTitle>
+
+            <p className="text-sm text-gray-500">
+              Aktivitas TRF terbaru sesuai akses Anda
+            </p>
           </div>
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-32">TRF Number</TableHead>
+                <TableHead className="w-32">
+                  TRF Number
+                </TableHead>
+
                 <TableHead>Activity</TableHead>
+
                 <TableHead>Employee</TableHead>
-                <TableHead className="w-28">Status</TableHead>
-                <TableHead className="w-32 text-right">Time</TableHead>
+
+                <TableHead className="w-28">
+                  Status
+                </TableHead>
+
+                <TableHead className="w-32 text-right">
+                  Time
+                </TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
-              {recentTRFs.map((trf) => (
-                <TableRow key={trf.id} className="cursor-pointer hover:bg-gray-50">
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium text-gray-900">{trf.trfNumber}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <p className="text-sm text-gray-600">{getActivityDescription(trf)}</p>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-600">
-                          {trf.employee?.employeeName.charAt(0)}
+              {recentTRFs.map((trf) => {
+                const employeeName =
+                  trf.employee?.employeeName ??
+                  'Unknown Employee';
+
+                return (
+                  <TableRow
+                    key={trf.id}
+                    className="hover:bg-gray-50"
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-gray-400" />
+
+                        <span className="whitespace-nowrap font-medium text-gray-900">
+                          {trf.trfNumber}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-700">{trf.employee?.employeeName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={trf.status} size="sm" />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="text-sm text-gray-500">
-                      {formatDate(trf.updatedAt)}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+
+                    <TableCell>
+                      <p className="min-w-52 text-sm text-gray-600">
+                        {getActivityDescription(trf)}
+                      </p>
+                    </TableCell>
+
+                    <TableCell>
+                      <div className="flex min-w-44 items-center gap-2">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200">
+                          <span className="text-xs font-medium text-gray-600">
+                            {employeeName
+                              .charAt(0)
+                              .toUpperCase()}
+                          </span>
+                        </div>
+
+                        <span className="text-sm text-gray-700">
+                          {employeeName}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusBadge
+                        status={trf.status}
+                        size="sm"
+                      />
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <span className="whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(trf.updatedAt)}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
 
         {recentTRFs.length === 0 && (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-gray-400" />
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+              <FileText className="h-8 w-8 text-gray-400" />
             </div>
-            <p className="text-gray-500">No recent activity</p>
+
+            <p className="text-gray-500">
+              Tidak ada aktivitas terbaru
+            </p>
           </div>
         )}
       </CardContent>
