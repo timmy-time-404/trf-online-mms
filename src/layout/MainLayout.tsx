@@ -27,7 +27,7 @@ import {
 import NotificationBell from '@/components/common/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useTRFStore } from '@/store';
 import type { UserRole } from '@/types';
 
 type NavigationBadge =
@@ -225,6 +225,31 @@ const MainLayout: React.FC = () => {
   const { currentUser, logout } =
     useAuthStore();
 
+  /*
+   * Data dan selector workflow dipakai untuk menghitung
+   * indikator merah dengan aturan yang sama seperti halaman
+   * Verify, Approvals, dan Process.
+   */
+  const trfs = useTRFStore(
+    (state) => state.trfs,
+  );
+
+  const fetchTRFs = useTRFStore(
+    (state) => state.fetchTRFs,
+  );
+
+  const getTRFsForVerification = useTRFStore(
+    (state) => state.getTRFsForVerification,
+  );
+
+  const getTRFsForApproval = useTRFStore(
+    (state) => state.getTRFsForApproval,
+  );
+
+  const getTRFsForProcessing = useTRFStore(
+    (state) => state.getTRFsForProcessing,
+  );
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -243,6 +268,22 @@ const MainLayout: React.FC = () => {
     logout();
     navigate('/login');
   };
+
+  /*
+   * Ambil data TRF ketika layout aktif.
+   * Setelah proses verify/approve/process, store juga
+   * melakukan refresh sehingga indikator ikut berubah.
+   */
+  React.useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    void fetchTRFs();
+  }, [
+    currentUser?.id,
+    fetchTRFs,
+  ]);
 
   /*
    * Mobile drawer otomatis tertutup
@@ -301,6 +342,86 @@ const MainLayout: React.FC = () => {
         ),
     );
   }, [currentUser]);
+
+  /*
+   * Badge harus menggunakan selector workflow yang sama dengan
+   * halaman tujuan. Dengan begitu, ketika halaman menampilkan
+   * "No pending approvals", titik merah juga pasti hilang.
+   *
+   * ADMIN_DEPT -> getTRFsForVerification(department)
+   * HOD / HR / PM -> getTRFsForApproval(role, department)
+   * GA -> getTRFsForProcessing()
+   *
+   * SUPER_ADMIN saat ini tidak dihitung untuk Verify/Approvals,
+   * karena halaman Approval saat ini belum memproses role
+   * SUPER_ADMIN. Process tetap dapat memakai antrean GA.
+   */
+  const navigationBadgeCounts =
+    React.useMemo(() => {
+      const counts: Record<
+        NavigationBadge,
+        number
+      > = {
+        verify: 0,
+        approval: 0,
+        process: 0,
+      };
+
+      if (!currentUser) {
+        return counts;
+      }
+
+      const role =
+        currentUser.role as UserRole;
+
+      const department =
+        currentUser.department ?? '';
+
+      if (role === 'ADMIN_DEPT') {
+        counts.verify =
+          getTRFsForVerification(
+            department,
+          ).length;
+      }
+
+      if (
+        role === 'HOD' ||
+        role === 'HR' ||
+        role === 'PM'
+      ) {
+        counts.approval =
+          getTRFsForApproval(
+            role,
+            department,
+          ).length;
+      }
+
+      if (
+        role === 'GA' ||
+        role === 'SUPER_ADMIN'
+      ) {
+        counts.process =
+          getTRFsForProcessing().length;
+      }
+
+      return counts;
+    }, [
+      currentUser,
+      getTRFsForApproval,
+      getTRFsForProcessing,
+      getTRFsForVerification,
+      trfs,
+    ]);
+
+  const getNavigationBadgeCount = (
+    badge?: NavigationBadge,
+  ): number => {
+    if (!badge) {
+      return 0;
+    }
+
+    return navigationBadgeCounts[badge];
+  };
 
   const isNavItemActive = (
     path: string,
@@ -378,6 +499,11 @@ const MainLayout: React.FC = () => {
         const isActive =
           isNavItemActive(item.path);
 
+        const badgeCount =
+          getNavigationBadgeCount(
+            item.badge,
+          );
+
         return (
           <Link
             key={item.path}
@@ -404,18 +530,21 @@ const MainLayout: React.FC = () => {
             <Icon className="h-5 w-5 shrink-0" />
 
             {expanded && (
-              <>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {item.label}
-                </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                {item.label}
+              </span>
+            )}
 
-                {item.badge && (
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full bg-red-500"
-                    aria-label="Action required"
-                  />
+            {badgeCount > 0 && (
+              <span
+                className={cn(
+                  'h-2 w-2 shrink-0 rounded-full bg-red-500',
+                  !expanded &&
+                    'absolute right-2 top-2',
                 )}
-              </>
+                aria-label={`${badgeCount} TRF membutuhkan tindakan`}
+                title={`${badgeCount} TRF membutuhkan tindakan`}
+              />
             )}
           </Link>
         );
