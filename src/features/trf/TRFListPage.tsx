@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -9,239 +11,459 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import TRFListTable from './components/TRFListTable';
-import ConfirmDialog from '@/components/common/ConfirmDialog';
-import { useTRFStore, useAuthStore } from '@/store';
-import { exportAllTRFsToExcel } from '@/utils/exportAllTRFsToExcel';
-import type { TRFStatus, UserRole } from '@/types';
+
 import {
-  Plus,
-  Search,
-  FileText,
   Eye,
-  Shield,
   FileSpreadsheet,
+  FileText,
   Loader2,
+  Plus,
+  RotateCcw,
+  Search,
+  Shield,
 } from 'lucide-react';
- 
-// Role yang boleh export all
-const EXPORT_ALLOWED_ROLES: UserRole[] = ['EMPLOYEE', 'ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
- 
+
+import {
+  useAuthStore,
+  useTRFStore,
+} from '@/store';
+
+import type {
+  TRFStatus,
+  UserRole,
+} from '@/types';
+
+import { exportAllTRFsToExcel } from '@/utils/exportAllTRFsToExcel';
+
+import TRFListTable from './components/TRFListTable';
+
+const EXPORT_ALLOWED_ROLES: UserRole[] = [
+  'HOD',
+  'HR',
+  'PM',
+  'GA',
+  'SUPER_ADMIN',
+];
+
+const STATUS_FILTER_OPTIONS: {
+  value: TRFStatus | 'ALL';
+  label: string;
+}[] = [
+  { value: 'ALL', label: 'All Status' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+  {
+    value: 'ADMIN_DEPT_VERIFIED',
+    label: 'Admin Dept Verified',
+  },
+  {
+    value: 'PENDING_APPROVAL',
+    label: 'Pending Approval',
+  },
+  {
+    value: 'HOD_APPROVED',
+    label: 'HoD Approved',
+  },
+  {
+    value: 'HR_APPROVED',
+    label: 'HR Approved',
+  },
+  {
+    value: 'PM_APPROVED',
+    label: 'PM Approved',
+  },
+  {
+    value: 'GA_PROCESSED',
+    label: 'GA Processed',
+  },
+  { value: 'REJECTED', label: 'Rejected' },
+  {
+    value: 'NEEDS_REVISION',
+    label: 'Needs Revision',
+  },
+  { value: 'REVISED', label: 'Revised' },
+];
+
 const TRFListPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser }             = useAuthStore();
-  const { deleteTRF, getVisibleTRFs } = useTRFStore();
- 
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [statusFilter, setStatusFilter] = useState<TRFStatus | 'ALL'>('ALL');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [trfToDelete, setTrfToDelete]   = useState<string | null>(null);
-  const [isExporting, setIsExporting]   = useState(false);
- 
-  const visibleTRFs = currentUser ? getVisibleTRFs(currentUser) : [];
- 
-  const getFilteredTRFs = () => {
-    let filtered = [...visibleTRFs];
-    if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(t =>
-        t.trfNumber.toLowerCase().includes(q)             ||
-        t.employee?.employeeName.toLowerCase().includes(q)||
-        t.travelPurpose.toLowerCase().includes(q)         ||
-        t.department?.toLowerCase().includes(q)
+
+  const currentUser = useAuthStore(
+    (state) => state.currentUser,
+  );
+
+  const deleteTRF = useTRFStore(
+    (state) => state.deleteTRF,
+  );
+
+  const getVisibleTRFs = useTRFStore(
+    (state) => state.getVisibleTRFs,
+  );
+
+  const [searchQuery, setSearchQuery] =
+    React.useState('');
+
+  const [statusFilter, setStatusFilter] =
+    React.useState<TRFStatus | 'ALL'>('ALL');
+
+  const [deleteDialogOpen, setDeleteDialogOpen] =
+    React.useState(false);
+
+  const [trfToDelete, setTrfToDelete] =
+    React.useState<string | null>(null);
+
+  const [isExporting, setIsExporting] =
+    React.useState(false);
+
+  const visibleTRFs = React.useMemo(
+    () =>
+      currentUser
+        ? getVisibleTRFs(currentUser)
+        : [],
+    [currentUser, getVisibleTRFs],
+  );
+
+  const filteredTRFs = React.useMemo(() => {
+    const normalizedSearch = searchQuery
+      .trim()
+      .toLowerCase();
+
+    return [...visibleTRFs]
+      .filter((trf) => {
+        if (
+          statusFilter !== 'ALL' &&
+          trf.status !== statusFilter
+        ) {
+          return false;
+        }
+
+        if (!normalizedSearch) {
+          return true;
+        }
+
+        const searchableValues = [
+          trf.trfNumber,
+          trf.employee?.employeeName,
+          trf.employee?.employeeCode,
+          trf.travelPurpose,
+          trf.department,
+        ];
+
+        return searchableValues.some((value) =>
+          value
+            ?.toLowerCase()
+            .includes(normalizedSearch),
+        );
+      })
+      .sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() -
+          new Date(first.createdAt).getTime(),
       );
-    }
-    return filtered.sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  }, [searchQuery, statusFilter, visibleTRFs]);
+
+  const hasActiveFilter =
+    searchQuery.trim().length > 0 ||
+    statusFilter !== 'ALL';
+
+  const canExportAll =
+    Boolean(currentUser) &&
+    EXPORT_ALLOWED_ROLES.includes(
+      currentUser!.role,
     );
-  };
- 
-  const filteredTRFs = getFilteredTRFs();
- 
-  // ── Export All handler ────────────────────────────────────
+
   const handleExportAll = async () => {
     if (filteredTRFs.length === 0) {
       return;
     }
+
     setIsExporting(true);
+
     try {
-      await new Promise(r => setTimeout(r, 200));
-      exportAllTRFsToExcel(filteredTRFs, currentUser?.role);
-    } catch (err) {
-      console.error('Export failed:', err);
+      await new Promise((resolve) =>
+        setTimeout(resolve, 200),
+      );
+
+      exportAllTRFsToExcel(
+        filteredTRFs,
+        currentUser?.role,
+      );
+    } catch (error) {
+      console.error('Export failed:', error);
     } finally {
       setIsExporting(false);
     }
   };
- 
-  // ── Delete handlers ───────────────────────────────────────
+
   const handleDelete = (id: string) => {
     setTrfToDelete(id);
     setDeleteDialogOpen(true);
   };
- 
+
   const confirmDelete = () => {
-    if (trfToDelete) {
-      deleteTRF(trfToDelete);
-      setTrfToDelete(null);
-      setDeleteDialogOpen(false);
+    if (!trfToDelete) {
+      return;
     }
+
+    void deleteTRF(trfToDelete);
+    setTrfToDelete(null);
+    setDeleteDialogOpen(false);
   };
- 
-  // ── Visibility text ───────────────────────────────────────
-  const getVisibilityInfo = () => {
-    if (!currentUser) return '';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+  };
+
+  const getVisibilityInfo = (): string => {
+    if (!currentUser) {
+      return '';
+    }
+
     switch (currentUser.role) {
-      case 'EMPLOYEE'   : return 'Showing your TRFs only';
-      case 'ADMIN_DEPT' :
-      case 'HOD'        : return `Showing ${currentUser.department} department TRFs`;
-      default           : return 'Showing all TRFs';
+      case 'EMPLOYEE':
+        return 'Showing your TRFs only';
+
+      case 'ADMIN_DEPT':
+      case 'HOD':
+        return `Showing ${
+          currentUser.department ?? 'your'
+        } department TRFs`;
+
+      default:
+        return 'Showing all TRFs';
     }
   };
- 
-  const canExportAll = currentUser && EXPORT_ALLOWED_ROLES.includes(currentUser.role);
- 
+
+  const summary = React.useMemo(
+    () => ({
+      needVerification: visibleTRFs.filter(
+        (trf) => trf.status === 'SUBMITTED',
+      ).length,
+
+      needApproval: visibleTRFs.filter(
+        (trf) =>
+          trf.status === 'PENDING_APPROVAL',
+      ).length,
+
+      completed: visibleTRFs.filter(
+        (trf) => trf.status === 'GA_PROCESSED',
+      ).length,
+
+      total: visibleTRFs.length,
+    }),
+    [visibleTRFs],
+  );
+
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 sm:space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Travel Request Forms</h1>
-          <p className="text-gray-500 mt-1 flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            {getVisibilityInfo()}
+          <h1 className="text-2xl font-bold text-gray-900">
+            Travel Request Forms
+          </h1>
+
+          <p className="mt-1 flex items-center gap-2 text-sm text-gray-500 sm:text-base">
+            <Eye className="h-4 w-4 shrink-0" />
+            <span>{getVisibilityInfo()}</span>
           </p>
         </div>
- 
-        <div className="flex items-center gap-2">
-          {/* Export All — hanya untuk HoD+ */}
+
+        <div className="flex flex-wrap items-center gap-2">
           {canExportAll && (
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={handleExportAll}
-              disabled={isExporting || filteredTRFs.length === 0}
-              className="gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400"
+              disabled={
+                isExporting ||
+                filteredTRFs.length === 0
+              }
+              className="gap-2 border-green-300 text-green-700 hover:border-green-400 hover:bg-green-50"
             >
               {isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <FileSpreadsheet className="w-4 h-4" />
+                <FileSpreadsheet className="h-4 w-4" />
               )}
-              {isExporting ? 'Exporting...' : `Export Excel (${filteredTRFs.length})`}
+
+              {isExporting
+                ? 'Exporting...'
+                : `Export Excel (${filteredTRFs.length})`}
             </Button>
           )}
- 
-          {/* New TRF — hanya untuk employee */}
+
           {currentUser?.role === 'EMPLOYEE' && (
-            <Button onClick={() => navigate('/trf/new')}>
-              <Plus className="w-4 h-4 mr-2" />
+            <Button
+              type="button"
+              onClick={() => navigate('/trf/new')}
+            >
+              <Plus className="mr-2 h-4 w-4" />
               New TRF
             </Button>
           )}
         </div>
       </div>
- 
-      {/* ── Filters ── */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="Search by TRF number, employee, purpose..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+
+      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+            <Input
+              placeholder="Search by TRF number, employee, Employee ID, purpose..."
+              value={searchQuery}
+              onChange={(event) =>
+                setSearchQuery(event.target.value)
+              }
+              className="w-full pl-10"
+            />
+          </div>
+
+          <Select
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(
+                value as TRFStatus | 'ALL',
+              )
+            }
+          >
+            <SelectTrigger className="w-full lg:w-64">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+
+            <SelectContent
+              position="popper"
+              align="start"
+              sideOffset={6}
+              className="max-h-80 w-[var(--radix-select-trigger-width)]"
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasActiveFilter && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetFilters}
+              className="w-full gap-2 lg:w-auto"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset Filter
+            </Button>
+          )}
         </div>
-        <Select
-          value={statusFilter}
-          onValueChange={v => setStatusFilter(v as TRFStatus | 'ALL')}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Status</SelectItem>
-            <SelectItem value="DRAFT">Draft</SelectItem>
-            <SelectItem value="SUBMITTED">Submitted</SelectItem>
-            <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
-            <SelectItem value="HOD_APPROVED">HoD Approved</SelectItem>
-            <SelectItem value="HR_APPROVED">HR Approved</SelectItem>
-            <SelectItem value="PARALLEL_APPROVED">Parallel Approved</SelectItem>
-            <SelectItem value="PM_APPROVED">PM Approved</SelectItem>
-            <SelectItem value="GA_PROCESSED">GA Processed</SelectItem>
-            <SelectItem value="REJECTED">Rejected</SelectItem>
-            <SelectItem value="NEEDS_REVISION">Needs Revision</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <div className="mt-3 text-xs text-gray-500">
+          Showing{' '}
+          <span className="font-semibold text-gray-700">
+            {filteredTRFs.length}
+          </span>{' '}
+          of{' '}
+          <span className="font-semibold text-gray-700">
+            {visibleTRFs.length}
+          </span>{' '}
+          TRFs
+        </div>
       </div>
- 
-      {/* ── Stats ── */}
-      <div className="flex flex-wrap gap-4">
+
+      <div className="flex flex-wrap gap-2 sm:gap-3">
         {currentUser?.role !== 'EMPLOYEE' && (
           <>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full text-sm">
-              <Shield className="w-4 h-4 text-blue-600" />
+            <div className="flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm">
+              <Shield className="h-4 w-4 text-blue-600" />
               <span className="text-blue-700">
-                {filteredTRFs.filter(t => t.status === 'SUBMITTED').length} Need Verification
+                {summary.needVerification}{' '}
+                Need Verification
               </span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-full text-sm">
-              <Shield className="w-4 h-4 text-purple-600" />
+
+            <div className="flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1.5 text-sm">
+              <Shield className="h-4 w-4 text-purple-600" />
               <span className="text-purple-700">
-                {filteredTRFs.filter(t => t.status === 'PENDING_APPROVAL').length} Need Approval
+                {summary.needApproval}{' '}
+                Need Approval
               </span>
             </div>
           </>
         )}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full text-sm">
-          <FileText className="w-4 h-4 text-green-600" />
+
+        <div className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-sm">
+          <FileText className="h-4 w-4 text-green-600" />
           <span className="text-green-700">
-            {filteredTRFs.filter(t => t.status === 'GA_PROCESSED').length} Completed
+            {summary.completed} Completed
           </span>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-sm">
-          <FileText className="w-4 h-4 text-gray-600" />
-          <span className="text-gray-700">Total: {filteredTRFs.length}</span>
+
+        <div className="flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-sm">
+          <FileText className="h-4 w-4 text-gray-600" />
+          <span className="text-gray-700">
+            Total: {summary.total}
+          </span>
         </div>
       </div>
- 
-      {/* ── Empty state ── */}
+
       {filteredTRFs.length === 0 && (
-        <div className="text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-          <FileText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700">No Travel Requests Found</h3>
-          <p className="text-gray-500 mt-1 text-sm">
-            {searchQuery || statusFilter !== 'ALL'
+        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center">
+          <FileText className="mx-auto mb-4 h-14 w-14 text-gray-300" />
+
+          <h3 className="text-lg font-semibold text-gray-700">
+            No Travel Requests Found
+          </h3>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {hasActiveFilter
               ? 'No TRFs match your current filters.'
               : currentUser?.role === 'EMPLOYEE'
-              ? 'You haven\'t submitted any travel requests yet.'
-              : 'No travel requests have been submitted yet.'}
+                ? "You haven't submitted any travel requests yet."
+                : 'No travel requests have been submitted yet.'}
           </p>
-          {currentUser?.role === 'EMPLOYEE' && !searchQuery && statusFilter === 'ALL' && (
+
+          {hasActiveFilter && (
             <Button
-              className="mt-4"
-              onClick={() => navigate('/trf/new')}
+              type="button"
+              variant="outline"
+              onClick={resetFilters}
+              className="mt-4 gap-2"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              Create your first TRF
+              <RotateCcw className="h-4 w-4" />
+              Reset Filter
             </Button>
           )}
+
+          {currentUser?.role === 'EMPLOYEE' &&
+            !hasActiveFilter && (
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => navigate('/trf/new')}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create your first TRF
+              </Button>
+            )}
         </div>
       )}
- 
-      {/* ── Table ── */}
+
       {filteredTRFs.length > 0 && (
         <TRFListTable
           trfs={filteredTRFs}
-          onDelete={currentUser?.role === 'EMPLOYEE' ? handleDelete : undefined}
+          onDelete={
+            currentUser?.role === 'EMPLOYEE'
+              ? handleDelete
+              : undefined
+          }
         />
       )}
- 
-      {/* ── Delete dialog ── */}
+
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -255,5 +477,5 @@ const TRFListPage: React.FC = () => {
     </div>
   );
 };
- 
+
 export default TRFListPage;
