@@ -1,111 +1,181 @@
-import React, { useState } from 'react';
+import React, {
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/store';
-import { ShieldAlert, Loader2, CheckCircle2 } from 'lucide-react';
+
+import {
+  CheckCircle2,
+  Loader2,
+  ShieldAlert,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
-import bcrypt from 'bcryptjs';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  AppSessionApiError,
+  changeAppPassword,
+} from '@/lib/appSession';
+import { useAuthStore } from '@/store';
 
 const ChangePasswordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
 
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentUser = useAuthStore(
+    (state) => state.currentUser,
+  );
+
+  const login = useAuthStore(
+    (state) => state.login,
+  );
+
+  const [
+    newPassword,
+    setNewPassword,
+  ] = useState('');
+
+  const [
+    confirmPassword,
+    setConfirmPassword,
+  ] = useState('');
+
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
 
   const updatePassword = async () => {
-    if (!newPassword || !confirmPassword) {
-      toast.error('Semua kolom wajib diisi');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error('Password baru dan konfirmasi tidak cocok');
-      return;
-    }
-
-    if (newPassword.length < 10) {
-      toast.error('Password minimal 10 karakter');
+    if (
+      !newPassword ||
+      !confirmPassword
+    ) {
+      toast.error(
+        'Semua kolom wajib diisi',
+      );
       return;
     }
 
     if (
-      !/[a-z]/.test(newPassword) ||
-      !/[A-Z]/.test(newPassword) ||
-      !/[0-9]/.test(newPassword) ||
-      !/[^A-Za-z0-9]/.test(newPassword)
+      newPassword !==
+      confirmPassword
     ) {
       toast.error(
-        'Password harus memiliki huruf besar, huruf kecil, angka, dan simbol',
+        'Password baru dan konfirmasi tidak cocok',
+      );
+      return;
+    }
+
+    if (
+      newPassword.length < 8 ||
+      !/[A-Za-z]/.test(
+        newPassword,
+      ) ||
+      !/\d/.test(newPassword)
+    ) {
+      toast.error(
+        'Password minimal 8 karakter dan harus mengandung huruf serta angka',
       );
       return;
     }
 
     if (!currentUser?.id) {
-      toast.error('Sesi tidak valid, silakan login ulang');
-      navigate('/login', { replace: true });
+      toast.error(
+        'Sesi tidak valid, silakan login ulang',
+      );
+
+      navigate('/login', {
+        replace: true,
+      });
+
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const hash = await bcrypt.hash(newPassword, 12);
+      const updatedUser =
+        await changeAppPassword(
+          newPassword,
+        );
 
-      const { error } = await supabase
-        .from('users')
-        .update({
-          password_hash: hash,
-          must_change_password: false,
-        })
-        .eq('id', currentUser.id)
-        .eq('is_active', true);
+      login(updatedUser);
 
-      if (error) throw error;
+      toast.success(
+        'Password berhasil diperbarui',
+      );
 
-      toast.success('Password berhasil diperbarui');
-      navigate('/', { replace: true });
-    } catch (err) {
-      console.error('Change password error:', err);
-      toast.error('Gagal mengubah password. Silakan coba lagi.');
+      navigate('/', {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(
+        'Change password error:',
+        error,
+      );
+
+      if (
+        error instanceof
+        AppSessionApiError
+      ) {
+        toast.error(error.message);
+
+        if (
+          error.status === 401
+        ) {
+          navigate('/login', {
+            replace: true,
+          });
+        }
+      } else {
+        toast.error(
+          'Gagal mengubah password. Silakan coba lagi.',
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Card className="w-full shadow-lg max-w-md mx-auto mt-20 border-t-4 border-t-red-600">
-      <CardHeader className="text-center pb-6 space-y-2">
-        <div className="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-2">
-          <ShieldAlert className="w-6 h-6 text-red-600" />
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="space-y-3 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+            <ShieldAlert className="h-6 w-6 text-amber-700" />
+          </div>
 
-        <CardTitle className="text-2xl font-bold">
-          Ubah Password Default
-        </CardTitle>
+          <CardTitle className="text-2xl">
+            Ubah Password Default
+          </CardTitle>
 
-        <p className="text-sm text-gray-500">
-          Demi keamanan, Anda diwajibkan mengubah password sementara sebelum
-          melanjutkan.
-        </p>
-      </CardHeader>
+          <p className="text-sm text-gray-500">
+            Demi keamanan, Anda diwajibkan mengubah password bawaan sebelum melanjutkan.
+          </p>
+        </CardHeader>
 
-      <CardContent className="space-y-6">
-        <div className="space-y-4">
+        <CardContent className="space-y-5">
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
               Password Baru
             </label>
+
             <input
               type="password"
-              className="w-full border rounded-md p-3 text-sm focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition"
-              placeholder="Minimal 10 karakter"
               value={newPassword}
               autoComplete="new-password"
-              onChange={(e) => setNewPassword(e.target.value)}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setNewPassword(
+                  event.target.value,
+                )
+              }
+              className="w-full rounded-md border p-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black"
+              placeholder="Minimal 8 karakter, huruf dan angka"
             />
           </div>
 
@@ -113,38 +183,52 @@ const ChangePasswordPage: React.FC = () => {
             <label className="text-sm font-medium text-gray-700">
               Konfirmasi Password Baru
             </label>
+
             <input
               type="password"
-              className="w-full border rounded-md p-3 text-sm focus:ring-2 focus:ring-red-600 focus:border-red-600 outline-none transition"
-              placeholder="Ketik ulang password baru"
               value={confirmPassword}
               autoComplete="new-password"
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && updatePassword()}
+              disabled={isSubmitting}
+              onChange={(event) =>
+                setConfirmPassword(
+                  event.target.value,
+                )
+              }
+              onKeyDown={(event) => {
+                if (
+                  event.key === 'Enter'
+                ) {
+                  void updatePassword();
+                }
+              }}
+              className="w-full rounded-md border p-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black"
+              placeholder="Ulangi password baru"
             />
           </div>
-        </div>
 
-        <Button
-          onClick={updatePassword}
-          className="w-full bg-red-600 text-white hover:bg-red-700"
-          size="lg"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Menyimpan...
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Simpan & Lanjutkan
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+          <Button
+            type="button"
+            className="w-full"
+            disabled={isSubmitting}
+            onClick={() =>
+              void updatePassword()
+            }
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Menyimpan...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Simpan &amp; Lanjutkan
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

@@ -44,6 +44,7 @@ export interface User {
   employeeId?: string;
   department?: string;
   is_active?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface Employee {

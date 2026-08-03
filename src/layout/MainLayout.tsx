@@ -9,6 +9,7 @@ import {
 import {
   Building2,
   Briefcase,
+  CalendarClock,
   CheckCircle,
   CheckSquare,
   Crown,
@@ -27,13 +28,18 @@ import {
 import NotificationBell from '@/components/common/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  listEarlyRecalls,
+  type EarlyRecallRecord,
+} from '@/lib/earlyRecallApi';
 import { useAuthStore, useTRFStore } from '@/store';
 import type { UserRole } from '@/types';
 
 type NavigationBadge =
   | 'verify'
   | 'approval'
-  | 'process';
+  | 'process'
+  | 'earlyRecall';
 
 interface NavigationItem {
   path: string;
@@ -65,6 +71,13 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     label: 'Travel Requests',
     icon: FileText,
     roles: ALL_ROLES,
+  },
+  {
+    path: '/early-recall',
+    label: 'Early Recall',
+    icon: CalendarClock,
+    roles: ALL_ROLES,
+    badge: 'earlyRecall',
   },
   {
     path: '/trf/new',
@@ -263,10 +276,45 @@ const MainLayout: React.FC = () => {
     setMobileSidebarOpen,
   ] = React.useState(false);
 
-  const handleLogout = () => {
+  const [
+    earlyRecallRecords,
+    setEarlyRecallRecords,
+  ] = React.useState<
+    EarlyRecallRecord[]
+  >([]);
+
+  const fetchEarlyRecallBadge =
+    React.useCallback(async () => {
+      if (!currentUser) {
+        setEarlyRecallRecords([]);
+        return;
+      }
+
+      try {
+        const response =
+          await listEarlyRecalls();
+
+        setEarlyRecallRecords(
+          response.items,
+        );
+      } catch (error) {
+        console.warn(
+          'Unable to load Early Recall badge:',
+          error,
+        );
+
+        setEarlyRecallRecords([]);
+      }
+    }, [currentUser?.id]);
+
+  const handleLogout = async () => {
     setMobileSidebarOpen(false);
-    logout();
-    navigate('/login');
+
+    await logout();
+
+    navigate('/login', {
+      replace: true,
+    });
   };
 
   /*
@@ -284,6 +332,33 @@ const MainLayout: React.FC = () => {
     currentUser?.id,
     fetchTRFs,
   ]);
+
+  /*
+   * Early Recall badge menggunakan data yang sudah
+   * dibatasi oleh role di Edge Function.
+   */
+  React.useEffect(() => {
+    void fetchEarlyRecallBadge();
+  }, [fetchEarlyRecallBadge]);
+
+  React.useEffect(() => {
+    const handleEarlyRecallUpdated =
+      () => {
+        void fetchEarlyRecallBadge();
+      };
+
+    window.addEventListener(
+      'early-recall-updated',
+      handleEarlyRecallUpdated,
+    );
+
+    return () => {
+      window.removeEventListener(
+        'early-recall-updated',
+        handleEarlyRecallUpdated,
+      );
+    };
+  }, [fetchEarlyRecallBadge]);
 
   /*
    * Mobile drawer otomatis tertutup
@@ -365,6 +440,7 @@ const MainLayout: React.FC = () => {
         verify: 0,
         approval: 0,
         process: 0,
+        earlyRecall: 0,
       };
 
       if (!currentUser) {
@@ -404,12 +480,97 @@ const MainLayout: React.FC = () => {
           getTRFsForProcessing().length;
       }
 
+      switch (role) {
+        case 'EMPLOYEE':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                !record
+                  .employee_acknowledged_at &&
+                [
+                  'PM_APPROVED',
+                  'GA_PROCESSING',
+                  'TRAVEL_BOOKED',
+                  'RETURNED_TO_SITE',
+                  'OS_GENERATED',
+                ].includes(
+                  record.status,
+                ),
+            ).length;
+          break;
+
+        case 'HOD':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                [
+                  'DRAFT',
+                  'NEEDS_REVISION',
+                ].includes(
+                  record.status,
+                ),
+            ).length;
+          break;
+
+        case 'HR':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                record.status ===
+                'PENDING_HR_VALIDATION',
+            ).length;
+          break;
+
+        case 'PM':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                record.status ===
+                'PENDING_PM_APPROVAL',
+            ).length;
+          break;
+
+        case 'GA':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                [
+                  'PM_APPROVED',
+                  'GA_PROCESSING',
+                  'TRAVEL_BOOKED',
+                ].includes(
+                  record.status,
+                ),
+            ).length;
+          break;
+
+        case 'SUPER_ADMIN':
+          counts.earlyRecall =
+            earlyRecallRecords.filter(
+              (record) =>
+                [
+                  'PENDING_HR_VALIDATION',
+                  'PENDING_PM_APPROVAL',
+                  'PM_APPROVED',
+                  'GA_PROCESSING',
+                  'TRAVEL_BOOKED',
+                ].includes(
+                  record.status,
+                ),
+            ).length;
+          break;
+
+        default:
+          counts.earlyRecall = 0;
+      }
+
       return counts;
     }, [
       currentUser,
       getTRFsForApproval,
       getTRFsForProcessing,
       getTRFsForVerification,
+      earlyRecallRecords,
       trfs,
     ]);
 
@@ -542,8 +703,8 @@ const MainLayout: React.FC = () => {
                   !expanded &&
                     'absolute right-2 top-2',
                 )}
-                aria-label={`${badgeCount} TRF membutuhkan tindakan`}
-                title={`${badgeCount} TRF membutuhkan tindakan`}
+                aria-label={`${badgeCount} item membutuhkan tindakan`}
+                title={`${badgeCount} item membutuhkan tindakan`}
               />
             )}
           </Link>
