@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
+import {
+  clearAppSessionToken,
+  getCurrentAppSession,
+  logoutAppSession,
+} from '@/lib/appSession';
 import bcrypt from 'bcryptjs';
 import type {
   User,
@@ -192,7 +197,8 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (user: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
+  invalidateSession: () => void;
   switchRole: (role: UserRole) => void;
   loadUserFromSession: () => Promise<void>;
 }
@@ -205,61 +211,92 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
 
       login: (user) =>
-        set({ currentUser: user, isAuthenticated: true, isLoading: false }),
+        set({
+          currentUser: user,
+          isAuthenticated: true,
+          isLoading: false,
+        }),
 
-      logout: () => {
-        if (isSupabaseEnabled()) {
-          supabase.auth.signOut();
+      logout: async () => {
+        try {
+          await logoutAppSession();
+        } catch (error) {
+          console.warn(
+            'Server logout failed:',
+            error,
+          );
+        } finally {
+          clearAppSessionToken();
+
+          set({
+            currentUser: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
         }
-        set({ currentUser: null, isAuthenticated: false, isLoading: false });
       },
 
-      switchRole: (role) =>
-        set((state) => ({
-          currentUser: state.currentUser
-            ? { ...state.currentUser, role }
-            : null,
-        })),
+      /*
+       * Dipanggil oleh handler session pusat ketika salah satu
+       * authenticated Edge Function mengembalikan HTTP 401.
+       * Tidak memanggil app-logout lagi karena session server
+       * sudah invalid/revoked/expired.
+       */
+      invalidateSession: () => {
+        clearAppSessionToken();
+
+        set({
+          currentUser: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      },
+
+      /*
+       * Dipertahankan sementara agar MainLayout lama tetap build.
+       * Jangan gunakan role switcher untuk authorization.
+       * Edge Function tetap menentukan role dari server session.
+       */
+      switchRole: () => {
+        console.warn(
+          'Client-side role switching is disabled.',
+        );
+      },
 
       loadUserFromSession: async () => {
-        if (!isSupabaseEnabled()) {
-          set({ isLoading: false });
-          return;
-        }
+        set({ isLoading: true });
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        try {
+          const session =
+            await getCurrentAppSession();
 
-        if (session?.user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          set({
+            currentUser: session.user,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch {
+          clearAppSessionToken();
 
-          if (userData) {
-            set({
-              currentUser: {
-                id: userData.id,
-                username: userData.username,
-                email: userData.email,
-                role: userData.role as UserRole,
-                employeeId: userData.employee_id,
-                department: userData.department,
-              },
-              isAuthenticated: true,
-              isLoading: false,
-            });
-          }
-        } else {
-          set({ isLoading: false });
+          set({
+            currentUser: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
         }
       },
     }),
-    { name: 'trf-auth-storage' },
+    {
+      name: 'trf-auth-storage',
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        isAuthenticated:
+          state.isAuthenticated,
+      }),
+    },
   ),
 );
+
 
 // ============================================
 // TRF STORE
@@ -1074,7 +1111,7 @@ handleVerify: async (
         verified: true,
         verifiedAt: now,
         verifierId: currentUser.id,
-        verifierName: verifierDisplayName,   
+        verifierName: verifierDisplayName,
         remarks: remarks || '',
       };
     }
@@ -1144,7 +1181,7 @@ handleApproval: async (
         status: 'APPROVED' as const,
         actionAt: now,
         actionById: currentUser.id,
-        actionByName: approverDisplayName,   
+        actionByName: approverDisplayName,
         remarks: remarks || '',
       };
 
@@ -1163,7 +1200,7 @@ handleApproval: async (
           approved: true,
           approvedAt: now,
           approverId: currentUser.id,
-          approverName: approverDisplayName,   
+          approverName: approverDisplayName,
           remarks: remarks || '',
         };
       }
@@ -1181,7 +1218,7 @@ handleApproval: async (
     await get().addStatusHistory({
       trfId,
       changedBy: currentUser.id,
-      changedByName: approverDisplayName,   
+      changedByName: approverDisplayName,
       oldStatus: trf.status,
       newStatus: nextStatus,
       remarks: remarks || `${action} by ${currentUser.role}`,
