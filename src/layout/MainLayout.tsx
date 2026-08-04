@@ -10,6 +10,7 @@ import {
   Building2,
   Briefcase,
   CalendarClock,
+  CalendarRange,
   CheckCircle,
   CheckSquare,
   Crown,
@@ -32,6 +33,11 @@ import {
   listEarlyRecalls,
   type EarlyRecallRecord,
 } from '@/lib/earlyRecallApi';
+import {
+  getLocalDateInputValue,
+  getRosterAttentionQueue,
+  ROSTER_OPERATIONS_UPDATED_EVENT,
+} from '@/lib/rosterOperationsApi';
 import { useAuthStore, useTRFStore } from '@/store';
 import type { UserRole } from '@/types';
 
@@ -39,7 +45,8 @@ type NavigationBadge =
   | 'verify'
   | 'approval'
   | 'process'
-  | 'earlyRecall';
+  | 'earlyRecall'
+  | 'roster';
 
 interface NavigationItem {
   path: string;
@@ -78,6 +85,13 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: CalendarClock,
     roles: ALL_ROLES,
     badge: 'earlyRecall',
+  },
+  {
+    path: '/roster-operations',
+    label: 'Roster & OS',
+    icon: CalendarRange,
+    roles: ['GA', 'HR', 'SUPER_ADMIN'],
+    badge: 'roster',
   },
   {
     path: '/trf/new',
@@ -283,6 +297,11 @@ const MainLayout: React.FC = () => {
     EarlyRecallRecord[]
   >([]);
 
+  const [
+    rosterQueueCount,
+    setRosterQueueCount,
+  ] = React.useState(0);
+
   const fetchEarlyRecallBadge =
     React.useCallback(async () => {
       if (!currentUser) {
@@ -306,6 +325,38 @@ const MainLayout: React.FC = () => {
         setEarlyRecallRecords([]);
       }
     }, [currentUser?.id]);
+
+  const fetchRosterQueueBadge =
+    React.useCallback(async () => {
+      if (
+        !currentUser ||
+        !['GA', 'HR', 'SUPER_ADMIN'].includes(
+          currentUser.role,
+        )
+      ) {
+        setRosterQueueCount(0);
+        return;
+      }
+
+      try {
+        const response =
+          await getRosterAttentionQueue(
+            getLocalDateInputValue(),
+          );
+
+        setRosterQueueCount(response.total);
+      } catch (error) {
+        console.warn(
+          'Unable to load Roster queue badge:',
+          error,
+        );
+
+        setRosterQueueCount(0);
+      }
+    }, [
+      currentUser?.id,
+      currentUser?.role,
+    ]);
 
   const handleLogout = async () => {
     setMobileSidebarOpen(false);
@@ -359,6 +410,28 @@ const MainLayout: React.FC = () => {
       );
     };
   }, [fetchEarlyRecallBadge]);
+
+  React.useEffect(() => {
+    void fetchRosterQueueBadge();
+  }, [fetchRosterQueueBadge]);
+
+  React.useEffect(() => {
+    const handleRosterUpdated = () => {
+      void fetchRosterQueueBadge();
+    };
+
+    window.addEventListener(
+      ROSTER_OPERATIONS_UPDATED_EVENT,
+      handleRosterUpdated,
+    );
+
+    return () => {
+      window.removeEventListener(
+        ROSTER_OPERATIONS_UPDATED_EVENT,
+        handleRosterUpdated,
+      );
+    };
+  }, [fetchRosterQueueBadge]);
 
   /*
    * Mobile drawer otomatis tertutup
@@ -441,6 +514,7 @@ const MainLayout: React.FC = () => {
         approval: 0,
         process: 0,
         earlyRecall: 0,
+        roster: 0,
       };
 
       if (!currentUser) {
@@ -478,6 +552,14 @@ const MainLayout: React.FC = () => {
       ) {
         counts.process =
           getTRFsForProcessing().length;
+      }
+
+      if (
+        role === 'GA' ||
+        role === 'HR' ||
+        role === 'SUPER_ADMIN'
+      ) {
+        counts.roster = rosterQueueCount;
       }
 
       switch (role) {
@@ -571,6 +653,7 @@ const MainLayout: React.FC = () => {
       getTRFsForProcessing,
       getTRFsForVerification,
       earlyRecallRecords,
+      rosterQueueCount,
       trfs,
     ]);
 

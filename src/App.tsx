@@ -31,6 +31,7 @@ import TRFNewPage from '@/features/trf/TRFNewPage';
 import EarlyRecallDetailPage from '@/features/early-recall/EarlyRecallDetailPage';
 import EarlyRecallFormPage from '@/features/early-recall/EarlyRecallFormPage';
 import EarlyRecallListPage from '@/features/early-recall/EarlyRecallListPage';
+import RosterOperationsPage from '@/features/roster/RosterOperationsPage';
 
 // Role-specific pages
 import ApprovalPage from '@/features/approval/ApprovalPage';
@@ -385,6 +386,22 @@ const App: React.FC = () => {
                 ]}
               >
                 <EarlyRecallFormPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ROSTER & OS OPERATIONS */}
+          <Route
+            path="/roster-operations"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  'GA',
+                  'HR',
+                  'SUPER_ADMIN',
+                ]}
+              >
+                <RosterOperationsPage />
               </ProtectedRoute>
             }
           />
