@@ -9,7 +9,41 @@ const SESSION_STORAGE_KEY =
 export const APP_SESSION_INVALID_EVENT =
   'trf-app-session-invalid';
 
-let invalidSessionEventDispatched = false;
+let invalidSessionEventQueued = false;
+
+/**
+ * Mengirim satu event global ketika application session
+ * ditolak oleh backend.
+ *
+ * App.tsx menggunakan event ini untuk membersihkan Zustand
+ * auth state dan mengarahkan pengguna ke halaman login.
+ */
+const dispatchInvalidAppSessionEvent =
+  (): void => {
+    if (
+      typeof window === 'undefined' ||
+      invalidSessionEventQueued
+    ) {
+      return;
+    }
+
+    invalidSessionEventQueued = true;
+
+    window.dispatchEvent(
+      new Event(
+        APP_SESSION_INVALID_EVENT,
+      ),
+    );
+
+    /*
+     * Lock hanya berlaku pada event loop saat ini agar beberapa
+     * request paralel yang sama-sama menerima 401 tidak memicu
+     * logout dan redirect berulang kali.
+     */
+    window.setTimeout(() => {
+      invalidSessionEventQueued = false;
+    }, 0);
+  };
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL;
@@ -28,14 +62,35 @@ interface AppSessionApiUser {
   mustChangePassword: boolean;
 }
 
+interface AppSessionEnvelope {
+  id?: string;
+  token?: string;
+  expiresAt?: string;
+}
+
 interface LoginResponse {
-  sessionToken: string;
-  expiresAt: string;
+  success?: boolean;
+
+  /*
+   * Kontrak backend production terbaru:
+   * response.session.token
+   * response.session.expiresAt
+   */
+  session?: AppSessionEnvelope;
+
+  /*
+   * Backward compatibility untuk kontrak lama.
+   */
+  sessionToken?: string;
+  expiresAt?: string;
+
   user: AppSessionApiUser;
 }
 
 interface SessionResponse {
-  expiresAt: string;
+  success?: boolean;
+  session?: AppSessionEnvelope;
+  expiresAt?: string;
   user: AppSessionApiUser;
 }
 
@@ -47,7 +102,10 @@ interface ChangePasswordResponse {
 export class AppSessionApiError extends Error {
   readonly status: number;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+  ) {
     super(message);
     this.name = 'AppSessionApiError';
     this.status = status;
@@ -85,6 +143,33 @@ const toUser = (
     apiUser.mustChangePassword,
 });
 
+const getApiErrorMessage = (
+  payload: unknown,
+): string => {
+  if (
+    !payload ||
+    typeof payload !== 'object'
+  ) {
+    return 'Request gagal.';
+  }
+
+  if (
+    'message' in payload &&
+    typeof payload.message === 'string'
+  ) {
+    return payload.message;
+  }
+
+  if (
+    'error' in payload &&
+    typeof payload.error === 'string'
+  ) {
+    return payload.error;
+  }
+
+  return 'Request gagal.';
+};
+
 const parseResponse = async <T>(
   response: Response,
 ): Promise<T> => {
@@ -97,16 +182,8 @@ const parseResponse = async <T>(
   }
 
   if (!response.ok) {
-    const message =
-      payload &&
-      typeof payload === 'object' &&
-      'error' in payload &&
-      typeof payload.error === 'string'
-        ? payload.error
-        : 'Request gagal.';
-
     throw new AppSessionApiError(
-      message,
+      getApiErrorMessage(payload),
       response.status,
     );
   }
@@ -114,22 +191,64 @@ const parseResponse = async <T>(
   return payload as T;
 };
 
-const notifyInvalidAppSession = (): void => {
-  clearAppSessionToken();
+export const getStoredAppSessionToken =
+  (): string | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
 
+    const value =
+      window.localStorage.getItem(
+        SESSION_STORAGE_KEY,
+      );
+
+    if (
+      !value ||
+      value === 'undefined' ||
+      value === 'null' ||
+      value === '[object Object]'
+    ) {
+      return null;
+    }
+
+    return value;
+  };
+
+export const storeAppSessionToken = (
+  token: string,
+): void => {
   if (
-    typeof window === 'undefined' ||
-    invalidSessionEventDispatched
+    typeof window === 'undefined'
   ) {
     return;
   }
 
-  invalidSessionEventDispatched = true;
+  if (
+    !token ||
+    typeof token !== 'string'
+  ) {
+    throw new AppSessionApiError(
+      'Token sesi dari server tidak valid.',
+      500,
+    );
+  }
 
-  window.dispatchEvent(
-    new Event(APP_SESSION_INVALID_EVENT),
+  window.localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    token,
   );
 };
+
+export const clearAppSessionToken =
+  (): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.removeItem(
+      SESSION_STORAGE_KEY,
+    );
+  };
 
 const requestFunction = async <T>(
   functionName: string,
@@ -154,15 +273,27 @@ const requestFunction = async <T>(
     );
   }
 
+  /*
+   * Jangan kirim stale X-App-Session ke app-login.
+   * Header hanya dikirim untuk endpoint yang benar-benar
+   * membutuhkan application session.
+   */
+  const shouldAttachSession =
+    options.requireSession === true &&
+    Boolean(sessionToken);
+
   const response = await fetch(
     getFunctionUrl(functionName),
     {
       method: options.method ?? 'POST',
       headers: {
         apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
+        Authorization:
+          `Bearer ${supabaseAnonKey}`,
+        Accept: 'application/json',
         'Content-Type': 'application/json',
-        ...(sessionToken
+        ...(shouldAttachSession &&
+        sessionToken
           ? {
               'X-App-Session':
                 sessionToken,
@@ -176,54 +307,16 @@ const requestFunction = async <T>(
     },
   );
 
-  /*
-   * Semua 401 dari endpoint yang mewajibkan X-App-Session
-   * berarti session aplikasi tidak lagi dapat digunakan.
-   * Bersihkan token dan beri tahu auth store tepat satu kali
-   * agar request paralel tidak memicu logout/redirect berulang.
-   */
   if (
-    options.requireSession &&
-    response.status === 401
+    response.status === 401 &&
+    shouldAttachSession
   ) {
-    notifyInvalidAppSession();
+    clearAppSessionToken();
+    dispatchInvalidAppSessionEvent();
   }
 
   return parseResponse<T>(response);
 };
-
-export const getStoredAppSessionToken =
-  (): string | null => {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    return window.localStorage.getItem(
-      SESSION_STORAGE_KEY,
-    );
-  };
-
-export const storeAppSessionToken = (
-  token: string,
-): void => {
-  invalidSessionEventDispatched = false;
-
-  window.localStorage.setItem(
-    SESSION_STORAGE_KEY,
-    token,
-  );
-};
-
-export const clearAppSessionToken =
-  (): void => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.removeItem(
-      SESSION_STORAGE_KEY,
-    );
-  };
 
 export const loginWithAppSession = async (
   username: string,
@@ -232,6 +325,11 @@ export const loginWithAppSession = async (
   user: User;
   expiresAt: string;
 }> => {
+  /*
+   * Token lama tidak boleh ikut terbawa saat login baru.
+   */
+  clearAppSessionToken();
+
   const response =
     await requestFunction<LoginResponse>(
       'app-login',
@@ -243,13 +341,41 @@ export const loginWithAppSession = async (
       },
     );
 
+  const sessionToken =
+    response.session?.token ??
+    response.sessionToken;
+
+  const expiresAt =
+    response.session?.expiresAt ??
+    response.expiresAt;
+
+  if (
+    !sessionToken ||
+    typeof sessionToken !== 'string'
+  ) {
+    throw new AppSessionApiError(
+      'Respons login tidak memiliki session token yang valid.',
+      500,
+    );
+  }
+
+  if (
+    !expiresAt ||
+    typeof expiresAt !== 'string'
+  ) {
+    throw new AppSessionApiError(
+      'Respons login tidak memiliki session expiry yang valid.',
+      500,
+    );
+  }
+
   storeAppSessionToken(
-    response.sessionToken,
+    sessionToken,
   );
 
   return {
     user: toUser(response.user),
-    expiresAt: response.expiresAt,
+    expiresAt,
   };
 };
 
@@ -267,9 +393,23 @@ export const getCurrentAppSession =
           },
         );
 
+      const expiresAt =
+        response.session?.expiresAt ??
+        response.expiresAt;
+
+      if (
+        !expiresAt ||
+        typeof expiresAt !== 'string'
+      ) {
+        throw new AppSessionApiError(
+          'Respons validasi sesi tidak memiliki expiry yang valid.',
+          500,
+        );
+      }
+
       return {
         user: toUser(response.user),
-        expiresAt: response.expiresAt,
+        expiresAt,
       };
     } catch (error) {
       if (
@@ -322,8 +462,8 @@ export const changeAppPassword = async (
 };
 
 /**
- * Generic helper for the next Early Recall Edge Function.
- * Actor identity is resolved from X-App-Session on the server.
+ * Generic helper untuk Edge Function yang menggunakan
+ * custom application session melalui X-App-Session.
  */
 export const invokeAuthenticatedAppFunction =
   async <TResponse>(
