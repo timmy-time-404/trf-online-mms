@@ -18,6 +18,7 @@ type UserRole =
   | "SUPER_ADMIN";
 
 type RosterAction =
+  | "my_summary"
   | "queue"
   | "os_ledger"
   | "confirm_site_out"
@@ -123,6 +124,7 @@ const ACTION_ROLES: Record<
   RosterAction,
   UserRole[]
 > = {
+  my_summary: ["EMPLOYEE"],
   queue: ["GA", "HR", "SUPER_ADMIN"],
   os_ledger: ["HR", "SUPER_ADMIN"],
   confirm_site_out: ["GA", "HR", "SUPER_ADMIN"],
@@ -528,6 +530,38 @@ Deno.serve(
 
       const action = getAction(body.action);
       assertRole(action, context.user.role);
+
+      if (action === "my_summary") {
+        const asOfDate = body.asOfDate
+          ? requireDate(
+              body.asOfDate,
+              "As-of Date",
+            )
+          : todayIsoDate();
+
+        const summary = await runRpc(
+          admin,
+          "get_my_roster_os_summary",
+          {
+            p_actor_user_id:
+              context.user.id,
+            p_as_of_date: asOfDate,
+          },
+        );
+
+        return jsonResponse(
+          req,
+          200,
+          {
+            success: true,
+            action,
+            requestId,
+            asOfDate,
+            summary,
+          },
+          ALLOWED_METHODS,
+        );
+      }
 
       if (action === "queue") {
         const asOfDate = body.asOfDate

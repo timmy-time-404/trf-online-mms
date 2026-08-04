@@ -31,6 +31,7 @@ import TRFNewPage from '@/features/trf/TRFNewPage';
 import EarlyRecallDetailPage from '@/features/early-recall/EarlyRecallDetailPage';
 import EarlyRecallFormPage from '@/features/early-recall/EarlyRecallFormPage';
 import EarlyRecallListPage from '@/features/early-recall/EarlyRecallListPage';
+import MyRosterOSPage from '@/features/roster/MyRosterOSPage';
 import RosterOperationsPage from '@/features/roster/RosterOperationsPage';
 
 // Role-specific pages
@@ -386,6 +387,20 @@ const App: React.FC = () => {
                 ]}
               >
                 <EarlyRecallFormPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* EMPLOYEE SELF-SERVICE ROSTER & OS */}
+          <Route
+            path="/my-roster"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  'EMPLOYEE',
+                ]}
+              >
+                <MyRosterOSPage />
               </ProtectedRoute>
             }
           />

@@ -80,6 +80,12 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     roles: ALL_ROLES,
   },
   {
+    path: '/my-roster',
+    label: 'My Roster & OS',
+    icon: CalendarRange,
+    roles: ['EMPLOYEE'],
+  },
+  {
     path: '/early-recall',
     label: 'Early Recall',
     icon: CalendarClock,

@@ -101,6 +101,126 @@ export interface OSLedgerResponse {
   };
 }
 
+export interface MyRosterEmployee {
+  id: string;
+  employee_code: string;
+  employee_name: string;
+  department: string;
+  job_title: string;
+}
+
+export interface MyRosterDefinition {
+  assignment_id: string;
+  roster_pattern_id: string;
+  roster_code: string;
+  site_days: number;
+  leave_days: number;
+  effective_from: string;
+  effective_to: string | null;
+  source_type: string;
+  source_reference: string | null;
+}
+
+export interface MyRosterCurrentCycle {
+  id: string;
+  cycle_number: number;
+  status: string;
+
+  planned_site_in: string | null;
+  planned_site_out: string | null;
+  actual_site_in: string | null;
+  actual_site_out: string | null;
+
+  planned_leave_start: string | null;
+  planned_leave_end: string | null;
+  actual_leave_start: string | null;
+  actual_leave_end: string | null;
+
+  site_day_number: number;
+  completed_site_days: number;
+  days_until_site_out: number;
+  overstay_days: number;
+  progress_percent: number;
+
+  source_type: string;
+  source_reference: string | null;
+}
+
+export interface MyRosterOSBucket {
+  id: string;
+  os_number: string;
+  source_type: string;
+  source_reference?: string | null;
+  generated_date: string;
+  original_days: number;
+  remaining_days: number;
+  used_days: number;
+  expired_days?: number;
+  cancelled_days?: number;
+  cycle_number: number;
+  status: string;
+  remarks: string | null;
+}
+
+export interface MyRosterCycleHistoryItem {
+  id: string;
+  cycle_number: number;
+  status: string;
+
+  planned_site_in: string | null;
+  planned_site_out: string | null;
+  actual_site_in: string | null;
+  actual_site_out: string | null;
+
+  planned_leave_start: string | null;
+  planned_leave_end: string | null;
+  actual_leave_start: string | null;
+  actual_leave_end: string | null;
+
+  planned_site_days: number | null;
+  actual_site_days: number | null;
+  planned_leave_days: number | null;
+  actual_leave_days: number | null;
+
+  source_type: string;
+  source_reference: string | null;
+}
+
+export interface MyRosterSummary {
+  success: true;
+  as_of_date: string;
+
+  employee: MyRosterEmployee;
+  roster: MyRosterDefinition | null;
+  current_cycle: MyRosterCurrentCycle | null;
+
+  os_summary: {
+    has_available_os: boolean;
+    total_available_days: number;
+    active_bucket_count: number;
+  };
+
+  active_os_buckets: MyRosterOSBucket[];
+  recent_os_history: MyRosterOSBucket[];
+  cycle_history: MyRosterCycleHistoryItem[];
+
+  data_quality: {
+    employee_mapping_ready: boolean;
+    active_roster_assignment_count: number;
+    active_site_cycle_count: number;
+    has_active_roster: boolean;
+    has_active_cycle: boolean;
+  };
+}
+
+export interface MyRosterSummaryResponse {
+  success: true;
+  action: 'my_summary';
+  requestId: string;
+  asOfDate: string;
+  summary: MyRosterSummary;
+}
+
 export interface RosterMutationResponse {
   success: true;
   action:
@@ -164,6 +284,16 @@ export const getLocalDateInputValue = (
     .toISOString()
     .slice(0, 10);
 };
+
+export const getMyRosterSummary = (
+  asOfDate = getLocalDateInputValue(),
+): Promise<MyRosterSummaryResponse> =>
+  invokeRosterOperations<MyRosterSummaryResponse>(
+    {
+      action: 'my_summary',
+      asOfDate,
+    },
+  );
 
 export const getRosterAttentionQueue = (
   asOfDate = getLocalDateInputValue(),
