@@ -606,11 +606,35 @@ export const useTRFStore = create<TRFState>()(
       },
 
       getTRFsByDepartment: (department) => {
+        const normalizedDepartment =
+          department
+            ?.trim()
+            .toLocaleLowerCase('id-ID') ??
+          '';
+
+        if (!normalizedDepartment) {
+          return [];
+        }
+
         return get()
-          .trfs.filter((t) => t.department === department)
-          .map((t) => ({
-            ...t,
-            employee: get().employees.find((e) => e.id === t.employeeId),
+          .trfs.filter(
+            (trf) =>
+              (
+                trf.department
+                  ?.trim()
+                  .toLocaleLowerCase(
+                    'id-ID',
+                  ) ?? ''
+              ) ===
+              normalizedDepartment,
+          )
+          .map((trf) => ({
+            ...trf,
+            employee: get().employees.find(
+              (employee) =>
+                employee.id ===
+                trf.employeeId,
+            ),
           }));
       },
 
@@ -1035,14 +1059,40 @@ export const useTRFStore = create<TRFState>()(
   }));
 },
 
-      getTRFsForVerification: (department: string) => {
+      getTRFsForVerification: (
+        department: string,
+      ) => {
+        const normalizedDepartment =
+          department
+            ?.trim()
+            .toLocaleLowerCase('id-ID') ??
+          '';
+
+        if (!normalizedDepartment) {
+          return [];
+        }
+
         return get()
           .trfs.filter(
-            (t) => t.department === department && t.status === 'SUBMITTED',
+            (trf) =>
+              trf.status ===
+                'SUBMITTED' &&
+              (
+                trf.department
+                  ?.trim()
+                  .toLocaleLowerCase(
+                    'id-ID',
+                  ) ?? ''
+              ) ===
+                normalizedDepartment,
           )
-          .map((t) => ({
-            ...t,
-            employee: get().employees.find((e) => e.id === t.employeeId),
+          .map((trf) => ({
+            ...trf,
+            employee: get().employees.find(
+              (employee) =>
+                employee.id ===
+                trf.employeeId,
+            ),
           }));
       },
 
@@ -1051,10 +1101,27 @@ export const useTRFStore = create<TRFState>()(
           .trfs
           .filter((trf) => {
             if (role === 'HOD') {
+              const normalizedDepartment =
+                department
+                  ?.trim()
+                  .toLocaleLowerCase(
+                    'id-ID',
+                  ) ?? '';
+
               return (
-                trf.status === 'PENDING_APPROVAL' &&
-                !!department &&
-                trf.department === department
+                trf.status ===
+                  'PENDING_APPROVAL' &&
+                Boolean(
+                  normalizedDepartment,
+                ) &&
+                (
+                  trf.department
+                    ?.trim()
+                    .toLocaleLowerCase(
+                      'id-ID',
+                    ) ?? ''
+                ) ===
+                  normalizedDepartment
               );
             }
 
