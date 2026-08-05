@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import EmployeeInfoSection from './components/EmployeeInfoSection';
+import SearchableEmployeeInfoSection from './components/SearchableEmployeeInfoSection';
 import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
 import AccommodationSection from './components/AccommodationSection';
 import type { AccommodationEntry } from './components/AccommodationSection';
@@ -45,6 +45,15 @@ const TRFNewPage: React.FC = () => {
       }
     }
   }, [currentUser, employees]);
+
+  const handleEmployeeChange = (nextEmployeeId: string) => {
+    const selectedEmployee = employees.find(
+      employee => employee.id === nextEmployeeId,
+    );
+
+    setEmployeeId(nextEmployeeId);
+    setDepartment(selectedEmployee?.department ?? '');
+  };
 
   // ── Build CreateTRFInput dari state ───────────────────────
   // Field lama diisi dari entry pertama untuk backward-compat dengan store.
@@ -141,14 +150,16 @@ const TRFNewPage: React.FC = () => {
           Back to List
         </Button>
         <h1 className="text-2xl font-bold text-gray-900">New Travel Request</h1>
-        <p className="text-gray-500 mt-1">Create a new travel request form</p>
+        <p className="text-gray-500 mt-1">Buat Formulir Permintaan Perjalanan Baru</p>
       </div>
 
       {/* Form sections */}
       <div className="space-y-6">
-        <EmployeeInfoSection
+        <SearchableEmployeeInfoSection
+          employees={employees}
           selectedEmployeeId={employeeId}
-          onEmployeeChange={setEmployeeId}
+          onEmployeeChange={handleEmployeeChange}
+          selectionLocked={currentUser?.role === 'EMPLOYEE'}
         />
 
         {/* ── Multi Travel Purpose ── */}
