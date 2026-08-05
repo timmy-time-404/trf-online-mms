@@ -337,6 +337,11 @@ const RosterOperationsPage: React.FC = () => {
     OSAdjustmentDialogState | null
   >(null);
 
+  const [
+    employeeAdjustmentSearch,
+    setEmployeeAdjustmentSearch,
+  ] = React.useState('');
+
   const [mutationLoading, setMutationLoading] =
     React.useState(false);
 
@@ -785,35 +790,26 @@ const RosterOperationsPage: React.FC = () => {
 
 
   const openAddOSDialog = () => {
-    const firstEmployee =
-      adjustmentEmployees[0];
-
-    const firstCycle = firstEmployee
-      ? cyclesForEmployee(
-          firstEmployee.id,
-        )[0]
-      : undefined;
+    setEmployeeAdjustmentSearch('');
 
     setAdjustmentDialog({
       mode: 'ADD',
       adjustmentType: 'ADD_BUCKET',
 
-      employeeId:
-        firstEmployee?.id ?? '',
+      employeeId: '',
       osLedgerId: '',
 
       days: '1',
       newRemainingDays: '',
       newCycleNumber: '0',
-      earnedSiteCycleId:
-        firstCycle?.id ?? '',
+      earnedSiteCycleId: '',
 
       generatedDate:
         getLocalDateInputValue(),
       referenceNumber: '',
       remarks: '',
       operationKey: createOperationKey(
-        firstEmployee?.id ?? 'ADD_OS',
+        'ADD_OS',
       ),
     });
   };
@@ -1038,6 +1034,39 @@ const RosterOperationsPage: React.FC = () => {
     await loadQueue();
   };
 
+
+  const filteredAdjustmentEmployees =
+    React.useMemo(() => {
+      const keyword =
+        employeeAdjustmentSearch
+          .trim()
+          .toLocaleLowerCase('id-ID');
+
+      const source = keyword
+        ? adjustmentEmployees.filter(
+            (employee) => {
+              const searchableText = [
+                employee.employee_code,
+                employee.employee_name,
+                employee.department,
+                employee.job_title,
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .toLocaleLowerCase('id-ID');
+
+              return searchableText.includes(
+                keyword,
+              );
+            },
+          )
+        : adjustmentEmployees;
+
+      return source.slice(0, 25);
+    }, [
+      adjustmentEmployees,
+      employeeAdjustmentSearch,
+    ]);
 
   const selectedAdjustmentBucket =
     adjustmentDialog?.osLedgerId
@@ -2047,6 +2076,7 @@ const RosterOperationsPage: React.FC = () => {
         onOpenChange={(open) => {
           if (!open && !mutationLoading) {
             setAdjustmentDialog(null);
+            setEmployeeAdjustmentSearch('');
           }
         }}
       >
@@ -2119,64 +2149,122 @@ const RosterOperationsPage: React.FC = () => {
                 </div>
 
                 {adjustmentDialog.mode === 'ADD' && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="os-adjustment-employee">
+                  <div className="space-y-2">
+                    <Label htmlFor="os-adjustment-employee-search">
                       Employee
                     </Label>
 
-                    <select
-                      id="os-adjustment-employee"
-                      value={adjustmentDialog.employeeId}
-                      onChange={(event) => {
-                        const employeeId =
-                          event.target.value;
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
-                        const firstCycle =
-                          cyclesForEmployee(
-                            employeeId,
-                          )[0];
+                      <Input
+                        id="os-adjustment-employee-search"
+                        value={employeeAdjustmentSearch}
+                        onChange={(event) =>
+                          setEmployeeAdjustmentSearch(
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Cari Employee ID, nama, department, atau jabatan..."
+                        autoComplete="off"
+                        className="pl-9"
+                      />
+                    </div>
 
-                        setAdjustmentDialog(
-                          (current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  employeeId,
-                                  earnedSiteCycleId:
-                                    firstCycle?.id ?? '',
-                                  operationKey:
-                                    createOperationKey(
-                                      employeeId,
-                                    ),
-                                }
-                              : null,
-                        );
-                      }}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                      <option value="">
-                        Pilih employee
-                      </option>
+                    <div className="max-h-56 overflow-y-auto rounded-md border bg-white">
+                      {filteredAdjustmentEmployees.length === 0 ? (
+                        <div className="px-3 py-8 text-center text-sm text-gray-500">
+                          Employee tidak ditemukan.
+                        </div>
+                      ) : (
+                        filteredAdjustmentEmployees.map(
+                          (employee) => {
+                            const selected =
+                              adjustmentDialog.employeeId ===
+                              employee.id;
 
-                      {adjustmentEmployees.map(
-                        (employee) => (
-                          <option
-                            key={employee.id}
-                            value={employee.id}
-                          >
-                            {employee.employee_code} —{' '}
-                            {employee.employee_name}
-                          </option>
-                        ),
+                            return (
+                              <button
+                                key={employee.id}
+                                type="button"
+                                onClick={() => {
+                                  const firstCycle =
+                                    cyclesForEmployee(
+                                      employee.id,
+                                    )[0];
+
+                                  setAdjustmentDialog(
+                                    (current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            employeeId:
+                                              employee.id,
+                                            earnedSiteCycleId:
+                                              firstCycle?.id ??
+                                              '',
+                                            operationKey:
+                                              createOperationKey(
+                                                employee.id,
+                                              ),
+                                          }
+                                        : null,
+                                  );
+
+                                  setEmployeeAdjustmentSearch(
+                                    `${employee.employee_code} — ${employee.employee_name}`,
+                                  );
+                                }}
+                                className={cn(
+                                  'flex w-full items-start justify-between gap-3 border-b px-3 py-2.5 text-left last:border-0 hover:bg-gray-50',
+                                  selected &&
+                                    'bg-blue-50 hover:bg-blue-50',
+                                )}
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-gray-900">
+                                    {employee.employee_code}
+                                    {' — '}
+                                    {employee.employee_name}
+                                  </p>
+
+                                  <p className="mt-1 truncate text-xs text-gray-500">
+                                    {employee.department}
+                                    {' · '}
+                                    {employee.job_title}
+                                  </p>
+                                </div>
+
+                                {selected && (
+                                  <Badge className="shrink-0">
+                                    Selected
+                                  </Badge>
+                                )}
+                              </button>
+                            );
+                          },
+                        )
                       )}
-                    </select>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Menampilkan maksimal 25 hasil. Ketik Employee ID atau nama untuk mempersempit pencarian.
+                    </p>
 
                     {selectedAdjustmentEmployee && (
-                      <p className="text-xs text-gray-500">
-                        {selectedAdjustmentEmployee.department}
-                        {' · '}
-                        {selectedAdjustmentEmployee.job_title}
-                      </p>
+                      <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2">
+                        <p className="text-sm font-medium text-blue-950">
+                          {selectedAdjustmentEmployee.employee_code}
+                          {' — '}
+                          {selectedAdjustmentEmployee.employee_name}
+                        </p>
+
+                        <p className="mt-1 text-xs text-blue-700">
+                          {selectedAdjustmentEmployee.department}
+                          {' · '}
+                          {selectedAdjustmentEmployee.job_title}
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}
