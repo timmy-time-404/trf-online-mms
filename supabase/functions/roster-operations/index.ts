@@ -21,10 +21,12 @@ type RosterAction =
   | "my_summary"
   | "queue"
   | "os_ledger"
+  | "os_adjustment_options"
   | "confirm_site_out"
   | "confirm_leave_start"
   | "confirm_return"
-  | "consume_os";
+  | "consume_os"
+  | "adjust_os";
 
 interface RosterRequestBody {
   action?: unknown;
@@ -42,6 +44,14 @@ interface RosterRequestBody {
   referenceId?: unknown;
   referenceNumber?: unknown;
   remarks?: unknown;
+
+  adjustmentType?: unknown;
+  osLedgerId?: unknown;
+  days?: unknown;
+  newRemainingDays?: unknown;
+  newCycleNumber?: unknown;
+  earnedSiteCycleId?: unknown;
+  generatedDate?: unknown;
 }
 
 interface QueueItem {
@@ -84,6 +94,7 @@ interface OSLedgerRow {
   cancelled_days: number;
   cycle_number: number;
   status: string;
+  earned_site_cycle_id: string | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -96,6 +107,27 @@ interface EmployeeRow {
   department: string;
   job_title: string;
   is_active: boolean | null;
+}
+
+interface SiteCycleOptionRow {
+  id: string;
+  employee_id: string;
+  cycle_number: number;
+  status: string;
+  planned_site_in: string | null;
+  planned_site_out: string | null;
+  actual_site_in: string | null;
+  actual_site_out: string | null;
+  planned_leave_start: string | null;
+  planned_leave_end: string | null;
+  actual_leave_start: string | null;
+  actual_leave_end: string | null;
+}
+
+interface OSLedgerWithRelations extends OSLedgerRow {
+  employee: EmployeeRow | null;
+  earned_site_cycle_number: number | null;
+  earned_site_cycle_status: string | null;
 }
 
 class RosterWorkflowError extends Error {
@@ -127,10 +159,12 @@ const ACTION_ROLES: Record<
   my_summary: ["EMPLOYEE"],
   queue: ["GA", "HR", "SUPER_ADMIN"],
   os_ledger: ["HR", "SUPER_ADMIN"],
+  os_adjustment_options: ["HR", "SUPER_ADMIN"],
   confirm_site_out: ["GA", "HR", "SUPER_ADMIN"],
   confirm_leave_start: ["GA", "HR", "SUPER_ADMIN"],
   confirm_return: ["GA", "HR", "SUPER_ADMIN"],
   consume_os: ["HR", "SUPER_ADMIN"],
+  adjust_os: ["HR", "SUPER_ADMIN"],
 };
 
 function todayIsoDate(): string {
@@ -287,6 +321,63 @@ function requirePositiveInteger(
   return parsed;
 }
 
+function optionalInteger(
+  value: unknown,
+  label: string,
+): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isInteger(parsed)) {
+    throw new RosterWorkflowError(
+      `${label} harus berupa bilangan bulat.`,
+      400,
+      "VALIDATION_ERROR",
+    );
+  }
+
+  return parsed;
+}
+
+function optionalIntegerInRange(
+  value: unknown,
+  label: string,
+  minimum: number,
+  maximum: number,
+): number | null {
+  const parsed = optionalInteger(
+    value,
+    label,
+  );
+
+  if (parsed === null) return null;
+
+  if (
+    parsed < minimum ||
+    parsed > maximum
+  ) {
+    throw new RosterWorkflowError(
+      `${label} harus berada pada rentang ${minimum} sampai ${maximum}.`,
+      400,
+      "VALIDATION_ERROR",
+    );
+  }
+
+  return parsed;
+}
+
 function databaseErrorStatus(
   code?: string,
 ): number {
@@ -372,16 +463,12 @@ async function loadQueue(
 
 async function loadOSLedger(
   admin: SupabaseClient,
-): Promise<Array<
-  OSLedgerRow & {
-    employee: EmployeeRow | null;
-  }
->> {
+): Promise<OSLedgerWithRelations[]> {
   const { data: ledgerData, error: ledgerError } =
     await admin
       .from("employee_os_ledger")
       .select(
-        "id, os_number, employee_id, source_type, source_reference, generated_date, original_days, remaining_days, used_days, expired_days, cancelled_days, cycle_number, status, remarks, created_at, updated_at",
+        "id, os_number, employee_id, source_type, source_reference, generated_date, original_days, remaining_days, used_days, expired_days, cancelled_days, cycle_number, status, earned_site_cycle_id, remarks, created_at, updated_at",
       )
       .gt("remaining_days", 0)
       .order("generated_date", {
@@ -411,7 +498,23 @@ async function loadOSLedger(
     ),
   );
 
+  const originCycleIds = Array.from(
+    new Set(
+      ledgerRows
+        .map(
+          (row) =>
+            row.earned_site_cycle_id,
+        )
+        .filter(
+          (value): value is string =>
+            typeof value === "string" &&
+            value.length > 0,
+        ),
+    ),
+  );
+
   let employees: EmployeeRow[] = [];
+  let originCycles: SiteCycleOptionRow[] = [];
 
   if (employeeIds.length > 0) {
     const { data, error } = await admin
@@ -432,6 +535,26 @@ async function loadOSLedger(
     employees = (data ?? []) as EmployeeRow[];
   }
 
+  if (originCycleIds.length > 0) {
+    const { data, error } = await admin
+      .from("employee_site_cycles")
+      .select(
+        "id, employee_id, cycle_number, status, planned_site_in, planned_site_out, actual_site_in, actual_site_out, planned_leave_start, planned_leave_end, actual_leave_start, actual_leave_end",
+      )
+      .in("id", originCycleIds);
+
+    if (error) {
+      throw new RosterWorkflowError(
+        "Gagal mengambil origin cycle OS.",
+        500,
+        error.code,
+      );
+    }
+
+    originCycles =
+      (data ?? []) as SiteCycleOptionRow[];
+  }
+
   const employeeMap = new Map(
     employees.map((employee) => [
       employee.id,
@@ -439,12 +562,91 @@ async function loadOSLedger(
     ]),
   );
 
-  return ledgerRows.map((row) => ({
-    ...row,
-    employee:
-      employeeMap.get(row.employee_id) ??
-      null,
-  }));
+  const cycleMap = new Map(
+    originCycles.map((cycle) => [
+      cycle.id,
+      cycle,
+    ]),
+  );
+
+  return ledgerRows.map((row) => {
+    const originCycle =
+      row.earned_site_cycle_id
+        ? cycleMap.get(
+            row.earned_site_cycle_id,
+          ) ?? null
+        : null;
+
+    return {
+      ...row,
+      employee:
+        employeeMap.get(row.employee_id) ??
+        null,
+      earned_site_cycle_number:
+        originCycle?.cycle_number ?? null,
+      earned_site_cycle_status:
+        originCycle?.status ?? null,
+    };
+  });
+}
+
+async function loadOSAdjustmentOptions(
+  admin: SupabaseClient,
+): Promise<{
+  employees: EmployeeRow[];
+  cycles: SiteCycleOptionRow[];
+}> {
+  const [
+    employeeResult,
+    cycleResult,
+  ] = await Promise.all([
+    admin
+      .from("employees")
+      .select(
+        "id, employee_code, employee_name, department, job_title, is_active",
+      )
+      .eq("is_active", true)
+      .order("employee_code", {
+        ascending: true,
+      })
+      .limit(1000),
+
+    admin
+      .from("employee_site_cycles")
+      .select(
+        "id, employee_id, cycle_number, status, planned_site_in, planned_site_out, actual_site_in, actual_site_out, planned_leave_start, planned_leave_end, actual_leave_start, actual_leave_end",
+      )
+      .neq("status", "CANCELLED")
+      .order("cycle_number", {
+        ascending: false,
+      })
+      .limit(3000),
+  ]);
+
+  if (employeeResult.error) {
+    throw new RosterWorkflowError(
+      "Gagal mengambil employee untuk OS adjustment.",
+      500,
+      employeeResult.error.code,
+    );
+  }
+
+  if (cycleResult.error) {
+    throw new RosterWorkflowError(
+      "Gagal mengambil site cycle untuk OS adjustment.",
+      500,
+      cycleResult.error.code,
+    );
+  }
+
+  return {
+    employees:
+      (employeeResult.data ??
+        []) as EmployeeRow[],
+    cycles:
+      (cycleResult.data ??
+        []) as SiteCycleOptionRow[],
+  };
 }
 
 Deno.serve(
@@ -634,6 +836,28 @@ Deno.serve(
         );
       }
 
+      if (
+        action ===
+        "os_adjustment_options"
+      ) {
+        const options =
+          await loadOSAdjustmentOptions(
+            admin,
+          );
+
+        return jsonResponse(
+          req,
+          200,
+          {
+            success: true,
+            action,
+            requestId,
+            ...options,
+          },
+          ALLOWED_METHODS,
+        );
+      }
+
       let result: unknown;
 
       switch (action) {
@@ -750,6 +974,73 @@ Deno.serve(
               p_remarks: requireString(
                 body.remarks,
                 "Remarks",
+              ),
+            },
+          );
+          break;
+
+        case "adjust_os":
+          result = await runRpc(
+            admin,
+            "adjust_employee_os",
+            {
+              p_actor_user_id:
+                context.user.id,
+              p_operation_key: requireString(
+                body.operationKey,
+                "Operation Key",
+              ),
+              p_adjustment_type:
+                requireString(
+                  body.adjustmentType,
+                  "Adjustment Type",
+                ),
+              p_employee_id: optionalUuid(
+                body.employeeId,
+                "Employee ID",
+              ),
+              p_os_ledger_id: optionalUuid(
+                body.osLedgerId,
+                "OS Ledger ID",
+              ),
+              p_days: optionalInteger(
+                body.days,
+                "Jumlah OS",
+              ),
+              p_new_remaining_days:
+                optionalIntegerInRange(
+                  body.newRemainingDays,
+                  "New Remaining",
+                  0,
+                  10000,
+                ),
+              p_new_cycle_number:
+                optionalIntegerInRange(
+                  body.newCycleNumber,
+                  "New Current OS Cycle",
+                  0,
+                  4,
+                ),
+              p_earned_site_cycle_id:
+                optionalUuid(
+                  body.earnedSiteCycleId,
+                  "Earned Site Cycle ID",
+                ),
+              p_generated_date:
+                body.generatedDate
+                  ? requireDate(
+                      body.generatedDate,
+                      "Generated Date",
+                    )
+                  : todayIsoDate(),
+              p_reference_number:
+                requireString(
+                  body.referenceNumber,
+                  "Supporting Reference",
+                ),
+              p_remarks: requireString(
+                body.remarks,
+                "Reason / Remarks",
               ),
             },
           );

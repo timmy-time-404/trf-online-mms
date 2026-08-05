@@ -82,6 +82,11 @@ export interface OSLedgerItem {
   cancelled_days: number;
   cycle_number: number;
   status: string;
+
+  earned_site_cycle_id: string | null;
+  earned_site_cycle_number: number | null;
+  earned_site_cycle_status: string | null;
+
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -99,6 +104,64 @@ export interface OSLedgerResponse {
     activeBucketCount: number;
     totalRemainingDays: number;
   };
+}
+
+export interface OSAdjustmentEmployee {
+  id: string;
+  employee_code: string;
+  employee_name: string;
+  department: string;
+  job_title: string;
+  is_active: boolean | null;
+}
+
+export interface OSAdjustmentCycle {
+  id: string;
+  employee_id: string;
+  cycle_number: number;
+  status: string;
+
+  planned_site_in: string | null;
+  planned_site_out: string | null;
+  actual_site_in: string | null;
+  actual_site_out: string | null;
+
+  planned_leave_start: string | null;
+  planned_leave_end: string | null;
+  actual_leave_start: string | null;
+  actual_leave_end: string | null;
+}
+
+export interface OSAdjustmentOptionsResponse {
+  success: true;
+  action: 'os_adjustment_options';
+  requestId: string;
+  employees: OSAdjustmentEmployee[];
+  cycles: OSAdjustmentCycle[];
+}
+
+export type OSAdjustmentType =
+  | 'ADD_BUCKET'
+  | 'SET_REMAINING'
+  | 'SET_CURRENT_CYCLE'
+  | 'SET_ORIGIN_CYCLE'
+  | 'CANCEL_BUCKET';
+
+export interface AdjustOSInput {
+  operationKey: string;
+  adjustmentType: OSAdjustmentType;
+
+  employeeId?: string | null;
+  osLedgerId?: string | null;
+
+  days?: number | null;
+  newRemainingDays?: number | null;
+  newCycleNumber?: number | null;
+  earnedSiteCycleId?: string | null;
+
+  generatedDate?: string | null;
+  referenceNumber: string;
+  remarks: string;
 }
 
 export interface MyRosterEmployee {
@@ -227,7 +290,8 @@ export interface RosterMutationResponse {
     | 'confirm_site_out'
     | 'confirm_leave_start'
     | 'confirm_return'
-    | 'consume_os';
+    | 'consume_os'
+    | 'adjust_os';
   requestId: string;
   result: Record<string, unknown> | null;
 }
@@ -310,6 +374,22 @@ export const getActiveOSLedger =
     invokeRosterOperations<OSLedgerResponse>({
       action: 'os_ledger',
     });
+
+export const getOSAdjustmentOptions =
+  (): Promise<OSAdjustmentOptionsResponse> =>
+    invokeRosterOperations<OSAdjustmentOptionsResponse>({
+      action: 'os_adjustment_options',
+    });
+
+export const adjustEmployeeOS = (
+  input: AdjustOSInput,
+): Promise<RosterMutationResponse> =>
+  invokeRosterOperations<RosterMutationResponse>(
+    {
+      action: 'adjust_os',
+      ...input,
+    },
+  );
 
 export const confirmRosterSiteOut = (
   input: ConfirmSiteOutInput,

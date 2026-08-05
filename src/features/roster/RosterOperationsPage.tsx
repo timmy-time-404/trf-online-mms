@@ -3,8 +3,10 @@ import {
   AlertTriangle,
   CalendarCheck2,
   Clock3,
+  PlusCircle,
   RefreshCw,
   Search,
+  Settings2,
   ShieldCheck,
   WalletCards,
 } from 'lucide-react';
@@ -37,15 +39,20 @@ import {
 } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  adjustEmployeeOS,
   confirmRosterLeaveStart,
   confirmRosterReturn,
   confirmRosterSiteOut,
   consumeEmployeeOS,
   dispatchRosterOperationsUpdated,
   getActiveOSLedger,
+  getOSAdjustmentOptions,
   getLocalDateInputValue,
   getRosterAttentionQueue,
   type OSLedgerItem,
+  type OSAdjustmentCycle,
+  type OSAdjustmentEmployee,
+  type OSAdjustmentType,
   type RosterAttentionActionCode,
   type RosterAttentionQueueItem,
 } from '@/lib/rosterOperationsApi';
@@ -76,6 +83,24 @@ interface ConsumeDialogState {
   employee: EmployeeOSSummary;
   requestedDays: string;
   referenceType: string;
+  referenceNumber: string;
+  remarks: string;
+  operationKey: string;
+}
+
+interface OSAdjustmentDialogState {
+  mode: 'ADD' | 'EDIT';
+  adjustmentType: OSAdjustmentType;
+
+  employeeId: string;
+  osLedgerId: string;
+
+  days: string;
+  newRemainingDays: string;
+  newCycleNumber: string;
+  earnedSiteCycleId: string;
+
+  generatedDate: string;
   referenceNumber: string;
   remarks: string;
   operationKey: string;
@@ -115,6 +140,17 @@ const ACTION_ORDER: RosterAttentionActionCode[] = [
   'POTENTIAL_OVERSTAY',
   'SITE_OUT_DUE_TODAY',
 ];
+
+const OS_ADJUSTMENT_LABELS: Record<
+  OSAdjustmentType,
+  string
+> = {
+  ADD_BUCKET: 'Add OS Bucket',
+  SET_REMAINING: 'Correct Remaining Balance',
+  SET_CURRENT_CYCLE: 'Correct Current OS Cycle',
+  SET_ORIGIN_CYCLE: 'Correct Earned From Site Cycle',
+  CANCEL_BUCKET: 'Cancel OS Bucket',
+};
 
 const getActionBadgeClass = (
   actionCode: RosterAttentionActionCode,
@@ -256,6 +292,20 @@ const RosterOperationsPage: React.FC = () => {
   const [ledgerItems, setLedgerItems] =
     React.useState<OSLedgerItem[]>([]);
 
+  const [
+    adjustmentEmployees,
+    setAdjustmentEmployees,
+  ] = React.useState<OSAdjustmentEmployee[]>(
+    [],
+  );
+
+  const [
+    adjustmentCycles,
+    setAdjustmentCycles,
+  ] = React.useState<OSAdjustmentCycle[]>(
+    [],
+  );
+
   const [queueLoading, setQueueLoading] =
     React.useState(false);
 
@@ -279,6 +329,13 @@ const RosterOperationsPage: React.FC = () => {
     React.useState<ConsumeDialogState | null>(
       null,
     );
+
+  const [
+    adjustmentDialog,
+    setAdjustmentDialog,
+  ] = React.useState<
+    OSAdjustmentDialogState | null
+  >(null);
 
   const [mutationLoading, setMutationLoading] =
     React.useState(false);
@@ -344,6 +401,43 @@ const RosterOperationsPage: React.FC = () => {
       }
     }, [canManageOS]);
 
+  const loadAdjustmentOptions =
+    React.useCallback(
+      async (
+        options: {
+          silent?: boolean;
+        } = {},
+      ) => {
+        if (!canManageOS) {
+          setAdjustmentEmployees([]);
+          setAdjustmentCycles([]);
+          return;
+        }
+
+        try {
+          const response =
+            await getOSAdjustmentOptions();
+
+          setAdjustmentEmployees(
+            response.employees,
+          );
+          setAdjustmentCycles(
+            response.cycles,
+          );
+        } catch (error) {
+          setAdjustmentEmployees([]);
+          setAdjustmentCycles([]);
+
+          if (!options.silent) {
+            toast.error(
+              getErrorMessage(error),
+            );
+          }
+        }
+      },
+      [canManageOS],
+    );
+
   React.useEffect(() => {
     void loadQueue({ silent: true });
   }, [loadQueue]);
@@ -351,8 +445,15 @@ const RosterOperationsPage: React.FC = () => {
   React.useEffect(() => {
     if (canManageOS) {
       void loadLedger({ silent: true });
+      void loadAdjustmentOptions({
+        silent: true,
+      });
     }
-  }, [canManageOS, loadLedger]);
+  }, [
+    canManageOS,
+    loadAdjustmentOptions,
+    loadLedger,
+  ]);
 
   const queueCounts = React.useMemo(() => {
     const counts = ACTION_ORDER.reduce<
@@ -462,6 +563,38 @@ const RosterOperationsPage: React.FC = () => {
           ),
       );
     }, [ledgerItems]);
+
+
+  const adjustmentEmployeeMap =
+    React.useMemo(
+      () =>
+        new Map(
+          adjustmentEmployees.map(
+            (employee) => [
+              employee.id,
+              employee,
+            ],
+          ),
+        ),
+      [adjustmentEmployees],
+    );
+
+  const cyclesForEmployee =
+    React.useCallback(
+      (employeeId: string) =>
+        adjustmentCycles
+          .filter(
+            (cycle) =>
+              cycle.employee_id ===
+              employeeId,
+          )
+          .sort(
+            (first, second) =>
+              second.cycle_number -
+              first.cycle_number,
+          ),
+      [adjustmentCycles],
+    );
 
   const totalRemainingOS = React.useMemo(
     () =>
@@ -650,14 +783,284 @@ const RosterOperationsPage: React.FC = () => {
     }
   };
 
+
+  const openAddOSDialog = () => {
+    const firstEmployee =
+      adjustmentEmployees[0];
+
+    const firstCycle = firstEmployee
+      ? cyclesForEmployee(
+          firstEmployee.id,
+        )[0]
+      : undefined;
+
+    setAdjustmentDialog({
+      mode: 'ADD',
+      adjustmentType: 'ADD_BUCKET',
+
+      employeeId:
+        firstEmployee?.id ?? '',
+      osLedgerId: '',
+
+      days: '1',
+      newRemainingDays: '',
+      newCycleNumber: '0',
+      earnedSiteCycleId:
+        firstCycle?.id ?? '',
+
+      generatedDate:
+        getLocalDateInputValue(),
+      referenceNumber: '',
+      remarks: '',
+      operationKey: createOperationKey(
+        firstEmployee?.id ?? 'ADD_OS',
+      ),
+    });
+  };
+
+  const openAdjustOSDialog = (
+    bucket: OSLedgerItem,
+  ) => {
+    setAdjustmentDialog({
+      mode: 'EDIT',
+      adjustmentType: 'SET_REMAINING',
+
+      employeeId: bucket.employee_id,
+      osLedgerId: bucket.id,
+
+      days: '',
+      newRemainingDays:
+        String(bucket.remaining_days),
+      newCycleNumber:
+        String(bucket.cycle_number),
+      earnedSiteCycleId:
+        bucket.earned_site_cycle_id ?? '',
+
+      generatedDate:
+        bucket.generated_date,
+      referenceNumber: '',
+      remarks: '',
+      operationKey: createOperationKey(
+        bucket.employee_id,
+      ),
+    });
+  };
+
+  const submitOSAdjustment = async () => {
+    if (!adjustmentDialog) return;
+
+    const referenceNumber =
+      adjustmentDialog.referenceNumber.trim();
+
+    const remarks =
+      adjustmentDialog.remarks.trim();
+
+    if (!referenceNumber) {
+      toast.error(
+        'Supporting reference wajib diisi.',
+      );
+      return;
+    }
+
+    if (remarks.length < 3) {
+      toast.error(
+        'Reason / remarks wajib diisi minimal 3 karakter.',
+      );
+      return;
+    }
+
+    const input = {
+      operationKey:
+        adjustmentDialog.operationKey,
+      adjustmentType:
+        adjustmentDialog.adjustmentType,
+      employeeId:
+        adjustmentDialog.employeeId ||
+        null,
+      osLedgerId:
+        adjustmentDialog.osLedgerId ||
+        null,
+      days: null as number | null,
+      newRemainingDays:
+        null as number | null,
+      newCycleNumber:
+        null as number | null,
+      earnedSiteCycleId:
+        adjustmentDialog
+          .earnedSiteCycleId ||
+        null,
+      generatedDate:
+        adjustmentDialog.generatedDate ||
+        getLocalDateInputValue(),
+      referenceNumber,
+      remarks,
+    };
+
+    if (
+      adjustmentDialog.adjustmentType ===
+      'ADD_BUCKET'
+    ) {
+      const days = Number(
+        adjustmentDialog.days,
+      );
+
+      const cycle = Number(
+        adjustmentDialog.newCycleNumber,
+      );
+
+      if (
+        !Number.isInteger(days) ||
+        days <= 0
+      ) {
+        toast.error(
+          'Jumlah OS harus lebih dari 0.',
+        );
+        return;
+      }
+
+      if (
+        !Number.isInteger(cycle) ||
+        cycle < 0 ||
+        cycle > 3
+      ) {
+        toast.error(
+          'Current OS Cycle harus 0 sampai 3.',
+        );
+        return;
+      }
+
+      if (
+        !adjustmentDialog.employeeId ||
+        !adjustmentDialog
+          .earnedSiteCycleId
+      ) {
+        toast.error(
+          'Employee dan Earned From Site Cycle wajib dipilih.',
+        );
+        return;
+      }
+
+      input.days = days;
+      input.newCycleNumber = cycle;
+    }
+
+    if (
+      adjustmentDialog.adjustmentType ===
+      'SET_REMAINING'
+    ) {
+      const remaining = Number(
+        adjustmentDialog
+          .newRemainingDays,
+      );
+
+      if (
+        !Number.isInteger(remaining) ||
+        remaining < 0
+      ) {
+        toast.error(
+          'New Remaining harus bilangan bulat 0 atau lebih.',
+        );
+        return;
+      }
+
+      input.newRemainingDays =
+        remaining;
+    }
+
+    if (
+      adjustmentDialog.adjustmentType ===
+      'SET_CURRENT_CYCLE'
+    ) {
+      const cycle = Number(
+        adjustmentDialog.newCycleNumber,
+      );
+
+      if (
+        !Number.isInteger(cycle) ||
+        cycle < 0 ||
+        cycle > 4
+      ) {
+        toast.error(
+          'New Current OS Cycle harus 0 sampai 4.',
+        );
+        return;
+      }
+
+      input.newCycleNumber = cycle;
+    }
+
+    if (
+      adjustmentDialog.adjustmentType ===
+        'SET_ORIGIN_CYCLE' &&
+      !adjustmentDialog.earnedSiteCycleId
+    ) {
+      toast.error(
+        'New Earned From Site Cycle wajib dipilih.',
+      );
+      return;
+    }
+
+    setMutationLoading(true);
+
+    try {
+      await adjustEmployeeOS(input);
+
+      toast.success(
+        'OS adjustment berhasil disimpan dan diaudit.',
+      );
+
+      setAdjustmentDialog(null);
+
+      await Promise.all([
+        loadLedger({ silent: true }),
+        loadAdjustmentOptions({
+          silent: true,
+        }),
+      ]);
+
+      dispatchRosterOperationsUpdated();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setMutationLoading(false);
+    }
+  };
+
   const refreshActiveTab = async () => {
     if (activeTab === 'os' && canManageOS) {
-      await loadLedger();
+      await Promise.all([
+        loadLedger(),
+        loadAdjustmentOptions(),
+      ]);
       return;
     }
 
     await loadQueue();
   };
+
+
+  const selectedAdjustmentBucket =
+    adjustmentDialog?.osLedgerId
+      ? ledgerItems.find(
+          (item) =>
+            item.id ===
+            adjustmentDialog.osLedgerId,
+        ) ?? null
+      : null;
+
+  const selectedAdjustmentEmployee =
+    adjustmentDialog?.employeeId
+      ? adjustmentEmployeeMap.get(
+          adjustmentDialog.employeeId,
+        ) ?? null
+      : null;
+
+  const selectedAdjustmentCycles =
+    adjustmentDialog?.employeeId
+      ? cyclesForEmployee(
+          adjustmentDialog.employeeId,
+        )
+      : [];
 
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">
@@ -1028,7 +1431,22 @@ const RosterOperationsPage: React.FC = () => {
                     </CardDescription>
                   </div>
 
-                  <WalletCards className="h-6 w-6 text-blue-600" />
+                  <div className="flex items-center gap-2">
+                    <WalletCards className="h-6 w-6 text-blue-600" />
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={openAddOSDialog}
+                      disabled={
+                        mutationLoading ||
+                        adjustmentEmployees.length === 0
+                      }
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add OS
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
 
@@ -1137,6 +1555,155 @@ const RosterOperationsPage: React.FC = () => {
                             </tr>
                           ),
                         )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>
+                      OS Bucket Detail &amp; Adjustment
+                    </CardTitle>
+
+                    <CardDescription>
+                      Earned From Site Cycle menunjukkan cycle kerja saat OS diperoleh.
+                      Current OS Cycle menunjukkan usia OS saat ini.
+                    </CardDescription>
+                  </div>
+
+                  <Settings2 className="h-6 w-6 text-violet-600" />
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                {ledgerLoading ? (
+                  <div className="flex min-h-40 items-center justify-center text-sm text-gray-500">
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Mengambil detail bucket...
+                  </div>
+                ) : ledgerItems.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-10 text-center text-sm text-gray-500">
+                    Tidak ada active OS bucket.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1180px] border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                          <th className="px-3 py-3">
+                            Employee
+                          </th>
+                          <th className="px-3 py-3">
+                            OS Number / Source
+                          </th>
+                          <th className="px-3 py-3">
+                            Earned From Site Cycle
+                          </th>
+                          <th className="px-3 py-3">
+                            Current OS Cycle
+                          </th>
+                          <th className="px-3 py-3">
+                            Original / Remaining
+                          </th>
+                          <th className="px-3 py-3">
+                            Status
+                          </th>
+                          <th className="px-3 py-3 text-right">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {ledgerItems.map((bucket) => (
+                          <tr
+                            key={bucket.id}
+                            className="border-b align-top last:border-0 hover:bg-gray-50/70"
+                          >
+                            <td className="px-3 py-4">
+                              <p className="font-medium text-gray-900">
+                                {bucket.employee?.employee_name ??
+                                  'Unknown Employee'}
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                {bucket.employee?.employee_code ?? '-'}
+                              </p>
+                            </td>
+
+                            <td className="px-3 py-4">
+                              <p className="font-medium text-gray-900">
+                                {bucket.os_number}
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                {bucket.source_type}
+                              </p>
+                            </td>
+
+                            <td className="px-3 py-4">
+                              {bucket.earned_site_cycle_number !== null ? (
+                                <>
+                                  <p className="font-medium text-gray-900">
+                                    Site Cycle {bucket.earned_site_cycle_number}
+                                  </p>
+
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    {bucket.earned_site_cycle_status ?? '-'}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-sm text-amber-700">
+                                  Belum teridentifikasi
+                                </p>
+                              )}
+                            </td>
+
+                            <td className="px-3 py-4">
+                              <p className="font-medium text-gray-900">
+                                OS Cycle {bucket.cycle_number}
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                Generated {formatDate(bucket.generated_date)}
+                              </p>
+                            </td>
+
+                            <td className="px-3 py-4">
+                              <p className="font-medium text-gray-900">
+                                {bucket.original_days} / {bucket.remaining_days} hari
+                              </p>
+
+                              <p className="mt-1 text-xs text-gray-500">
+                                Used {bucket.used_days} hari
+                              </p>
+                            </td>
+
+                            <td className="px-3 py-4">
+                              <Badge variant="outline">
+                                {bucket.status}
+                              </Badge>
+                            </td>
+
+                            <td className="px-3 py-4 text-right">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  openAdjustOSDialog(bucket)
+                                }
+                              >
+                                Adjust OS
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -1468,6 +2035,439 @@ const RosterOperationsPage: React.FC = () => {
                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   Process FIFO
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(adjustmentDialog)}
+        onOpenChange={(open) => {
+          if (!open && !mutationLoading) {
+            setAdjustmentDialog(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          {adjustmentDialog && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {adjustmentDialog.mode === 'ADD'
+                    ? 'Add Employee OS'
+                    : 'Adjust Employee OS'}
+                </DialogTitle>
+
+                <DialogDescription>
+                  {adjustmentDialog.mode === 'ADD'
+                    ? 'Buat bucket MANUAL_ADJUSTMENT dengan audit trail lengkap.'
+                    : `${selectedAdjustmentBucket?.os_number ?? '-'} · ${
+                        selectedAdjustmentBucket?.employee?.employee_code ?? '-'
+                      } · ${
+                        selectedAdjustmentBucket?.employee?.employee_name ??
+                        'Unknown Employee'
+                      }`}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="os-adjustment-type">
+                    Adjustment Type
+                  </Label>
+
+                  <select
+                    id="os-adjustment-type"
+                    value={adjustmentDialog.adjustmentType}
+                    disabled={adjustmentDialog.mode === 'ADD'}
+                    onChange={(event) =>
+                      setAdjustmentDialog((current) =>
+                        current
+                          ? {
+                              ...current,
+                              adjustmentType:
+                                event.target.value as OSAdjustmentType,
+                            }
+                          : null,
+                      )
+                    }
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {adjustmentDialog.mode === 'ADD' ? (
+                      <option value="ADD_BUCKET">
+                        {OS_ADJUSTMENT_LABELS.ADD_BUCKET}
+                      </option>
+                    ) : (
+                      <>
+                        <option value="SET_REMAINING">
+                          {OS_ADJUSTMENT_LABELS.SET_REMAINING}
+                        </option>
+                        <option value="SET_CURRENT_CYCLE">
+                          {OS_ADJUSTMENT_LABELS.SET_CURRENT_CYCLE}
+                        </option>
+                        <option value="SET_ORIGIN_CYCLE">
+                          {OS_ADJUSTMENT_LABELS.SET_ORIGIN_CYCLE}
+                        </option>
+                        <option value="CANCEL_BUCKET">
+                          {OS_ADJUSTMENT_LABELS.CANCEL_BUCKET}
+                        </option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                {adjustmentDialog.mode === 'ADD' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="os-adjustment-employee">
+                      Employee
+                    </Label>
+
+                    <select
+                      id="os-adjustment-employee"
+                      value={adjustmentDialog.employeeId}
+                      onChange={(event) => {
+                        const employeeId =
+                          event.target.value;
+
+                        const firstCycle =
+                          cyclesForEmployee(
+                            employeeId,
+                          )[0];
+
+                        setAdjustmentDialog(
+                          (current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  employeeId,
+                                  earnedSiteCycleId:
+                                    firstCycle?.id ?? '',
+                                  operationKey:
+                                    createOperationKey(
+                                      employeeId,
+                                    ),
+                                }
+                              : null,
+                        );
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <option value="">
+                        Pilih employee
+                      </option>
+
+                      {adjustmentEmployees.map(
+                        (employee) => (
+                          <option
+                            key={employee.id}
+                            value={employee.id}
+                          >
+                            {employee.employee_code} —{' '}
+                            {employee.employee_name}
+                          </option>
+                        ),
+                      )}
+                    </select>
+
+                    {selectedAdjustmentEmployee && (
+                      <p className="text-xs text-gray-500">
+                        {selectedAdjustmentEmployee.department}
+                        {' · '}
+                        {selectedAdjustmentEmployee.job_title}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {adjustmentDialog.adjustmentType ===
+                  'ADD_BUCKET' && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="os-adjustment-days">
+                        OS Days
+                      </Label>
+
+                      <Input
+                        id="os-adjustment-days"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={adjustmentDialog.days}
+                        onChange={(event) =>
+                          setAdjustmentDialog(
+                            (current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    days:
+                                      event.target.value,
+                                  }
+                                : null,
+                          )
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="os-adjustment-generated-date">
+                        Generated Date
+                      </Label>
+
+                      <Input
+                        id="os-adjustment-generated-date"
+                        type="date"
+                        value={adjustmentDialog.generatedDate}
+                        onChange={(event) =>
+                          setAdjustmentDialog(
+                            (current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    generatedDate:
+                                      event.target.value,
+                                  }
+                                : null,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {adjustmentDialog.adjustmentType ===
+                  'SET_REMAINING' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="os-adjustment-remaining">
+                      New Remaining Days
+                    </Label>
+
+                    <Input
+                      id="os-adjustment-remaining"
+                      type="number"
+                      min={0}
+                      step={1}
+                      max={
+                        selectedAdjustmentBucket?.original_days
+                      }
+                      value={
+                        adjustmentDialog.newRemainingDays
+                      }
+                      onChange={(event) =>
+                        setAdjustmentDialog(
+                          (current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  newRemainingDays:
+                                    event.target.value,
+                                }
+                              : null,
+                        )
+                      }
+                    />
+
+                    <p className="text-xs text-gray-500">
+                      Original Days:{' '}
+                      {selectedAdjustmentBucket?.original_days ??
+                        '-'}
+                    </p>
+                  </div>
+                )}
+
+                {(adjustmentDialog.adjustmentType ===
+                  'ADD_BUCKET' ||
+                  adjustmentDialog.adjustmentType ===
+                    'SET_CURRENT_CYCLE') && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="os-adjustment-current-cycle">
+                      {adjustmentDialog.adjustmentType ===
+                      'ADD_BUCKET'
+                        ? 'Initial Current OS Cycle'
+                        : 'New Current OS Cycle'}
+                    </Label>
+
+                    <select
+                      id="os-adjustment-current-cycle"
+                      value={adjustmentDialog.newCycleNumber}
+                      onChange={(event) =>
+                        setAdjustmentDialog(
+                          (current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  newCycleNumber:
+                                    event.target.value,
+                                }
+                              : null,
+                        )
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      {[0, 1, 2, 3].map((cycle) => (
+                        <option
+                          key={cycle}
+                          value={cycle}
+                        >
+                          OS Cycle {cycle}
+                        </option>
+                      ))}
+
+                      {adjustmentDialog.adjustmentType ===
+                        'SET_CURRENT_CYCLE' && (
+                        <option value={4}>
+                          OS Cycle 4 — Expire Remaining Balance
+                        </option>
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {(adjustmentDialog.adjustmentType ===
+                  'ADD_BUCKET' ||
+                  adjustmentDialog.adjustmentType ===
+                    'SET_ORIGIN_CYCLE') && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="os-adjustment-origin-cycle">
+                      Earned From Site Cycle
+                    </Label>
+
+                    <select
+                      id="os-adjustment-origin-cycle"
+                      value={
+                        adjustmentDialog.earnedSiteCycleId
+                      }
+                      onChange={(event) =>
+                        setAdjustmentDialog(
+                          (current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  earnedSiteCycleId:
+                                    event.target.value,
+                                }
+                              : null,
+                        )
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <option value="">
+                        Pilih site cycle
+                      </option>
+
+                      {selectedAdjustmentCycles.map(
+                        (cycle) => (
+                          <option
+                            key={cycle.id}
+                            value={cycle.id}
+                          >
+                            Site Cycle {cycle.cycle_number}
+                            {' — '}
+                            {cycle.status}
+                            {' — '}
+                            {formatDate(
+                              cycle.actual_site_in ??
+                                cycle.planned_site_in,
+                            )}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {adjustmentDialog.adjustmentType ===
+                  'CANCEL_BUCKET' && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">
+                    Remaining balance bucket akan menjadi 0 dan status
+                    menjadi CANCELLED. Pemakaian OS yang sudah terjadi
+                    tetap tercatat.
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="os-adjustment-reference">
+                    Supporting Reference
+                  </Label>
+
+                  <Input
+                    id="os-adjustment-reference"
+                    value={adjustmentDialog.referenceNumber}
+                    onChange={(event) =>
+                      setAdjustmentDialog(
+                        (current) =>
+                          current
+                            ? {
+                                ...current,
+                                referenceNumber:
+                                  event.target.value,
+                              }
+                            : null,
+                      )
+                    }
+                    placeholder="Contoh: MEMO-HR-2026-001"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="os-adjustment-reason">
+                    Reason / Remarks
+                  </Label>
+
+                  <Textarea
+                    id="os-adjustment-reason"
+                    value={adjustmentDialog.remarks}
+                    onChange={(event) =>
+                      setAdjustmentDialog(
+                        (current) =>
+                          current
+                            ? {
+                                ...current,
+                                remarks:
+                                  event.target.value,
+                              }
+                            : null,
+                      )
+                    }
+                    placeholder="Alasan koreksi, dasar verifikasi, dan PIC yang mengonfirmasi..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                  Ini adalah perubahan production. Sistem menyimpan
+                  before/after value, actor, operation key, supporting
+                  reference, dan remarks pada audit trail.
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setAdjustmentDialog(null)
+                  }
+                  disabled={mutationLoading}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={() =>
+                    void submitOSAdjustment()
+                  }
+                  disabled={mutationLoading}
+                >
+                  {mutationLoading && (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+
+                  {adjustmentDialog.mode === 'ADD'
+                    ? 'Add OS'
+                    : 'Save Adjustment'}
                 </Button>
               </DialogFooter>
             </>
