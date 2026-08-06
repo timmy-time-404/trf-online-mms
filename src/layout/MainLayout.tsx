@@ -11,6 +11,7 @@ import {
   Briefcase,
   CalendarClock,
   CalendarRange,
+  ChartPie,
   CheckCircle,
   CheckSquare,
   Crown,
@@ -72,6 +73,17 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     roles: ALL_ROLES,
+  },
+  {
+    path: '/manpower-dashboard',
+    label: 'Manpower Dashboard',
+    icon: ChartPie,
+    roles: [
+      'HOD',
+      'HR',
+      'PM',
+      'SUPER_ADMIN',
+    ],
   },
   {
     path: '/trf',

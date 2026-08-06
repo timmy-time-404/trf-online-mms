@@ -24,6 +24,7 @@ import MainLayout from '@/layout/MainLayout';
 import LoginPage from '@/features/auth/LoginPage';
 import ChangePasswordPage from '@/features/auth/ChangePasswordPage';
 import DashboardPage from '@/features/dashboard/DashboardPage';
+import ManpowerDashboardPage from '@/features/manpower-dashboard/ManpowerDashboardPage';
 import TRFDetailPage from '@/features/trf/TRFDetailPage';
 import TRFEditPage from '@/features/trf/TRFEditPage';
 import TRFListPage from '@/features/trf/TRFListPage';
@@ -307,6 +308,24 @@ const App: React.FC = () => {
           <Route
             path="/"
             element={<DashboardPage />}
+          />
+
+          {/* MANPOWER DASHBOARD */}
+          <Route
+            path="/manpower-dashboard"
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  'HOD',
+                  'HR',
+                  'PM',
+                  'SUPER_ADMIN',
+                ]}
+                requireDepartment
+              >
+                <ManpowerDashboardPage />
+              </ProtectedRoute>
+            }
           />
 
           {/* TRF ROUTES */}
