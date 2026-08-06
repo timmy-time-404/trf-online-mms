@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
 import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
 import AccommodationSection from './components/AccommodationSection';
@@ -10,6 +17,10 @@ import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
 import { saveHRLumpsum } from '@/store/supabaseStore';
+import {
+  HR_LUMPSUM_OPTIONS,
+  isHRLumpsumAmount,
+} from '@/lib/lumpsumOptions';
 import type { UpdateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
 import { Send, ArrowLeft, AlertTriangle, MessageSquare, CheckCircle2, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
@@ -87,6 +98,15 @@ const TRFEditPage: React.FC = () => {
     }
 
     setTravelArrangements(trf.travelArrangements ?? []);
+
+    if (
+      trf.lumpsumAmount !== undefined &&
+      isHRLumpsumAmount(trf.lumpsumAmount)
+    ) {
+      setLumpsum(trf.lumpsumAmount);
+    }
+
+    setLumpsumNote(trf.lumpsumNote ?? '');
     setIsLoaded(true);
   }, [trf, isLoaded]);
 
@@ -170,6 +190,19 @@ const TRFEditPage: React.FC = () => {
       }
     }
 
+    if (
+      isHREditApprove &&
+      (
+        lumpsum === '' ||
+        !isHRLumpsumAmount(lumpsum)
+      )
+    ) {
+      toast.error(
+        'Pilih nominal lumpsum sebelum menyimpan & approve.',
+      );
+      return false;
+    }
+
     if (isEditApproveMode && !noteToEmployee.trim()) {
       toast.error('Catatan untuk employee wajib diisi sebelum menyimpan & approve.');
       return false;
@@ -190,9 +223,30 @@ const TRFEditPage: React.FC = () => {
         // menyimpan lumpsum dulu sebelum TRF disetujui.
         if (isHREditApprove) {
           try {
-            await saveHRLumpsum(trf.id, Number(lumpsum) || 0, lumpsumNote, currentUser.id);
-          } catch {
-            toast.error('Gagal menyimpan data Lumpsum.');
+            if (
+              lumpsum === '' ||
+              !isHRLumpsumAmount(lumpsum)
+            ) {
+              toast.error(
+                'Pilih nominal lumpsum sebelum menyimpan & approve.',
+              );
+              setIsSubmitting(false);
+              setSubmitDialogOpen(false);
+              return;
+            }
+
+            await saveHRLumpsum(
+              trf.id,
+              lumpsum,
+              lumpsumNote,
+              currentUser.id,
+            );
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : 'Gagal menyimpan data Lumpsum.',
+            );
             setIsSubmitting(false);
             setSubmitDialogOpen(false);
             return;
@@ -318,14 +372,42 @@ const TRFEditPage: React.FC = () => {
             </label>
             <div>
               <label className="text-xs text-gray-500">Nominal Lumpsum (Rp)</label>
-              <input
-                type="number"
-                min={0}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={lumpsum}
-                onChange={(e) => setLumpsum(e.target.value ? Number(e.target.value) : '')}
-                placeholder="0"
-              />
+              <Select
+                value={
+                  lumpsum === ''
+                    ? undefined
+                    : String(lumpsum)
+                }
+                onValueChange={value =>
+                  setLumpsum(Number(value))
+                }
+              >
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue placeholder="Pilih nominal lumpsum" />
+                </SelectTrigger>
+
+                <SelectContent
+                  position="popper"
+                  className="max-h-72"
+                >
+                  {HR_LUMPSUM_OPTIONS.map(
+                    option => (
+                      <SelectItem
+                        key={option.value}
+                        value={String(
+                          option.value,
+                        )}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Nominal wajib dipilih dari daftar yang telah ditetapkan.
+              </p>
             </div>
             <div>
               <label className="text-xs text-gray-500">Catatan Lumpsum (opsional)</label>

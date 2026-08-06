@@ -1,5 +1,6 @@
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
 import { notifyEmployeeStatusChangeWA } from '@/lib/notifyStatusChangeWA';
+import { isHRLumpsumAmount } from '@/lib/lumpsumOptions';
 
 import type {
   User,
@@ -453,7 +454,7 @@ export const gaProcessTRF = async (
   id: string,
   gaId: string,
   gaName: string,
-  voucherDetails: GAProcess['voucherDetails'], 
+  voucherDetails: GAProcess['voucherDetails'],
   remarks: string
 ): Promise<boolean> => {
 
@@ -462,7 +463,7 @@ export const gaProcessTRF = async (
   try {
     const { data: trf } = await supabase
       .from("trfs")
-      .select("*, ga_documents") 
+      .select("*, ga_documents")
       .eq("id", id)
       .single();
 
@@ -482,7 +483,7 @@ export const gaProcessTRF = async (
     const { error: updateError } = await supabase.from("trfs")
       .update({
         status: "GA_PROCESSED",
-        ga_process: gaProcessData, 
+        ga_process: gaProcessData,
         updated_at: new Date().toISOString()
       })
       .eq("id", id);
@@ -517,11 +518,18 @@ export const saveHRLumpsum = async (
 ) => {
   if (!isSupabaseEnabled()) return;
 
+  if (!isHRLumpsumAmount(amount)) {
+    throw new Error(
+      'Nominal lumpsum tidak tersedia pada daftar resmi.',
+    );
+  }
+
   const { error } = await supabase
     .from("trfs")
     .update({
       lumpsum_amount: amount,
-      lumpsum_note: note,
+      lumpsum_currency: "IDR",
+      lumpsum_note: note.trim(),
       lumpsum_input_by: hrUserId,
       lumpsum_input_at: new Date().toISOString()
     })
@@ -567,7 +575,7 @@ export const addStatusHistory = async (
 ===================================================== */
 
 export const getEmployees = async (): Promise<Employee[]> => {
-  
+
   if (!isSupabaseEnabled()) return [];
 
   const { data } = await supabase.from("employees").select("*");
@@ -580,7 +588,7 @@ export const getTRFs = async (): Promise<TRF[]> => {
 
   const { data } = await supabase
     .from("trfs")
-    .select("*, ga_documents") 
+    .select("*, ga_documents")
     .order("created_at", { ascending: false });
 
   const employees = await getEmployees();
@@ -657,7 +665,7 @@ const transformTRFFromDB = (dbTRF: DBTRFRow, employees: Employee[]): TRF => ({
   adminDeptVerify: dbTRF.admin_dept_verify,
   pmApproval: dbTRF.pm_approval,
   gaProcess: dbTRF.ga_process,
-  
+
   submittedAt: dbTRF.submitted_at,
   createdAt: dbTRF.created_at,
   updatedAt: dbTRF.updated_at

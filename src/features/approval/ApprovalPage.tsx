@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input'; // ✅ TAMBAHKAN IMPORT INPUT
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -16,7 +22,11 @@ import {
 
 import { useTRFStore, useAuthStore } from '@/store';
 // ✅ IMPORT FUNGSI LUMPSUM DARI SUPABASE STORE
-import { saveHRLumpsum } from '@/store/supabaseStore'; 
+import { saveHRLumpsum } from '@/store/supabaseStore';
+import {
+  HR_LUMPSUM_OPTIONS,
+  isHRLumpsumAmount,
+} from '@/lib/lumpsumOptions';
 import type { TRF, UserRole } from '@/types';
 
 import {
@@ -39,13 +49,13 @@ const ApprovalPage: React.FC = () => {
   const {
     getTRFsForApproval,
     fetchTRFs,
-    handleApproval 
+    handleApproval
   } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [remarks, setRemarks] = useState('');
   const [action, setAction] = useState<'APPROVE' | 'REVISE' | null>(null);
-  
+
   // ✅ STATE UNTUK LUMPSUM
   const [lumpsum, setLumpsum] = useState<number | ''>('');
   const [lumpsumNote, setLumpsumNote] = useState("");
@@ -85,30 +95,44 @@ const ApprovalPage: React.FC = () => {
       return;
     }
 
-    // ✅ JIKA ACTION APPROVE DAN ROLE ADALAH HR -> SIMPAN LUMPSUM DULU
+    // HR wajib memilih nominal lumpsum dari daftar resmi.
     if (action === 'APPROVE' && userRole === 'HR') {
+      if (
+        lumpsum === '' ||
+        !isHRLumpsumAmount(lumpsum)
+      ) {
+        toast.error(
+          'Pilih nominal lumpsum sebelum melakukan approval.',
+        );
+        return;
+      }
+
       try {
         await saveHRLumpsum(
           selectedTRF.id,
-          Number(lumpsum) || 0,
+          lumpsum,
           lumpsumNote,
-          currentUser.id
+          currentUser.id,
         );
-      } catch{
-        toast.error('Gagal menyimpan data Lumpsum.');
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : 'Gagal menyimpan data Lumpsum.',
+        );
         return;
       }
     }
 
     // Panggil fungsi workflow utama
     const success = await handleApproval(selectedTRF.id, currentUser, action, remarks);
-    
+
     if (success) {
        toast.success(`TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
     } else {
        toast.error(`Gagal memproses TRF ${selectedTRF.trfNumber}.`);
     }
-    
+
     setSelectedTRF(null);
     setAction(null);
     setRemarks('');
@@ -189,7 +213,7 @@ const ApprovalPage: React.FC = () => {
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={async () => {
                     if (!currentUser) return;
-                    
+
                     // ✅ Jika role HR, buka Modal Lumpsum. Jika bukan, langsung approve.
                     if (userRole === 'HR') {
                       openDialog(trf, 'APPROVE');
@@ -214,7 +238,7 @@ const ApprovalPage: React.FC = () => {
                   className="text-red-600 border-red-300 hover:bg-red-50"
                   onClick={async () => {
                     if (!currentUser) return;
-                    
+
                     const success = await handleApproval(trf.id, currentUser, 'REJECT');
                     if (success) {
                          toast.error(`TRF ${trf.trfNumber} Rejected!`);
@@ -257,7 +281,7 @@ const ApprovalPage: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
-            
+
             {/* JIKA ACTION === REVISE */}
             {action === 'REVISE' && (
               <div className="space-y-2">
@@ -279,12 +303,42 @@ const ApprovalPage: React.FC = () => {
                     <Banknote className="w-4 h-4 text-green-600" />
                     Nominal Lumpsum (Rp)
                   </label>
-                  <Input
-                    type="number"
-                    placeholder="Masukkan nominal (contoh: 500000)"
-                    value={lumpsum}
-                    onChange={(e) => setLumpsum(e.target.value ? Number(e.target.value) : '')}
-                  />
+                  <Select
+                    value={
+                      lumpsum === ''
+                        ? undefined
+                        : String(lumpsum)
+                    }
+                    onValueChange={value =>
+                      setLumpsum(Number(value))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Pilih nominal lumpsum" />
+                    </SelectTrigger>
+
+                    <SelectContent
+                      position="popper"
+                      className="max-h-72"
+                    >
+                      {HR_LUMPSUM_OPTIONS.map(
+                        option => (
+                          <SelectItem
+                            key={option.value}
+                            value={String(
+                              option.value,
+                            )}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+
+                  <p className="text-xs text-gray-500">
+                    Nominal wajib dipilih dari daftar yang telah ditetapkan.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Catatan HR (Opsional)</label>
@@ -307,7 +361,7 @@ const ApprovalPage: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={executeAction}
               className={action === 'APPROVE' ? "bg-green-600 hover:bg-green-700" : ""}
             >
