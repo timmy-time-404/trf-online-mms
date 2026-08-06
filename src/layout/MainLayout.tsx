@@ -108,7 +108,12 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/roster-operations',
     label: 'Roster & OS',
     icon: CalendarRange,
-    roles: ['GA', 'HR', 'SUPER_ADMIN'],
+    roles: [
+      'GA',
+      'HOD',
+      'HR',
+      'SUPER_ADMIN',
+    ],
     badge: 'roster',
   },
   {
@@ -348,9 +353,12 @@ const MainLayout: React.FC = () => {
     React.useCallback(async () => {
       if (
         !currentUser ||
-        !['GA', 'HR', 'SUPER_ADMIN'].includes(
-          currentUser.role,
-        )
+        ![
+          'GA',
+          'HOD',
+          'HR',
+          'SUPER_ADMIN',
+        ].includes(currentUser.role)
       ) {
         setRosterQueueCount(0);
         return;
@@ -574,6 +582,7 @@ const MainLayout: React.FC = () => {
 
       if (
         role === 'GA' ||
+        role === 'HOD' ||
         role === 'HR' ||
         role === 'SUPER_ADMIN'
       ) {

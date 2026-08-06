@@ -157,8 +157,8 @@ const ACTION_ROLES: Record<
   UserRole[]
 > = {
   my_summary: ["EMPLOYEE"],
-  queue: ["GA", "HR", "SUPER_ADMIN"],
-  os_ledger: ["HR", "SUPER_ADMIN"],
+  queue: ["GA", "HOD", "HR", "SUPER_ADMIN"],
+  os_ledger: ["HOD", "HR", "SUPER_ADMIN"],
   os_adjustment_options: ["HR", "SUPER_ADMIN"],
   confirm_site_out: ["GA", "HR", "SUPER_ADMIN"],
   confirm_leave_start: ["GA", "HR", "SUPER_ADMIN"],
@@ -169,6 +169,14 @@ const ACTION_ROLES: Record<
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeDepartment(
+  value: string | null | undefined,
+): string {
+  return value
+    ?.trim()
+    .toLocaleLowerCase("id-ID") ?? "";
 }
 
 function getAction(value: unknown): RosterAction {
@@ -463,6 +471,8 @@ async function loadQueue(
 
 async function loadOSLedger(
   admin: SupabaseClient,
+  actorRole: string,
+  actorDepartment: string | null,
 ): Promise<OSLedgerWithRelations[]> {
   const { data: ledgerData, error: ledgerError } =
     await admin
@@ -569,7 +579,36 @@ async function loadOSLedger(
     ]),
   );
 
-  return ledgerRows.map((row) => {
+  const normalizedActorDepartment =
+    normalizeDepartment(actorDepartment);
+
+  if (
+    actorRole === "HOD" &&
+    !normalizedActorDepartment
+  ) {
+    throw new RosterWorkflowError(
+      "Department HOD belum dikonfigurasi.",
+      403,
+      "HOD_DEPARTMENT_REQUIRED",
+    );
+  }
+
+  const scopedLedgerRows =
+    actorRole === "HOD"
+      ? ledgerRows.filter((row) => {
+          const employee =
+            employeeMap.get(row.employee_id);
+
+          return (
+            normalizeDepartment(
+              employee?.department,
+            ) ===
+            normalizedActorDepartment
+          );
+        })
+      : ledgerRows;
+
+  return scopedLedgerRows.map((row) => {
     const originCycle =
       row.earned_site_cycle_id
         ? cycleMap.get(
@@ -805,7 +844,11 @@ Deno.serve(
       }
 
       if (action === "os_ledger") {
-        const items = await loadOSLedger(admin);
+        const items = await loadOSLedger(
+          admin,
+          context.user.role,
+          context.user.department,
+        );
 
         const totalRemainingDays = items.reduce(
           (total, item) =>

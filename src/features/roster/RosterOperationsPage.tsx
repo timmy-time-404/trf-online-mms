@@ -272,9 +272,22 @@ const RosterOperationsPage: React.FC = () => {
     (state) => state.currentUser,
   );
 
+  const canViewOS =
+    currentUser?.role === 'HOD' ||
+    currentUser?.role === 'HR' ||
+    currentUser?.role === 'SUPER_ADMIN';
+
   const canManageOS =
     currentUser?.role === 'HR' ||
     currentUser?.role === 'SUPER_ADMIN';
+
+  const canProcessMovement =
+    currentUser?.role === 'GA' ||
+    currentUser?.role === 'HR' ||
+    currentUser?.role === 'SUPER_ADMIN';
+
+  const isHODReadOnly =
+    currentUser?.role === 'HOD';
 
   const [activeTab, setActiveTab] =
     React.useState<'queue' | 'os'>('queue');
@@ -381,7 +394,7 @@ const RosterOperationsPage: React.FC = () => {
         silent?: boolean;
       } = {},
     ) => {
-      if (!canManageOS) {
+      if (!canViewOS) {
         setLedgerItems([]);
         return;
       }
@@ -404,7 +417,7 @@ const RosterOperationsPage: React.FC = () => {
       } finally {
         setLedgerLoading(false);
       }
-    }, [canManageOS]);
+    }, [canViewOS]);
 
   const loadAdjustmentOptions =
     React.useCallback(
@@ -448,14 +461,18 @@ const RosterOperationsPage: React.FC = () => {
   }, [loadQueue]);
 
   React.useEffect(() => {
-    if (canManageOS) {
+    if (canViewOS) {
       void loadLedger({ silent: true });
+    }
+
+    if (canManageOS) {
       void loadAdjustmentOptions({
         silent: true,
       });
     }
   }, [
     canManageOS,
+    canViewOS,
     loadAdjustmentOptions,
     loadLedger,
   ]);
@@ -1023,11 +1040,15 @@ const RosterOperationsPage: React.FC = () => {
   };
 
   const refreshActiveTab = async () => {
-    if (activeTab === 'os' && canManageOS) {
-      await Promise.all([
-        loadLedger(),
-        loadAdjustmentOptions(),
-      ]);
+    if (activeTab === 'os' && canViewOS) {
+      if (canManageOS) {
+        await Promise.all([
+          loadLedger(),
+          loadAdjustmentOptions(),
+        ]);
+      } else {
+        await loadLedger();
+      }
       return;
     }
 
@@ -1100,9 +1121,9 @@ const RosterOperationsPage: React.FC = () => {
           </h1>
 
           <p className="mt-1 max-w-3xl text-sm text-gray-500">
-            Attention Queue hanya memberi peringatan.
-            Perubahan cycle dan OS baru terjadi setelah
-            konfirmasi aktual disimpan melalui RPC production.
+            {isHODReadOnly
+              ? 'View read-only untuk Attention Queue dan saldo OS employee pada department Anda.'
+              : 'Attention Queue hanya memberi peringatan. Perubahan cycle dan OS baru terjadi setelah konfirmasi aktual disimpan melalui RPC production.'}
           </p>
         </div>
 
@@ -1138,7 +1159,7 @@ const RosterOperationsPage: React.FC = () => {
             Attention Queue
           </TabsTrigger>
 
-          {canManageOS && (
+          {canViewOS && (
             <TabsTrigger value="os">
               OS Ledger
             </TabsTrigger>
@@ -1290,7 +1311,9 @@ const RosterOperationsPage: React.FC = () => {
                           Exposure
                         </th>
                         <th className="px-3 py-3 text-right">
-                          Process
+                          {canProcessMovement
+                            ? 'Process'
+                            : 'Access'}
                         </th>
                       </tr>
                     </thead>
@@ -1380,21 +1403,27 @@ const RosterOperationsPage: React.FC = () => {
                           </td>
 
                           <td className="px-3 py-4 text-right">
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() =>
-                                openMovementDialog(
-                                  item,
-                                )
-                              }
-                            >
-                              {
-                                ACTION_SHORT_LABELS[
-                                  item.action_code
-                                ]
-                              }
-                            </Button>
+                            {canProcessMovement ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() =>
+                                  openMovementDialog(
+                                    item,
+                                  )
+                                }
+                              >
+                                {
+                                  ACTION_SHORT_LABELS[
+                                    item.action_code
+                                  ]
+                                }
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary">
+                                Read only
+                              </Badge>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1406,7 +1435,7 @@ const RosterOperationsPage: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {canManageOS && (
+        {canViewOS && (
           <TabsContent
             value="os"
             className="mt-6 space-y-6"
@@ -1463,18 +1492,20 @@ const RosterOperationsPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <WalletCards className="h-6 w-6 text-blue-600" />
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={openAddOSDialog}
-                      disabled={
-                        mutationLoading ||
-                        adjustmentEmployees.length === 0
-                      }
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add OS
-                    </Button>
+                    {canManageOS && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={openAddOSDialog}
+                        disabled={
+                          mutationLoading ||
+                          adjustmentEmployees.length === 0
+                        }
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add OS
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -1509,9 +1540,11 @@ const RosterOperationsPage: React.FC = () => {
                           <th className="px-3 py-3">
                             Available
                           </th>
-                          <th className="px-3 py-3 text-right">
-                            Action
-                          </th>
+                          {canManageOS && (
+                            <th className="px-3 py-3 text-right">
+                              Action
+                            </th>
+                          )}
                         </tr>
                       </thead>
 
@@ -1567,20 +1600,22 @@ const RosterOperationsPage: React.FC = () => {
                                 </span>
                               </td>
 
-                              <td className="px-3 py-4 text-right">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    openConsumeDialog(
-                                      employee,
-                                    )
-                                  }
-                                >
-                                  Use OS
-                                </Button>
-                              </td>
+                              {canManageOS && (
+                                <td className="px-3 py-4 text-right">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      openConsumeDialog(
+                                        employee,
+                                      )
+                                    }
+                                  >
+                                    Use OS
+                                  </Button>
+                                </td>
+                              )}
                             </tr>
                           ),
                         )}
@@ -1642,9 +1677,11 @@ const RosterOperationsPage: React.FC = () => {
                           <th className="px-3 py-3">
                             Status
                           </th>
-                          <th className="px-3 py-3 text-right">
-                            Action
-                          </th>
+                          {canManageOS && (
+                            <th className="px-3 py-3 text-right">
+                              Action
+                            </th>
+                          )}
                         </tr>
                       </thead>
 
@@ -1719,18 +1756,20 @@ const RosterOperationsPage: React.FC = () => {
                               </Badge>
                             </td>
 
-                            <td className="px-3 py-4 text-right">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  openAdjustOSDialog(bucket)
-                                }
-                              >
-                                Adjust OS
-                              </Button>
-                            </td>
+                            {canManageOS && (
+                              <td className="px-3 py-4 text-right">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    openAdjustOSDialog(bucket)
+                                  }
+                                >
+                                  Adjust OS
+                                </Button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

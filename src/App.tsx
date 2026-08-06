@@ -431,9 +431,11 @@ const App: React.FC = () => {
               <ProtectedRoute
                 allowedRoles={[
                   'GA',
+                  'HOD',
                   'HR',
                   'SUPER_ADMIN',
                 ]}
+                requireDepartment
               >
                 <RosterOperationsPage />
               </ProtectedRoute>

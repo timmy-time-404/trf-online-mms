@@ -175,7 +175,7 @@ const EntryCard: React.FC<{
 
       {/* Remarks */}
       <div className="space-y-1.5">
-        <Label>Remarks / Catatan</Label>
+        <Label>Remarks / Catatan *</Label>
         <Textarea
           placeholder="Tambahkan catatan tambahan jika diperlukan..."
           value={entry.purposeRemarks ?? ''}

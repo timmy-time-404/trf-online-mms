@@ -188,6 +188,10 @@ const TRFEditPage: React.FC = () => {
         toast.error(`Travel Purpose #${i + 1}: Harap isi tanggal mulai dan selesai.`);
         return false;
       }
+      if (!p.purposeRemarks?.trim()) {
+        toast.error(`Travel Purpose #${i + 1}: Remarks / Catatan wajib diisi.`);
+        return false;
+      }
     }
 
     if (
