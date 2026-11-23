@@ -7,3 +7,6 @@
 dist/
 node_modules
 .vitest/
+
+# Internal notes (audit, security findings) — never pushed
+docs/internal/
