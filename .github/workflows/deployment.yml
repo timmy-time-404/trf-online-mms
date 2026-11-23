@@ -1,0 +1,65 @@
+name: Deployment foundation
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ci-${{ github.sha }}
+      COMPOSE_FILE: deploy/compose.yaml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create temporary database secret
+        run: sh deploy/init-secrets.sh
+      - name: Validate configuration
+        run: |
+          docker compose config --quiet
+          APP_DOMAIN=example.org docker compose -f deploy/compose.yaml -f deploy/compose.domain.yaml config --quiet
+      - name: Build and start private foundation
+        run: docker compose up --build --detach --wait --wait-timeout 120
+      - name: Migrate, verify schema, and seed disposable test data
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm db-tools
+          docker compose run --rm db-tools
+          docker compose exec -T db psql -X -U trf_owner -d trf -v ON_ERROR_STOP=1 < deploy/verify-schema.sql
+          SEED_CONFIRM=trf-development-dummy-only docker compose run --rm db-tools node dist/db/seed.js
+          docker compose exec -T db psql -X -U trf_owner -d trf -v ON_ERROR_STOP=1 < db/tests/seed-contract.sql
+      - name: Connect restricted API runtime and verify seven-role authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm db-tools node dist/db/provision-runtime.js
+          APP_DOMAIN=meong-mms.org docker compose -f deploy/compose.yaml -f deploy/compose.auth.yaml up -d --wait --wait-timeout 60
+          docker compose run --rm -e AUTH_TEST_URL=http://api:3000/auth db-tools node dist/auth-smoke.js
+          if SEED_CONFIRM=trf-development-dummy-only docker compose run --rm db-tools node dist/db/seed.js; then
+            echo 'Seed incorrectly accepted a populated database.' >&2
+            exit 1
+          fi
+          docker compose exec -T db psql -X -U trf_owner -d trf -v ON_ERROR_STOP=1 < db/tests/seed-contract.sql
+      - name: Verify gateway and database
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent http://127.0.0.1:8080/api/health | python3 -c 'import json,sys; assert json.load(sys.stdin) == {"status": "ok"}'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/)" = 503
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/api/missing)" = 404
+          test "$(docker compose exec -T db sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_password)" psql -h 127.0.0.1 -U trf_owner -d trf -Atc "SELECT 1"')" = 1
+          docker compose stop api
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$(docker compose ps --all --quiet api)")" = 0
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --tail 100
+      - name: Remove CI containers and disposable volumes
+        if: always()
+        run: docker compose down --volumes

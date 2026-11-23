@@ -1,0 +1,135 @@
+name: trf-dev
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:-postgres:17-bookworm@sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trf
+      POSTGRES_USER: trf_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets:
+      - postgres_password
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks: [database]
+    shm_size: 128mb
+    mem_limit: 768m
+    cpus: 1
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U trf_owner -d trf"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+
+  api:
+    image: trf-api:${RELEASE_TAG:?Set RELEASE_TAG to the reviewed release identifier}
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:size=32m,noexec,nosuid"]
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    volumes:
+      - documents:/data/documents
+    networks: [application]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 15s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health', {signal: AbortSignal.timeout(3000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *logging
+
+  gateway:
+    image: ${CADDY_IMAGE:-caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0}
+    user: "1000:1000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:size=32m,noexec,nosuid"]
+    environment:
+      XDG_CONFIG_HOME: /tmp/config
+      XDG_DATA_HOME: /tmp/data
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [application]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/api/health]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 100
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+  db-tools:
+    profiles: [tools]
+    image: trf-api:${RELEASE_TAG:?Set RELEASE_TAG to the reviewed release identifier}
+    # Administrative one-shot task needs the host-owned bootstrap secret.
+    user: "0:0"
+    command: [node, dist/db/migrate.js]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,noexec,nosuid"]
+    environment:
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-trf}
+      DB_USER: trf_owner
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
+      DB_MIGRATIONS_DIR: /app/db/migrations
+      SEED_CONFIRM: ${SEED_CONFIRM:-disabled}
+      SEED_CREDENTIALS_FILE: ${SEED_CREDENTIALS_FILE:-/run/seed/dummy-accounts.json}
+    secrets: [postgres_password]
+    volumes:
+      - ./secrets:/run/seed
+    networks: [database]
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 100
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+
+volumes:
+  database:
+  documents:
+
+networks:
+  database:
+    internal: true
+  application:

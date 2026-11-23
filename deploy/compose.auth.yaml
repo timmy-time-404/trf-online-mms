@@ -1,0 +1,17 @@
+services:
+  api:
+    environment:
+      DB_HOST: db
+      DB_NAME: trf
+      DB_USER: trf_api
+      DB_PASSWORD_FILE: /run/secrets/runtime_password
+      APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN}
+    secrets: [runtime_password]
+    networks: [database, application]
+    depends_on:
+      db:
+        condition: service_healthy
+
+secrets:
+  runtime_password:
+    file: ./secrets/runtime_password

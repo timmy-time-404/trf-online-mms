@@ -10,3 +10,6 @@ node_modules
 
 # Internal notes (audit, security findings) — never pushed
 docs/internal/
+
+# Deployment credentials stay on the host.
+deploy/secrets/

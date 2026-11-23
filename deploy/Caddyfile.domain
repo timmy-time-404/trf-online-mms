@@ -1,0 +1,14 @@
+{
+    admin off
+    persist_config off
+}
+
+{$APP_DOMAIN} {
+    header -Server
+    reverse_proxy gateway:8080
+}
+
+# Container-only liveness; public certificate validity is checked separately.
+:8081 {
+    respond /health "ok" 200
+}

@@ -1,0 +1,20 @@
+{
+    admin off
+    auto_https off
+    persist_config off
+}
+
+:8080 {
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Cache-Control no-store
+        -Server
+    }
+    handle_path /api/* {
+        reverse_proxy api:3000
+    }
+    handle {
+        respond "TRF sedang disiapkan untuk pengujian. Fitur aplikasi belum tersedia." 503
+    }
+}

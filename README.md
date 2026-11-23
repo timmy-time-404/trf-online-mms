@@ -40,3 +40,4 @@ pnpm check   # lint + typecheck + test + build untuk semua paket
 | [docs/spec/](docs/spec/README.md) | Spesifikasi bisnis yang diekstrak dari sistem lama |
 | [docs/adr/](docs/adr/README.md) | Keputusan arsitektur dan alasannya |
 | [docs/github-setup.md](docs/github-setup.md) | Proteksi branch dan pengaturan repo |
+| [docs/deployment.md](docs/deployment.md) | Fondasi deployment privat dan batas kesiapan migrasi |
