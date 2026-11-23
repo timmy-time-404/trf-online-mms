@@ -16,11 +16,12 @@ export const requireSession = (db: ReturnType<typeof openDatabase>) => createMid
   const digest = createHash('sha256').update(token).digest('hex');
   const [row] = await db`update public.app_sessions s set last_used_at=now(),
     expires_at=least(now()+interval '30 minutes', s.created_at+interval '12 hours')
-    from public.users u left join public.employees e on e.user_id=u.id
+    from public.users u left join public.employees e on e.id=u.employee_id
+      left join public.employees linked on linked.user_id=u.id
     where s.user_id=u.id and s.token_hash=${digest} and s.revoked_at is null
       and s.expires_at>now() and s.created_at>now()-interval '12 hours' and u.is_active=true
-    returning u.id,u.role,u.department,coalesce(u.employee_id,e.id) as employee_id,
-      u.username,coalesce(e.employee_name,u.username) as display_name,s.expires_at`;
+    returning u.id,u.role,u.department,coalesce(u.employee_id,linked.id) as employee_id,
+      u.username,coalesce(e.employee_name,linked.employee_name,u.username) as display_name,s.expires_at`;
   const role = userRoleSchema.safeParse(row?.role);
   if (!row || !role.success) {
     deleteCookie(c, '__Host-trf-session', { path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });

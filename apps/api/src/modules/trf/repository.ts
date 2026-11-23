@@ -32,7 +32,7 @@ export const findEmployee = async (sql: Connection, id: string) => {
 export const formEmployees = (sql: Connection, actor: Actor) => sql`
   select * from public.employees where is_active=true
     and (${actor.role === 'SUPER_ADMIN'} or id=${actor.employeeId}) order by employee_name`;
-const fields = (sql: Connection, input: CreateTRF) => ({
+export const fields = (sql: Connection, input: CreateTRF) => ({
   travel_purpose: input.travelPurpose, start_date: input.startDate, end_date: input.endDate,
   purpose_remarks: input.purposeRemarks ?? null,
   purpose_entries: sql.json(input.purposeEntries ?? []),

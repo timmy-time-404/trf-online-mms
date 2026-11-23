@@ -4,6 +4,7 @@
   "entries": [
     { "idx": 0, "version": "7", "when": 1795392000000, "tag": "0000_legacy_baseline", "breakpoints": false },
     { "idx": 1, "version": "7", "when": 1795392000001, "tag": "0001_auth_runtime", "breakpoints": false },
-    { "idx": 2, "version": "7", "when": 1795392000002, "tag": "0002_trf_runtime", "breakpoints": false }
+    { "idx": 2, "version": "7", "when": 1795392000002, "tag": "0002_trf_runtime", "breakpoints": false },
+    { "idx": 3, "version": "7", "when": 1795392000003, "tag": "0003_trf_workflow", "breakpoints": false }
   ]
 }

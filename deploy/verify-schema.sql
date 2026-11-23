@@ -1,4 +1,4 @@
--- Run only against a fresh database restored from the reviewed baseline.
+-- Run against a disposable database after all reviewed migrations.
 -- Temporary permission probes are rolled back together with the validation role.
 \set ON_ERROR_STOP on
 BEGIN;
@@ -7,15 +7,15 @@ DO $$
 BEGIN
   ASSERT current_setting('server_version_num')::int BETWEEN 170000 AND 179999,
     'Expected PostgreSQL 17';
-  ASSERT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') = 20,
+  ASSERT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') = 21,
     'Unexpected table count';
   ASSERT (SELECT count(*) FROM pg_views WHERE schemaname = 'public') = 1,
     'Unexpected view count';
   ASSERT (SELECT count(*) FROM pg_sequences WHERE schemaname = 'public') = 2,
     'Unexpected sequence count';
-  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 93,
+  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 95,
     'Unexpected index count';
-  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 158,
+  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 162,
     'Unexpected constraint count';
   ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 45,
     'Unexpected routine count';
