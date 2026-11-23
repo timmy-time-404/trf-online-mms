@@ -19,32 +19,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Target, Calendar, Plus, Trash2 } from 'lucide-react';
 import type { TravelPurposeEntry } from '@/types';
 import { TRAVEL_PURPOSE_OPTIONS } from '@/constants/travelPurposeOptions';
+import { createEmptyPurposeEntry, parsePurposes } from './travelPurposeEntries';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
-const genId = () => `purpose-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-/** Parse travelPurpose: bisa string (lama) atau JSON array (baru) */
-export const parsePurposes = (raw: string | string[] | undefined): string[] => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-    return [raw]; // plain string lama (e.g. "TRAINING")
-  } catch {
-    return [raw]; // plain string lama
-  }
-};
-
-export const createEmptyPurposeEntry = (): TravelPurposeEntry => ({
-  id            : genId(),
-  travelPurpose : '[]',   // JSON array kosong
-  startDate     : '',
-  endDate       : '',
-  purposeRemarks: '',
-});
 
 // ─────────────────────────────────────────────────────────────
 // Props

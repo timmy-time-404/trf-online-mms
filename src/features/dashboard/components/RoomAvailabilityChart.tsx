@@ -3,8 +3,34 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { useDashboardStore } from '@/store';
 import { Hotel } from 'lucide-react';
+import type { TooltipProps } from 'recharts';
 
-// Colors for the chart
+interface RoomSlice {
+  name: string;
+  value: number;
+  color: string;
+}
+
+type RoomTooltipProps = TooltipProps<number, string> & { total: number };
+
+const RoomTooltip: React.FC<RoomTooltipProps> = ({ active, payload, total }) => {
+  if (!active || !payload?.length) return null;
+
+  const item = payload[0];
+  const slice = item.payload as RoomSlice;
+  const value = item.value ?? 0;
+  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+
+  return (
+    <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+      <p className="font-medium text-gray-900">{slice.name}</p>
+      <p className="text-2xl font-bold" style={{ color: slice.color }}>
+        {value}
+      </p>
+      <p className="text-sm text-gray-500">{percentage}% of total</p>
+    </div>
+  );
+};
 
 const RoomAvailabilityChart: React.FC = () => {
   const { roomAvailability } = useDashboardStore();
@@ -20,27 +46,11 @@ const RoomAvailabilityChart: React.FC = () => {
     { available: 0, occupied: 0, total: 0 }
   );
 
-  const data = [
+  const data: RoomSlice[] = [
     { name: 'Available', value: aggregated.available, color: '#10B981' },
     { name: 'Occupied', value: aggregated.occupied, color: '#EF4444' }
   ];
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const item = payload[0];
-      const percentage = ((item.value / aggregated.total) * 100).toFixed(1);
-      return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-medium text-gray-900">{item.name}</p>
-          <p className="text-2xl font-bold" style={{ color: item.payload.color }}>
-            {item.value}
-          </p>
-          <p className="text-sm text-gray-500">{percentage}% of total</p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <Card className="border shadow-sm">
@@ -72,7 +82,7 @@ const RoomAvailabilityChart: React.FC = () => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<RoomTooltip total={aggregated.total} />} />
               <Legend 
                 verticalAlign="bottom" 
                 height={36}

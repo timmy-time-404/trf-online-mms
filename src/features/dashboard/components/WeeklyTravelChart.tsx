@@ -3,30 +3,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useDashboardStore } from '@/store';
 import { TrendingUp } from 'lucide-react';
+import type { TooltipProps } from 'recharts';
+
+const WeeklyTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+      <p className="font-medium text-gray-900 mb-2">{label}</p>
+      {payload.map((item) => (
+        <div key={item.name} className="flex items-center gap-2">
+          <div
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: item.color }}
+          />
+          <span className="text-sm text-gray-600">{item.name}:</span>
+          <span className="text-sm font-semibold text-gray-900">{item.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const WeeklyTravelChart: React.FC = () => {
   const { weeklyTravel } = useDashboardStore();
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-medium text-gray-900 mb-2">{label}</p>
-          {payload.map((item: any, index: number) => (
-            <div key={index} className="flex items-center gap-2">
-              <div 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="text-sm text-gray-600">{item.name}:</span>
-              <span className="text-sm font-semibold text-gray-900">{item.value}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   // Calculate totals
   const totalTravelIn = weeklyTravel.reduce((sum, day) => sum + day.travelIn, 0);
@@ -63,7 +64,7 @@ const WeeklyTravelChart: React.FC = () => {
                 tickLine={false}
                 tick={{ fill: '#6B7280', fontSize: 12 }}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<WeeklyTooltip />} />
               <Legend 
                 verticalAlign="top" 
                 height={36}

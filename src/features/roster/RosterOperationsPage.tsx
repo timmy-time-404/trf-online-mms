@@ -358,13 +358,15 @@ const RosterOperationsPage: React.FC = () => {
   const [mutationLoading, setMutationLoading] =
     React.useState(false);
 
+  const currentUserId = currentUser?.id;
+
   const loadQueue = React.useCallback(
     async (
       options: {
         silent?: boolean;
       } = {},
     ) => {
-      if (!currentUser) return;
+      if (!currentUserId) return;
 
       setQueueLoading(true);
 
@@ -386,7 +388,7 @@ const RosterOperationsPage: React.FC = () => {
       } finally {
         setQueueLoading(false);
       }
-    }, [asOfDate, currentUser?.id]);
+    }, [asOfDate, currentUserId]);
 
   const loadLedger = React.useCallback(
     async (

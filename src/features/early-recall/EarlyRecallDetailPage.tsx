@@ -64,9 +64,8 @@ import type {
   UserRole,
 } from '@/types';
 
-import EarlyRecallStatusBadge, {
-  getEarlyRecallStatusDescription,
-} from './components/EarlyRecallStatusBadge';
+import EarlyRecallStatusBadge from './components/EarlyRecallStatusBadge';
+import { getEarlyRecallStatusDescription } from './components/earlyRecallStatus';
 
 type DialogAction =
   | 'SUBMIT'

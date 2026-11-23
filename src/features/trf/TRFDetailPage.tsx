@@ -60,8 +60,7 @@ const TRFDetailPage: React.FC = () => {
       setIsDeleting(false);
     }
   };
-  
-  const gaFiles = (trf as any).ga_files;
+
 
   return (
     <div className="space-y-6">
@@ -98,29 +97,6 @@ const TRFDetailPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {/* UI Dokumen GA */}
-      {gaFiles && gaFiles.length > 0 && (
-        <div className="mt-6 border rounded-lg p-4 bg-blue-50 max-w-4xl">
-          <h3 className="font-semibold mb-3 text-blue-900">
-            Travel Documents (Tickets / Vouchers)
-          </h3>
-
-          <div className="flex flex-col gap-2">
-            {gaFiles.map((file: any, index: number) => (
-              <a
-                key={index}
-                href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors self-start hover:underline bg-white px-3 py-2 rounded-md shadow-sm border border-blue-100"
-              >
-                📄 Download {file.name}
-              </a>
-            ))}
-          </div>
-        </div>
       )}
 
       <ConfirmDialog

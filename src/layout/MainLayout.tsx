@@ -187,33 +187,25 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   },
 ];
 
-const getRoleIcon = (
-  role?: UserRole,
-): React.ElementType => {
+/** Icon for the signed-in user's role. A switch (not a lookup) keeps the component static. */
+const RoleIcon: React.FC<{ role?: UserRole; className?: string }> = ({ role, className }) => {
   switch (role) {
     case 'EMPLOYEE':
-      return User;
-
+      return <User className={className} />;
     case 'ADMIN_DEPT':
-      return CheckCircle;
-
+      return <CheckCircle className={className} />;
     case 'HOD':
-      return Briefcase;
-
+      return <Briefcase className={className} />;
     case 'HR':
-      return Users;
-
+      return <Users className={className} />;
     case 'PM':
-      return Shield;
-
+      return <Shield className={className} />;
     case 'GA':
-      return Building2;
-
+      return <Building2 className={className} />;
     case 'SUPER_ADMIN':
-      return Crown;
-
+      return <Crown className={className} />;
     default:
-      return User;
+      return <User className={className} />;
   }
 };
 
@@ -325,9 +317,13 @@ const MainLayout: React.FC = () => {
     setRosterQueueCount,
   ] = React.useState(0);
 
+  // Primitive copies keep hook dependencies stable across store refreshes.
+  const currentUserId = currentUser?.id;
+  const currentUserRole = currentUser?.role;
+
   const fetchEarlyRecallBadge =
     React.useCallback(async () => {
-      if (!currentUser) {
+      if (!currentUserId) {
         setEarlyRecallRecords([]);
         return;
       }
@@ -347,18 +343,18 @@ const MainLayout: React.FC = () => {
 
         setEarlyRecallRecords([]);
       }
-    }, [currentUser?.id]);
+    }, [currentUserId]);
 
   const fetchRosterQueueBadge =
     React.useCallback(async () => {
       if (
-        !currentUser ||
+        !currentUserRole ||
         ![
           'GA',
           'HOD',
           'HR',
           'SUPER_ADMIN',
-        ].includes(currentUser.role)
+        ].includes(currentUserRole)
       ) {
         setRosterQueueCount(0);
         return;
@@ -379,10 +375,7 @@ const MainLayout: React.FC = () => {
 
         setRosterQueueCount(0);
       }
-    }, [
-      currentUser?.id,
-      currentUser?.role,
-    ]);
+    }, [currentUserRole]);
 
   const handleLogout = async () => {
     setMobileSidebarOpen(false);
@@ -400,13 +393,13 @@ const MainLayout: React.FC = () => {
    * melakukan refresh sehingga indikator ikut berubah.
    */
   React.useEffect(() => {
-    if (!currentUser) {
+    if (!currentUserId) {
       return;
     }
 
     void fetchTRFs();
   }, [
-    currentUser?.id,
+    currentUserId,
     fetchTRFs,
   ]);
 
@@ -674,6 +667,8 @@ const MainLayout: React.FC = () => {
       }
 
       return counts;
+    // The getters read the store directly; `trfs` re-runs the count when TRFs change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
       currentUser,
       getTRFsForApproval,
@@ -726,31 +721,17 @@ const MainLayout: React.FC = () => {
     );
   };
 
+  // Longest matching path wins, so /trf/new beats /trf.
   const currentPageTitle =
-    React.useMemo(() => {
-      const sortedItems = [
-        ...navItems,
-      ].sort(
+    [...navItems]
+      .sort(
         (first, second) =>
           second.path.length -
           first.path.length,
-      );
-
-      return (
-        sortedItems.find((item) =>
-          isNavItemActive(item.path),
-        )?.label ?? 'Dashboard'
-      );
-    }, [
-      location.pathname,
-      navItems,
-    ]);
-
-  const CurrentRoleIcon = getRoleIcon(
-    currentUser?.role as
-      | UserRole
-      | undefined,
-  );
+      )
+      .find((item) =>
+        isNavItemActive(item.path),
+      )?.label ?? 'Dashboard';
 
   const renderNavigation = (
     expanded: boolean,
@@ -899,7 +880,7 @@ const MainLayout: React.FC = () => {
                 ),
               )}
             >
-              <CurrentRoleIcon className="h-5 w-5" />
+              <RoleIcon role={currentUserRole} className="h-5 w-5" />
             </div>
 
             <div className="min-w-0">
@@ -1055,7 +1036,7 @@ const MainLayout: React.FC = () => {
                   ),
                 )}
               >
-                <CurrentRoleIcon className="h-4 w-4" />
+                <RoleIcon role={currentUserRole} className="h-4 w-4" />
               </div>
 
               <div className="hidden min-w-0 lg:block">

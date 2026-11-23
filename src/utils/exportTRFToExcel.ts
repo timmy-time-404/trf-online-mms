@@ -59,7 +59,7 @@ export const exportTRFToExcel = (trf: TRF): void => {
   // ── 2. PETAKAN DATA TRF KE DALAM BARIS (ROW) ───────────────────────────
   const row = [
     trf.employee?.tenant ?? '-',
-    (trf.employee as any)?.employeeId ?? '-', // Sesuaikan dengan properti ID di backend Anda
+    trf.employee?.employeeCode ?? '-',
     trf.employee?.employeeName ?? '-',
     trf.employee?.department ?? '-',
     trf.employee?.section ?? '-',

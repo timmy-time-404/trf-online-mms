@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useTRFStore } from "@/store";
+import { useTRFStore, type LocationRow } from "@/store";
 
 interface Props {
   transport: string;
@@ -19,11 +19,11 @@ export default function LocationCombobox({
   const { searchLocations } = useTRFStore();
 
   const [query, setQuery] = useState(value);
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<LocationRow[]>([]);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const transportMap: any = { 
+  const transportMap: Record<string, string> = { 
     FLIGHT: "AIRPORT",
     TRAIN: "TRAIN_STATION",
     SHIP: "SEAPORT",

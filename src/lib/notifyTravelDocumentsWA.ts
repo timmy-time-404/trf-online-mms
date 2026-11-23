@@ -81,13 +81,10 @@ export const notifyEmployeeTravelDocumentsWA = async (
       `Halo ${employeeName},\n\n` +
       `Berikut *${label}* untuk TRF *${trfNumber}* kamu.\n\n` +
       `_Pesan otomatis dari TRF Online MMS._`;
-
-    // eslint-disable-next-line no-await-in-loop
     const deliverableUrl = await resolveDeliverableUrl(doc);
 
     // Dikirim berurutan (bukan Promise.all) supaya tidak membanjiri
     // rate limit Fonnte kalau dokumennya banyak.
-    // eslint-disable-next-line no-await-in-loop
     const success = await sendWhatsAppMessage(employeePhone, caption, {
       fileUrl: deliverableUrl,
       fileName: doc.name,

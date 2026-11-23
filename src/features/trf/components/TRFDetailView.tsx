@@ -154,9 +154,8 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
    * Data lama tetap menggunakan field travelPurpose/startDate/endDate.
    */
   const purposeEntries = (
-    Array.isArray((trf as any).purposeEntries) &&
-    (trf as any).purposeEntries.length > 0
-      ? (trf as any).purposeEntries
+    trf.purposeEntries && trf.purposeEntries.length > 0
+      ? trf.purposeEntries
       : [
           {
             id: 'legacy',
@@ -179,9 +178,8 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
    * Data lama tetap menggunakan field accommodation.
    */
   const accommodationEntries = (
-    Array.isArray((trf as any).accommodations) &&
-    (trf as any).accommodations.length > 0
-      ? (trf as any).accommodations
+    trf.accommodations && trf.accommodations.length > 0
+      ? trf.accommodations
       : trf.accommodation
         ? [trf.accommodation]
         : []

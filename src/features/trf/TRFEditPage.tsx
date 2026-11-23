@@ -10,9 +10,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import EmployeeInfoSection from './components/EmployeeInfoSection';
-import TravelPurposeSection, { createEmptyPurposeEntry } from './components/TravelPurposeSection';
+import TravelPurposeSection from './components/TravelPurposeSection';
+import { createEmptyPurposeEntry } from './components/travelPurposeEntries';
 import AccommodationSection from './components/AccommodationSection';
-import type { AccommodationEntry } from './components/AccommodationSection';
+import type { AccommodationEntry } from './components/accommodationEntries';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';

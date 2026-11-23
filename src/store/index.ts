@@ -88,7 +88,7 @@ interface DBTRFRow {
   accommodations?: NonNullable<TRF['accommodations']>;
 }
 
-interface LocationRow {
+export interface LocationRow {
   id: string;
   name: string;
   type: string;
@@ -671,9 +671,9 @@ export const useTRFStore = create<TRFState>()(
                 travel_arrangements:
                   trfData.travelArrangements || [],
                 purpose_entries:
-                  (trfData as any).purposeEntries || [],
+                  trfData.purposeEntries || [],
                 accommodations:
-                  (trfData as any).accommodations || [],
+                  trfData.accommodations || [],
               },
             ])
             .select()
@@ -712,9 +712,9 @@ export const useTRFStore = create<TRFState>()(
             travelArrangements:
               trfData.travelArrangements || [],
             purposeEntries:
-              (trfData as any).purposeEntries || [],
+              trfData.purposeEntries || [],
             accommodations:
-              (trfData as any).accommodations || [],
+              trfData.accommodations || [],
           };
 
           set((state) => ({
@@ -752,9 +752,9 @@ export const useTRFStore = create<TRFState>()(
             travel_arrangements:
               updates.travelArrangements || [],
             purpose_entries:
-              (updates as any).purposeEntries || [],
+              updates.purposeEntries || [],
             accommodations:
-              (updates as any).accommodations || [],
+              updates.accommodations || [],
             updated_at: new Date().toISOString(),
           };
 
@@ -799,8 +799,8 @@ export const useTRFStore = create<TRFState>()(
         purpose_remarks: updates.purposeRemarks,
         accommodation: updates.accommodation,
         travel_arrangements: updates.travelArrangements,
-        purpose_entries: (updates as any).purposeEntries || [],
-        accommodations: (updates as any).accommodations || [],
+        purpose_entries: updates.purposeEntries || [],
+        accommodations: updates.accommodations || [],
         status: 'SUBMITTED',
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -881,8 +881,8 @@ export const useTRFStore = create<TRFState>()(
             purpose_remarks: updates.purposeRemarks,
             accommodation: updates.accommodation,
             travel_arrangements: updates.travelArrangements,
-            purpose_entries: (updates as any).purposeEntries || [],
-            accommodations: (updates as any).accommodations || [],
+            purpose_entries: updates.purposeEntries || [],
+            accommodations: updates.accommodations || [],
             updated_at: now,
           };
 

@@ -47,6 +47,8 @@ const RecentActivityTable: React.FC<
           new Date(first.updatedAt).getTime(),
       )
       .slice(0, 5);
+  // getVisibleTRFs reads the store directly; these re-run the memo when data changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     employees,
     getVisibleTRFs,

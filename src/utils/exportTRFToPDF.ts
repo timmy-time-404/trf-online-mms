@@ -49,8 +49,8 @@ const buildHTML = (trf: TRF): string => {
 
   // ── Resolve purpose entries ──────────────────────────────────
   const rawPurposeEntries: TravelPurposeEntry[] =
-    Array.isArray((trf as any).purposeEntries) && (trf as any).purposeEntries.length > 0
-      ? (trf as any).purposeEntries
+    trf.purposeEntries && trf.purposeEntries.length > 0
+      ? trf.purposeEntries
       : [{
           id            : 'legacy',
           travelPurpose : trf.travelPurpose ?? '',
@@ -74,8 +74,8 @@ const buildHTML = (trf: TRF): string => {
 
   // ── Accommodation rows ───────────────────────────────────────
   const rawAccomEntries: Accommodation[] =
-    Array.isArray((trf as any).accommodations) && (trf as any).accommodations.length > 0
-      ? (trf as any).accommodations
+    trf.accommodations && trf.accommodations.length > 0
+      ? trf.accommodations
       : trf.accommodation
       ? [trf.accommodation]
       : [];
@@ -364,67 +364,64 @@ const buildSubmittedStamp = (date?: string) => `
 // 3. MAIN EXPORT
 // ─────────────────────────────────────────────────────────────
 export const exportTRFToPDF = async (trf: TRF): Promise<void> => {
-  return new Promise(async (resolve, reject) => {
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:hidden;z-index:9999;pointer-events:none;';
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:hidden;z-index:9999;pointer-events:none;';
 
-    const container = document.createElement('div');
-    container.style.cssText = 'position:absolute;top:0;left:0;width:794px;background:#fff;';
-    container.innerHTML = buildHTML(trf);
+  const container = document.createElement('div');
+  container.style.cssText = 'position:absolute;top:0;left:0;width:794px;background:#fff;';
+  container.innerHTML = buildHTML(trf);
 
-    wrapper.appendChild(container);
-    document.body.appendChild(wrapper);
+  wrapper.appendChild(container);
+  document.body.appendChild(wrapper);
 
-    try {
-      await new Promise(r => setTimeout(r, 500));
+  try {
+    await new Promise(r => setTimeout(r, 500));
 
-      const canvas = await html2canvas(container, {
-        scale: 2, useCORS: true, allowTaint: true,
-        backgroundColor: '#ffffff', logging: false,
-        width: 794, height: container.scrollHeight,
-        windowWidth: 794, windowHeight: container.scrollHeight,
-      });
+    const canvas = await html2canvas(container, {
+      scale: 2, useCORS: true, allowTaint: true,
+      backgroundColor: '#ffffff', logging: false,
+      width: 794, height: container.scrollHeight,
+      windowWidth: 794, windowHeight: container.scrollHeight,
+    });
 
-      if (canvas.width === 0 || canvas.height === 0)
-        throw new Error('Canvas render gagal (ukuran 0).');
+    if (canvas.width === 0 || canvas.height === 0)
+      throw new Error('Canvas render gagal (ukuran 0).');
 
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      if (!imgData || imgData === 'data:,')
-        throw new Error('Canvas toDataURL gagal.');
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    if (!imgData || imgData === 'data:,')
+      throw new Error('Canvas toDataURL gagal.');
 
-      const pdf      = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight= pdf.internal.pageSize.getHeight();
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight= (imgProps.height * pdfWidth) / imgProps.width;
+    const pdf      = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight= pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgHeight= (imgProps.height * pdfWidth) / imgProps.width;
 
-      if (imgHeight <= pdfHeight) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      } else {
-        const scale    = canvas.width / pdfWidth;
-        const pageHtPx = Math.floor(pdfHeight * scale);
-        let yPx = 0, pg = 0;
-        while (yPx < canvas.height) {
-          if (pg > 0) pdf.addPage();
-          const sliceHt = Math.min(pageHtPx, canvas.height - yPx);
-          const pc = document.createElement('canvas');
-          pc.width = canvas.width; pc.height = sliceHt;
-          const ctx = pc.getContext('2d')!;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, pc.width, pc.height);
-          ctx.drawImage(canvas, 0, yPx, canvas.width, sliceHt, 0, 0, canvas.width, sliceHt);
-          pdf.addImage(pc.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, pdfWidth, (sliceHt * pdfWidth) / canvas.width);
-          yPx += pageHtPx; pg++;
-        }
+    if (imgHeight <= pdfHeight) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+    } else {
+      const scale    = canvas.width / pdfWidth;
+      const pageHtPx = Math.floor(pdfHeight * scale);
+      let yPx = 0, pg = 0;
+      while (yPx < canvas.height) {
+        if (pg > 0) pdf.addPage();
+        const sliceHt = Math.min(pageHtPx, canvas.height - yPx);
+        const pc = document.createElement('canvas');
+        pc.width = canvas.width; pc.height = sliceHt;
+        const ctx = pc.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pc.width, pc.height);
+        ctx.drawImage(canvas, 0, yPx, canvas.width, sliceHt, 0, 0, canvas.width, sliceHt);
+        pdf.addImage(pc.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, pdfWidth, (sliceHt * pdfWidth) / canvas.width);
+        yPx += pageHtPx; pg++;
       }
-
-      pdf.save(`TRF_${trf.trfNumber ?? 'Draft'}_${new Date().toISOString().slice(0,10)}.pdf`);
-      resolve();
-    } catch (error) {
-      console.error('Gagal export ke PDF:', error);
-      reject(error);
-    } finally {
-      if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
     }
-  });
+
+    pdf.save(`TRF_${trf.trfNumber ?? 'Draft'}_${new Date().toISOString().slice(0,10)}.pdf`);
+  } catch (error) {
+    console.error('Gagal export ke PDF:', error);
+    throw error;
+  } finally {
+    if (document.body.contains(wrapper)) document.body.removeChild(wrapper);
+  }
 };

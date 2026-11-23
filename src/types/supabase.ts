@@ -1,4 +1,12 @@
 // types/supabase.ts - Database schema untuk Supabase
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export interface Database {
   public: {
     Tables: {
@@ -89,12 +97,12 @@ export interface Database {
           end_date: string;
           purpose_remarks: string | null;
           status: string;
-          accommodation: any | null;
-          travel_arrangements: any;
-          admin_dept_verify: any | null;
-          parallel_approval: any | null;
-          pm_approval: any | null;
-          ga_process: any | null;
+          accommodation: Json | null;
+          travel_arrangements: Json;
+          admin_dept_verify: Json | null;
+          parallel_approval: Json | null;
+          pm_approval: Json | null;
+          ga_process: Json | null;
           submitted_at: string | null;
           created_at: string;
           updated_at: string;
@@ -109,12 +117,12 @@ export interface Database {
           end_date: string;
           purpose_remarks?: string | null;
           status?: string;
-          accommodation?: any | null;
-          travel_arrangements?: any;
-          admin_dept_verify?: any | null;
-          parallel_approval?: any | null;
-          pm_approval?: any | null;
-          ga_process?: any | null;
+          accommodation?: Json | null;
+          travel_arrangements?: Json;
+          admin_dept_verify?: Json | null;
+          parallel_approval?: Json | null;
+          pm_approval?: Json | null;
+          ga_process?: Json | null;
           submitted_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -129,12 +137,12 @@ export interface Database {
           end_date?: string;
           purpose_remarks?: string | null;
           status?: string;
-          accommodation?: any | null;
-          travel_arrangements?: any;
-          admin_dept_verify?: any | null;
-          parallel_approval?: any | null;
-          pm_approval?: any | null;
-          ga_process?: any | null;
+          accommodation?: Json | null;
+          travel_arrangements?: Json;
+          admin_dept_verify?: Json | null;
+          parallel_approval?: Json | null;
+          pm_approval?: Json | null;
+          ga_process?: Json | null;
           submitted_at?: string | null;
           created_at?: string;
           updated_at?: string;

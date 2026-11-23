@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTRFStore } from '@/store';
+import type { User } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import UserFormDialog from './UserFormDialog';
@@ -9,7 +10,7 @@ export default function UsersPage() {
   const [open, setOpen] = useState(false);
 
   // ✅ State untuk mode edit
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // 🔍 State untuk Fitur Pencarian dan Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,7 +18,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
   // ⚙️ Logika Penyaringan Data Client-Side
   const filteredUsers = users.filter((user) => {

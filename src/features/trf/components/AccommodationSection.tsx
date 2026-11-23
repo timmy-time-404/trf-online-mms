@@ -28,14 +28,16 @@ import {
 
 import type { Accommodation } from '@/types';
 
+import {
+  createEmptyAccommodationEntry,
+  type AccommodationEntry,
+} from './accommodationEntries';
+
 
 /* ============================================================
    TYPES
    ============================================================ */
 
-export interface AccommodationEntry extends Accommodation {
-  _id: string;
-}
 
 interface AccommodationSectionProps {
   entries: AccommodationEntry[];
@@ -63,20 +65,6 @@ interface EntryCardProps {
    HELPERS
    ============================================================ */
 
-const generateAccommodationId = () =>
-  `accommodation-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
-
-
-export const createEmptyAccommodationEntry =
-  (): AccommodationEntry => ({
-    _id: generateAccommodationId(),
-    hotelName: '',
-    checkInDate: '',
-    checkOutDate: '',
-    remarks: '',
-  });
 
 
 /* ============================================================
