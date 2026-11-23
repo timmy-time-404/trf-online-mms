@@ -6,12 +6,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev:web": "pnpm --filter @trf/web dev",
-    "dev:api": "pnpm --filter @trf/api dev",
+    "dev:web": "pnpm --filter @trf/shared build && pnpm --filter @trf/web dev",
+    "dev:api": "pnpm --filter @trf/shared build && pnpm --filter @trf/api dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @trf/shared build && pnpm -r test",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   }
 }
