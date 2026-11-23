@@ -5,8 +5,10 @@
 Konfigurasi `deploy/compose.yaml` menyiapkan PostgreSQL 17, API Hono, dan gateway
 Caddy. Image gateway membangun React dengan `VITE_API_BASE_URL=/api`, menyajikan SPA,
 dan meneruskan `/api/*` ke Hono pada origin yang sama. Autentikasi serta inti TRF
-(daftar/detail, buat, edit, resubmit, hapus DRAFT) memakai PostgreSQL. Approval,
-master data, roster, Early Recall, dokumen, dan notifikasi masih menunggu paket berikutnya.
+(daftar/detail, buat, edit, resubmit, hapus DRAFT), serta workflow approval memakai
+PostgreSQL. Perubahan workflow, history, dan outbox berada dalam satu transaksi;
+outbox belum dikirim. Master data, roster, Early Recall, dokumen, dan pembacaan
+notifikasi masih menunggu paket berikutnya.
 Konfigurasi ini hanya untuk pengujian fitur yang telah dimigrasi; bukan bukti paritas seluruh sistem.
 Supabase lama tetap tersedia dan tidak diubah oleh konfigurasi ini.
 
@@ -97,7 +99,7 @@ Origin yang tepat untuk mutasi, expiry bergeser 30 menit dengan batas 12 jam,
 dan pembatasan percobaan login per identifier. Belum ada perubahan password atau
 undangan. `VITE_API_BASE_URL=/api` mengaktifkan adapter cookie frontend untuk uji
 integrasi; modul bisnis yang belum dimigrasi mengembalikan error eksplisit.
-Inti TRF bisa diuji pada mode ini; workflow WP2 dan modul WP3–WP5 belum tersedia.
+Inti TRF dan workflow WP2 bisa diuji setelah rilis terkait diterapkan; modul WP3–WP5 belum tersedia.
 
 Uji integrasi WP1 memakai database PostgreSQL terpisah yang namanya berakhiran
 `_test`, dengan administrator yang dapat menjalankan migrasi dan membuat role uji:
@@ -112,6 +114,21 @@ konflik status, rollback history, dan sesi invalid, lalu menghapus fixture milik
 Untuk PostgreSQL lokal, set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`,
 `DB_PASSWORD_FILE`, dan `DB_MIGRATIONS_DIR`, jalankan build shared lalu
 `pnpm --filter @trf/api test:integration`.
+
+WP2 memakai database disposable lain yang belum memiliki user aplikasi, karena
+tes skip-approver mengubah status aktif semua fixture peran di database tersebut:
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T db createdb -U trf_owner trf_wp2_test
+DB_NAME=trf_wp2_test docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm db-tools node dist/modules/trf/workflow.integration.js
+```
+
+Untuk PostgreSQL lokal dengan variabel koneksi yang sama dan `DB_NAME=trf_wp2_test`,
+jalankan `pnpm --filter @trf/api test:workflow`. Migrasi `0003_trf_workflow` menambah
+outbox, indeks pending, dan grant terbatas. Jangan mengubah migrasi WP1 yang sudah dirilis.
+Upload masih ditunda hingga WP5; pengujian GA sementara dapat menyelesaikan proses
+dengan metadata dokumen kosong. Outbox memakai nomor employee dari DB; worker WP5
+wajib menangani nomor kosong dan membatasi pengiriman ke nomor uji yang disetujui.
 
 Untuk uji migrasi, buat database kosong terpisah dan atur `DB_NAME` pada task;
 ubah `SEED_CREDENTIALS_FILE` ke path berbeda di `/run/seed` untuk credential uji.
