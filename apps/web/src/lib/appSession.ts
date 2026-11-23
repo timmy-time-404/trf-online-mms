@@ -51,6 +51,8 @@ const supabaseUrl =
 const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+const standaloneApi = import.meta.env.VITE_API_BASE_URL;
+
 interface AppSessionApiUser {
   id: string;
   username: string;
@@ -191,8 +193,26 @@ const parseResponse = async <T>(
   return payload as T;
 };
 
+const requestStandalone = async <T>(path: string, body?: unknown): Promise<T> => {
+  if (!/^\/[a-zA-Z0-9][a-zA-Z0-9/_-]*$/.test(standaloneApi ?? '')) {
+    throw new AppSessionApiError('API harus menggunakan path pada domain aplikasi.', 500);
+  }
+  const response = await fetch(`${standaloneApi}/auth/${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.status === 401 && path !== 'login') {
+    clearAppSessionToken();
+    dispatchInvalidAppSessionEvent();
+  }
+  return parseResponse<T>(response);
+};
+
 export const getStoredAppSessionToken =
   (): string | null => {
+    if (standaloneApi) return null;
     if (typeof window === 'undefined') {
       return null;
     }
@@ -258,6 +278,9 @@ const requestFunction = async <T>(
     requireSession?: boolean;
   } = {},
 ): Promise<T> => {
+  if (standaloneApi) {
+    throw new AppSessionApiError('Modul ini belum dimigrasikan ke backend baru.', 501);
+  }
   assertEnvironment();
 
   const sessionToken =
@@ -330,6 +353,12 @@ export const loginWithAppSession = async (
    */
   clearAppSessionToken();
 
+  if (standaloneApi) {
+    const response = await requestStandalone<SessionResponse>('login', { username, password });
+    if (!response.expiresAt) throw new AppSessionApiError('Expiry sesi tidak tersedia.', 500);
+    return { user: toUser(response.user), expiresAt: response.expiresAt };
+  }
+
   const response =
     await requestFunction<LoginResponse>(
       'app-login',
@@ -385,6 +414,11 @@ export const getCurrentAppSession =
     expiresAt: string;
   }> => {
     try {
+      if (standaloneApi) {
+        const response = await requestStandalone<SessionResponse>('me');
+        if (!response.expiresAt) throw new AppSessionApiError('Expiry sesi tidak tersedia.', 500);
+        return { user: toUser(response.user), expiresAt: response.expiresAt };
+      }
       const response =
         await requestFunction<SessionResponse>(
           'app-session',
@@ -425,6 +459,11 @@ export const getCurrentAppSession =
 
 export const logoutAppSession =
   async (): Promise<void> => {
+    if (standaloneApi) {
+      try { await requestStandalone('logout', {}); }
+      finally { clearAppSessionToken(); }
+      return;
+    }
     const token =
       getStoredAppSessionToken();
 
