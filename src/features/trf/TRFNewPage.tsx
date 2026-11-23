@@ -11,11 +11,12 @@ import { useTRFStore, useAuthStore } from '@/store';
 import type { CreateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
 import { Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { validateTravelPurposeEntries } from '@/lib/trfValidation';
 
 const TRFNewPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { createTRF, submitTRF, fetchAllData, employees } = useTRFStore();
+  const { createTRF, fetchAllData, employees } = useTRFStore();
 
   // ── State: multi-purpose entries ──────────────────────────
   const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>([
@@ -96,21 +97,10 @@ const TRFNewPage: React.FC = () => {
       return false;
     }
 
-    // Cek semua purpose entries
-    for (let i = 0; i < purposeEntries.length; i++) {
-      const p = purposeEntries[i];
-      if (!p.travelPurpose) {
-        toast.error(`Travel Purpose #${i + 1}: Harap pilih tujuan perjalanan.`);
-        return false;
-      }
-      if (!p.startDate || !p.endDate) {
-        toast.error(`Travel Purpose #${i + 1}: Harap isi tanggal mulai dan selesai.`);
-        return false;
-      }
-      if (!p.purposeRemarks?.trim()) {
-        toast.error(`Travel Purpose #${i + 1}: Remarks / Catatan wajib diisi.`);
-        return false;
-      }
+    const error = validateTravelPurposeEntries(purposeEntries);
+    if (error) {
+      toast.error(error);
+      return false;
     }
 
     return true;
@@ -126,7 +116,6 @@ const TRFNewPage: React.FC = () => {
       const newTRF = await createTRF(input);
       if (!newTRF) throw new Error('Gagal membuat data');
 
-      await submitTRF(newTRF.id, currentUser.id, currentUser.username);
       await fetchAllData();
 
       toast.success('TRF submitted successfully');

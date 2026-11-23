@@ -11,7 +11,7 @@ export function getNextStatus(
   // =============================
   // 🔴 REJECT (VALIDATED)
   // =============================
-  if (action === 'REJECT') {
+  if (action === 'REJECT' || action === 'REVISE') {
     const allowedReject: Record<UserRole, TRFStatus[]> = {
       ADMIN_DEPT: ['SUBMITTED'],
       HOD: ['PENDING_APPROVAL'],
@@ -23,17 +23,10 @@ export function getNextStatus(
     };
 
     if (!allowedReject[role]?.includes(current)) {
-      throw new Error(`❌ Reject not allowed: ${current} → ${role}`);
+      throw new Error(`❌ ${action} not allowed: ${current} → ${role}`);
     }
 
-    return 'REJECTED';
-  }
-
-  // =============================
-  // 🟡 REVISE
-  // =============================
-  if (action === 'REVISE') {
-    return 'NEEDS_REVISION';
+    return action === 'REJECT' ? 'REJECTED' : 'NEEDS_REVISION';
   }
 
   // =============================

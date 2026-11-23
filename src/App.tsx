@@ -1,4 +1,6 @@
 import React, {
+  lazy,
+  Suspense,
   useEffect,
 } from 'react';
 import {
@@ -10,6 +12,7 @@ import {
 } from 'react-router-dom';
 
 import { Toaster } from '@/components/ui/sonner';
+import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import {
   APP_SESSION_INVALID_EVENT,
 } from '@/lib/appSession';
@@ -18,31 +21,31 @@ import type { UserRole } from '@/types';
 
 // Layouts
 import AuthLayout from '@/layout/AuthLayout';
-import MainLayout from '@/layout/MainLayout';
+const MainLayout = lazy(() => import('@/layout/MainLayout'));
 
 // Pages
 import LoginPage from '@/features/auth/LoginPage';
-import ChangePasswordPage from '@/features/auth/ChangePasswordPage';
-import DashboardPage from '@/features/dashboard/DashboardPage';
-import ManpowerDashboardPage from '@/features/manpower-dashboard/ManpowerDashboardPage';
-import TRFDetailPage from '@/features/trf/TRFDetailPage';
-import TRFEditPage from '@/features/trf/TRFEditPage';
-import TRFListPage from '@/features/trf/TRFListPage';
-import TRFNewPage from '@/features/trf/TRFNewPage';
-import EarlyRecallDetailPage from '@/features/early-recall/EarlyRecallDetailPage';
-import EarlyRecallFormPage from '@/features/early-recall/EarlyRecallFormPage';
-import EarlyRecallListPage from '@/features/early-recall/EarlyRecallListPage';
-import MyRosterOSPage from '@/features/roster/MyRosterOSPage';
-import RosterOperationsPage from '@/features/roster/RosterOperationsPage';
+const ChangePasswordPage = lazy(() => import('@/features/auth/ChangePasswordPage'));
+const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage'));
+const ManpowerDashboardPage = lazy(() => import('@/features/manpower-dashboard/ManpowerDashboardPage'));
+const TRFDetailPage = lazy(() => import('@/features/trf/TRFDetailPage'));
+const TRFEditPage = lazy(() => import('@/features/trf/TRFEditPage'));
+const TRFListPage = lazy(() => import('@/features/trf/TRFListPage'));
+const TRFNewPage = lazy(() => import('@/features/trf/TRFNewPage'));
+const EarlyRecallDetailPage = lazy(() => import('@/features/early-recall/EarlyRecallDetailPage'));
+const EarlyRecallFormPage = lazy(() => import('@/features/early-recall/EarlyRecallFormPage'));
+const EarlyRecallListPage = lazy(() => import('@/features/early-recall/EarlyRecallListPage'));
+const MyRosterOSPage = lazy(() => import('@/features/roster/MyRosterOSPage'));
+const RosterOperationsPage = lazy(() => import('@/features/roster/RosterOperationsPage'));
 
 // Role-specific pages
-import ApprovalPage from '@/features/approval/ApprovalPage';
-import UsersPage from '@/features/admin/users/UsersPage';
-import EmployeeManagementPage from './features/employees/EmployeeManagementPage';
-import HotelManagementPage from './features/hotels/HotelManagementPage';
-import ProcessPage from './features/process/ProcessPage';
-import SuperAdminPage from './features/super-admin/SuperAdminPage';
-import VerifyPage from './features/verify/VerifyPage';
+const ApprovalPage = lazy(() => import('@/features/approval/ApprovalPage'));
+const UsersPage = lazy(() => import('@/features/admin/users/UsersPage'));
+const EmployeeManagementPage = lazy(() => import('@/features/employees/EmployeeManagementPage'));
+const HotelManagementPage = lazy(() => import('@/features/hotels/HotelManagementPage'));
+const ProcessPage = lazy(() => import('@/features/process/ProcessPage'));
+const SuperAdminPage = lazy(() => import('@/features/super-admin/SuperAdminPage'));
+const VerifyPage = lazy(() => import('@/features/verify/VerifyPage'));
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -50,13 +53,13 @@ interface ProtectedRouteProps {
   requireDepartment?: boolean;
 }
 
-const SessionLoadingScreen: React.FC = () => (
+const LoadingScreen: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex min-h-screen items-center justify-center bg-gray-50">
     <div className="text-center">
       <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900" />
 
-      <p className="mt-3 text-sm text-gray-500">
-        Memvalidasi sesi...
+      <p role="status" className="mt-3 text-sm text-gray-500">
+        {label}
       </p>
     </div>
   </div>
@@ -84,7 +87,7 @@ const ProtectedRoute: React.FC<
   );
 
   if (isLoading) {
-    return <SessionLoadingScreen />;
+    return <LoadingScreen label="Memvalidasi sesi..." />;
   }
 
   if (
@@ -277,6 +280,8 @@ const App: React.FC = () => {
         richColors
       />
 
+      <PageErrorBoundary>
+      <Suspense fallback={<LoadingScreen label="Memuat halaman..." />}>
       <Routes>
         {/* PUBLIC ROUTES */}
         <Route element={<AuthLayout />}>
@@ -609,6 +614,8 @@ const App: React.FC = () => {
           }
         />
       </Routes>
+      </Suspense>
+      </PageErrorBoundary>
     </BrowserRouter>
   );
 };

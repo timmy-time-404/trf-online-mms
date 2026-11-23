@@ -828,8 +828,21 @@ export const useTRFStore = create<TRFState>()(
 
       deleteTRF: async (id) => {
         if (!isSupabaseEnabled()) return false;
-        await supabase.from('trfs').delete().eq('id', id);
-        return true;
+        try {
+          const { data, error } = await supabase.from('trfs')
+            .delete().eq('id', id).eq('status', 'DRAFT')
+            .select('id').maybeSingle();
+          if (error) throw error;
+          if (!data) return false;
+          set((state) => ({
+            trfs: state.trfs.filter((trf) => trf.id !== id),
+            statusHistory: state.statusHistory.filter((entry) => entry.trfId !== id),
+          }));
+          return true;
+        } catch (error) {
+          console.error('Delete TRF error:', error);
+          return false;
+        }
       },
 
       editAndApproveTRF: async (id, currentUser, updates, note) => {

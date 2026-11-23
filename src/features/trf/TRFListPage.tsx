@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -33,7 +34,6 @@ import type {
   UserRole,
 } from '@/types';
 
-import { exportAllTRFsToExcel } from '@/utils/exportAllTRFsToExcel';
 
 import TRFListTable from './components/TRFListTable';
 
@@ -95,9 +95,7 @@ const TRFListPage: React.FC = () => {
     (state) => state.deleteTRF,
   );
 
-  const getVisibleTRFs = useTRFStore(
-    (state) => state.getVisibleTRFs,
-  );
+  const { getVisibleTRFs } = useTRFStore();
 
   const [searchQuery, setSearchQuery] =
     React.useState('');
@@ -113,21 +111,15 @@ const TRFListPage: React.FC = () => {
 
   const [isExporting, setIsExporting] =
     React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
-  const visibleTRFs = React.useMemo(
-    () =>
-      currentUser
-        ? getVisibleTRFs(currentUser)
-        : [],
-    [currentUser, getVisibleTRFs],
-  );
+  const visibleTRFs = currentUser ? getVisibleTRFs(currentUser) : [];
 
-  const filteredTRFs = React.useMemo(() => {
-    const normalizedSearch = searchQuery
+  const normalizedSearch = searchQuery
       .trim()
       .toLowerCase();
 
-    return [...visibleTRFs]
+  const filteredTRFs = [...visibleTRFs]
       .filter((trf) => {
         if (
           statusFilter !== 'ALL' &&
@@ -159,7 +151,6 @@ const TRFListPage: React.FC = () => {
           new Date(second.createdAt).getTime() -
           new Date(first.createdAt).getTime(),
       );
-  }, [searchQuery, statusFilter, visibleTRFs]);
 
   const hasActiveFilter =
     searchQuery.trim().length > 0 ||
@@ -179,9 +170,7 @@ const TRFListPage: React.FC = () => {
     setIsExporting(true);
 
     try {
-      await new Promise((resolve) =>
-        setTimeout(resolve, 200),
-      );
+      const { exportAllTRFsToExcel } = await import('@/utils/exportAllTRFsToExcel');
 
       exportAllTRFsToExcel(
         filteredTRFs,
@@ -189,6 +178,7 @@ const TRFListPage: React.FC = () => {
       );
     } catch (error) {
       console.error('Export failed:', error);
+      toast.error('Ekspor Excel gagal. Silakan coba kembali.');
     } finally {
       setIsExporting(false);
     }
@@ -199,14 +189,23 @@ const TRFListPage: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (!trfToDelete) {
+  const confirmDelete = async () => {
+    if (!trfToDelete || isDeleting) {
       return;
     }
 
-    void deleteTRF(trfToDelete);
-    setTrfToDelete(null);
-    setDeleteDialogOpen(false);
+    setIsDeleting(true);
+    try {
+      if (!await deleteTRF(trfToDelete)) {
+        toast.error('TRF gagal dihapus. Muat ulang data dan coba kembali.');
+        return;
+      }
+      toast.success('TRF berhasil dihapus.');
+      setTrfToDelete(null);
+      setDeleteDialogOpen(false);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const resetFilters = () => {
@@ -234,8 +233,7 @@ const TRFListPage: React.FC = () => {
     }
   };
 
-  const summary = React.useMemo(
-    () => ({
+  const summary = {
       needVerification: visibleTRFs.filter(
         (trf) => trf.status === 'SUBMITTED',
       ).length,
@@ -250,9 +248,7 @@ const TRFListPage: React.FC = () => {
       ).length,
 
       total: visibleTRFs.length,
-    }),
-    [visibleTRFs],
-  );
+  };
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -473,6 +469,7 @@ const TRFListPage: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+        loading={isDeleting}
       />
     </div>
   );

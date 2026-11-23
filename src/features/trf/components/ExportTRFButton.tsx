@@ -13,8 +13,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store';
-import { exportTRFToExcel } from '@/utils/exportTRFToExcel';
-import { exportTRFToPDF } from '@/utils/exportTRFToPDF';
+import { toast } from 'sonner';
 import type { TRF, UserRole } from '@/types';
 
 // Role yang diizinkan export
@@ -37,10 +36,11 @@ const ExportTRFButton: React.FC<ExportTRFButtonProps> = ({ trf }) => {
   const handleExcelExport = async () => {
     setIsExportingExcel(true);
     try {
-      await new Promise((r) => setTimeout(r, 200));
+      const { exportTRFToExcel } = await import('@/utils/exportTRFToExcel');
       exportTRFToExcel(trf);
     } catch (err) {
       console.error('Excel export failed:', err);
+      toast.error('Ekspor Excel gagal. Silakan coba kembali.');
     } finally {
       setIsExportingExcel(false);
     }
@@ -49,9 +49,11 @@ const ExportTRFButton: React.FC<ExportTRFButtonProps> = ({ trf }) => {
   const handlePDFExport = async () => {
     setIsExportingPDF(true);
     try {
+      const { exportTRFToPDF } = await import('@/utils/exportTRFToPDF');
       await exportTRFToPDF(trf);
     } catch (err) {
       console.error('PDF export failed:', err);
+      toast.error('Ekspor PDF gagal. Silakan coba kembali.');
     } finally {
       setIsExportingPDF(false);
     }

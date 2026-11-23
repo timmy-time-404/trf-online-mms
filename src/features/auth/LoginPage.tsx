@@ -127,11 +127,12 @@ const LoginPage: React.FC = () => {
       <CardContent className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="login-username" className="text-sm font-medium text-gray-700">
               Username / Employee ID
             </label>
 
             <input
+              id="login-username"
               className="w-full rounded-md border p-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black"
               placeholder="Masukkan Username"
               value={employeeId}
@@ -153,11 +154,12 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="login-password" className="text-sm font-medium text-gray-700">
               Password
             </label>
 
             <input
+              id="login-password"
               type="password"
               className="w-full rounded-md border p-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black"
               placeholder="Masukkan Password"

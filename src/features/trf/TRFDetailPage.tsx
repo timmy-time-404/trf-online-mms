@@ -15,6 +15,7 @@ const TRFDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { getTRFById, deleteTRF, fetchAllData } = useTRFStore();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   useEffect(() => {
     fetchAllData();
@@ -45,10 +46,19 @@ const TRFDetailPage: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    deleteTRF(trf.id);
-    toast.success('TRF deleted successfully');
-    navigate('/trf');
+  const confirmDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      if (!await deleteTRF(trf.id)) {
+        toast.error('TRF gagal dihapus. Muat ulang data dan coba kembali.');
+        return;
+      }
+      toast.success('TRF berhasil dihapus.');
+      navigate('/trf');
+    } finally {
+      setIsDeleting(false);
+    }
   };
   
   const gaFiles = (trf as any).ga_files;
@@ -122,9 +132,10 @@ const TRFDetailPage: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+        loading={isDeleting}
       />
     </div>
   );
 };
 
-export default TRFDetailPage; 
+export default TRFDetailPage;

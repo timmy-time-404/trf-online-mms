@@ -24,6 +24,7 @@ import {
 import type { UpdateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
 import { Send, ArrowLeft, AlertTriangle, MessageSquare, CheckCircle2, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
+import { validateTravelPurposeEntries } from '@/lib/trfValidation';
 
 const TRFEditPage: React.FC = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const TRFEditPage: React.FC = () => {
   useEffect(() => {
     if (!trf || isLoaded) return;
 
-    const existingPurposeEntries = (trf as any).purposeEntries;
+    const existingPurposeEntries = trf.purposeEntries;
     if (Array.isArray(existingPurposeEntries) && existingPurposeEntries.length > 0) {
       setPurposeEntries(existingPurposeEntries);
     } else {
@@ -72,10 +73,10 @@ const TRFEditPage: React.FC = () => {
       ]);
     }
 
-    const existingAccommodations = (trf as any).accommodations;
+    const existingAccommodations = trf.accommodations;
     if (Array.isArray(existingAccommodations) && existingAccommodations.length > 0) {
       setAccommodationEntries(
-        existingAccommodations.map((a: any) => ({
+        existingAccommodations.map((a) => ({
           _id: `accom-${Math.random().toString(36).slice(2, 9)}`,
           hotelName: a.hotelName ?? '',
           checkInDate: a.checkInDate ?? '',
@@ -178,20 +179,10 @@ const TRFEditPage: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    for (let i = 0; i < purposeEntries.length; i++) {
-      const p = purposeEntries[i];
-      if (!p.travelPurpose) {
-        toast.error(`Travel Purpose #${i + 1}: Harap pilih tujuan perjalanan.`);
-        return false;
-      }
-      if (!p.startDate || !p.endDate) {
-        toast.error(`Travel Purpose #${i + 1}: Harap isi tanggal mulai dan selesai.`);
-        return false;
-      }
-      if (!p.purposeRemarks?.trim()) {
-        toast.error(`Travel Purpose #${i + 1}: Remarks / Catatan wajib diisi.`);
-        return false;
-      }
+    const error = validateTravelPurposeEntries(purposeEntries);
+    if (error) {
+      toast.error(error);
+      return false;
     }
 
     if (
