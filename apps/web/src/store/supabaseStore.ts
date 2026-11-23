@@ -1,5 +1,5 @@
 import { supabase, isSupabaseEnabled } from '@/lib/supabase';
-import { notifyEmployeeStatusChangeWA } from '@/lib/notifyStatusChangeWA';
+import { apiRequest } from '@/api/client';
 import { isHRLumpsumAmount } from '@/lib/lumpsumOptions';
 
 import type {
@@ -451,91 +451,27 @@ export const pmApproveTRF = async (
 };
 
 export const gaProcessTRF = async (
-  id: string,
-  gaId: string,
-  gaName: string,
-  voucherDetails: GAProcess['voucherDetails'],
-  remarks: string
+  id: string, _gaId: string, _gaName: string,
+  voucherDetails: GAProcess['voucherDetails'], remarks: string,
 ): Promise<boolean> => {
-
-  if (!isSupabaseEnabled()) return false;
-
-  try {
-    const { data: trf } = await supabase
-      .from("trfs")
-      .select("*, ga_documents")
-      .eq("id", id)
-      .single();
-
-    if (!trf) throw new Error("TRF tidak ditemukan");
-
-    requireStatus(trf.status as string, "PM_APPROVED");
-
-    const gaProcessData: GAProcess = {
-      processed: true,
-      processedAt: new Date().toISOString(),
-      processorId: gaId,
-      processorName: gaName,
-      voucherDetails: voucherDetails,
-      remarksToEmployee: remarks || ""
-    };
-
-    const { error: updateError } = await supabase.from("trfs")
-      .update({
-        status: "GA_PROCESSED",
-        ga_process: gaProcessData,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", id);
-
-    if (updateError) throw updateError;
-
-    await addStatusHistory({
-      trfId: id,
-      changedBy: gaId,
-      changedByName: gaName,
-      oldStatus: "PM_APPROVED",
-      newStatus: "GA_PROCESSED",
-      remarks: remarks || "TRF Processed by GA"
-    });
-
-    return true;
-  } catch (e) {
-    console.error("GA Process Error:", e);
-    throw e;
-  }
+  await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/process', {
+    method: 'POST', body: { voucherDetails, remarks, ga_documents: {} },
+  });
+  return true;
 };
 
 /* =====================================================
    HR LUMPSUM
 ===================================================== */
 
+// Compatibility entry point: saving lumpsum now completes HR approval atomically.
 export const saveHRLumpsum = async (
-  trfId: string,
-  amount: number,
-  note: string,
-  hrUserId: string
-) => {
-  if (!isSupabaseEnabled()) return;
-
-  if (!isHRLumpsumAmount(amount)) {
-    throw new Error(
-      'Nominal lumpsum tidak tersedia pada daftar resmi.',
-    );
-  }
-
-  const { error } = await supabase
-    .from("trfs")
-    .update({
-      lumpsum_amount: amount,
-      lumpsum_currency: "IDR",
-      lumpsum_note: note.trim(),
-      lumpsum_input_by: hrUserId,
-      lumpsum_input_at: new Date().toISOString()
-    })
-    .eq("id", trfId);
-
-  if (error) throw error;
+  trfId: string, amount: number, note: string, _hrUserId: string, remarks = '',
+): Promise<TRF> => {
+  if (!isHRLumpsumAmount(amount)) throw new Error('Nominal lumpsum tidak tersedia pada daftar resmi.');
+  return apiRequest<TRF>('/trfs/' + encodeURIComponent(trfId) + '/approve', {
+    method: 'POST', body: { remarks, lumpsum: { amount, note } },
+  });
 };
 
 /* =====================================================
@@ -559,15 +495,7 @@ export const addStatusHistory = async (
       remarks: entry.remarks ?? "System update"
     }]);
 
-  // Notifikasi WA ke employee (fire-and-forget, tidak menghambat alur GA Process)
-  if (entry.oldStatus) {
-    void notifyEmployeeStatusChangeWA({
-      trfId: entry.trfId,
-      newStatus: entry.newStatus as TRFStatus,
-      actorName: entry.changedByName,
-      remarks: entry.remarks,
-    });
-  }
+
 };
 
 /* =====================================================

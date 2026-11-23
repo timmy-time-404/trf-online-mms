@@ -21,9 +21,7 @@ import type {
   TravelArrangement,
 } from '@/types';
 
-import { getNextStatus, type WorkflowAction } from '@/workflow/trfWorkflow';
-import { useNotificationStore } from '@/store/notificationStore';
-import { notifyEmployeeStatusChangeWA } from '@/lib/notifyStatusChangeWA';
+import { findNextActiveStatus, type WorkflowAction, type LumpsumInput } from '@trf/shared';
 
 // ============================================
 // DATABASE ROW & PAYLOAD INTERFACES
@@ -276,6 +274,7 @@ interface TRFState {
     currentUser: User,
     updates: UpdateTRFInput,
     note: string,
+    lumpsum?: LumpsumInput,
   ) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
@@ -305,6 +304,7 @@ interface TRFState {
     currentUser: User,
     action: WorkflowAction,
     remarks?: string,
+    lumpsum?: LumpsumInput,
   ) => Promise<boolean>;
 
   findNextActiveStatus: (
@@ -600,160 +600,8 @@ export const useTRFStore = create<TRFState>()(
         } catch (error) { console.error('Delete TRF failed:', error); return false; }
       },
 
-      editAndApproveTRF: async (id, currentUser, updates, note) => {
-        if (!isSupabaseEnabled()) return false;
-
-        const trf = get().trfs.find((t) => t.id === id);
-        if (!trf) return false;
-
-        if (currentUser.role !== 'HR' && currentUser.role !== 'GA') {
-          console.error('editAndApproveTRF: role tidak diizinkan', currentUser.role);
-          return false;
-        }
-
-        const expectedStatus: TRFStatus =
-          currentUser.role === 'HR' ? 'HOD_APPROVED' : 'PM_APPROVED';
-
-        if (trf.status !== expectedStatus) {
-          console.error(
-            `editAndApproveTRF: status tidak sesuai. Expected ${expectedStatus}, got ${trf.status}`,
-          );
-          return false;
-        }
-
-        try {
-          const now = new Date().toISOString();
-
-          const actorEmployee = currentUser.employeeId
-            ? get().employees.find((e) => e.id === currentUser.employeeId)
-            : undefined;
-          const actorDisplayName = actorEmployee?.employeeName ?? currentUser.username;
-
-          const baseUpdatePayload: Record<string, unknown> = {
-            travel_purpose: updates.travelPurpose,
-            start_date: updates.startDate,
-            end_date: updates.endDate,
-            purpose_remarks: updates.purposeRemarks,
-            accommodation: updates.accommodation,
-            travel_arrangements: updates.travelArrangements,
-            purpose_entries: updates.purposeEntries || [],
-            accommodations: updates.accommodations || [],
-            updated_at: now,
-          };
-
-          // ============================================
-          // HR: edit TRF DAN langsung approve ke tahap berikutnya
-          // (lumpsum sudah disimpan terpisah oleh pemanggil sebelum ini).
-          // ============================================
-          if (currentUser.role === 'HR') {
-            const nextStatus = get().findNextActiveStatus('HR_APPROVED', trf.department);
-
-            const { error } = await supabase
-              .from('trfs')
-              .update({
-                ...baseUpdatePayload,
-                status: nextStatus,
-                parallel_approval: {
-                  ...(trf.parallelApproval || {}),
-                  hr: {
-                    status: 'APPROVED' as const,
-                    actionAt: now,
-                    actionById: currentUser.id,
-                    actionByName: actorDisplayName,
-                    remarks: note || '',
-                  },
-                },
-              })
-              .eq('id', id);
-
-            if (error) throw error;
-
-            await get().addStatusHistory({
-              trfId: id,
-              changedBy: currentUser.id,
-              changedByName: actorDisplayName,
-              oldStatus: trf.status,
-              newStatus: nextStatus,
-              remarks: note?.trim() || `TRF diedit dan disetujui otomatis oleh HR`,
-            });
-
-            const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
-            if (ownerEmployee?.userId) {
-              await useNotificationStore.getState().createNotification({
-                userId: ownerEmployee.userId,
-                trfId: id,
-                trfNumber: trf.trfNumber,
-                title: `TRF ${trf.trfNumber} diperbarui & disetujui oleh HR`,
-                message:
-                  note?.trim() ||
-                  `${actorDisplayName} (HR) telah memperbarui dan menyetujui TRF ini.`,
-                createdBy: currentUser.id,
-                createdByName: actorDisplayName,
-              });
-            }
-
-            await get().fetchAllData();
-            return true;
-          }
-
-          // ============================================
-          // GA: edit TRF SAJA, TIDAK auto-approve. Status tetap PM_APPROVED.
-          // GA tetap wajib upload dokumen lewat halaman Process untuk benar-benar
-          // menyelesaikan (approve) TRF-nya.
-          // ============================================
-          const { error } = await supabase
-            .from('trfs')
-            .update(baseUpdatePayload)
-            .eq('id', id);
-
-          if (error) throw error;
-
-          // Audit trail: status tidak berubah, ini murni pencatatan edit.
-          await supabase.from('status_history').insert([
-            {
-              trf_id: id,
-              changed_by: currentUser.id,
-              changed_by_name: actorDisplayName,
-              old_status: trf.status,
-              new_status: trf.status,
-              remarks:
-                note?.trim() ||
-                `Detail TRF diedit oleh GA (${actorDisplayName}), menunggu proses dokumen.`,
-            },
-          ]);
-
-          // Notifikasi WA + in-app: "diedit", BUKAN "disetujui" — supaya
-          // employee tidak salah kira TRF-nya sudah final.
-          void notifyEmployeeStatusChangeWA({
-            trfId: id,
-            newStatus: trf.status,
-            actorName: actorDisplayName,
-            remarks: note,
-            editedOnly: true,
-          });
-
-          const ownerEmployee = get().employees.find((e) => e.id === trf.employeeId);
-          if (ownerEmployee?.userId) {
-            await useNotificationStore.getState().createNotification({
-              userId: ownerEmployee.userId,
-              trfId: id,
-              trfNumber: trf.trfNumber,
-              title: `TRF ${trf.trfNumber} diedit oleh GA`,
-              message:
-                note?.trim() ||
-                `${actorDisplayName} (GA) memperbarui detail TRF ini. TRF masih menunggu proses dokumen (voucher/tiket) sebelum final disetujui.`,
-              createdBy: currentUser.id,
-              createdByName: actorDisplayName,
-            });
-          }
-
-          await get().fetchAllData();
-          return true;
-        } catch (error) {
-          console.error('editAndApproveTRF error:', error);
-          return false;
-        }
-      },
+      editAndApproveTRF: async (id, _currentUser, updates, note, lumpsum) =>
+        applyWorkflow(id, 'edit-approve', { updates, note, lumpsum }),
 
       getVisibleTRFs: (user) => {
   const allTRFs = get().trfs;
@@ -910,205 +758,16 @@ export const useTRFStore = create<TRFState>()(
           }));
       },
 
-handleVerify: async (
-  trfId: string,
-  currentUser: User,
-  action: WorkflowAction,
-  remarks?: string,
-) => {
-  const trf = get().trfs.find((t) => t.id === trfId);
-  if (!trf) return false;
-
-  try {
-    let nextStatus = getNextStatus(trf.status, currentUser.role, action);
-
-    if (action === 'APPROVE' || action === 'VERIFY') {
-      nextStatus = get().findNextActiveStatus(nextStatus, trf.department);
-    }
-
-    const now = new Date().toISOString();
-
-    // 🔑 Resolve nama asli dari tabel employees via employeeId
-    const verifierEmployee = currentUser.employeeId
-      ? get().employees.find((e) => e.id === currentUser.employeeId)
-      : undefined;
-    const verifierDisplayName = verifierEmployee?.employeeName ?? currentUser.username;
-
-    const updatePayload: Record<string, unknown> = {
-      status: nextStatus,
-      updated_at: now,
-    };
-
-    if (action === 'VERIFY') {
-      updatePayload.admin_dept_verify = {
-        verified: true,
-        verifiedAt: now,
-        verifierId: currentUser.id,
-        verifierName: verifierDisplayName,
-        remarks: remarks || '',
-      };
-    }
-
-    const { error: updateError } = await supabase
-      .from('trfs')
-      .update(updatePayload)
-      .eq('id', trfId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    await get().addStatusHistory({
-      trfId,
-      changedBy: currentUser.id,
-      changedByName: verifierDisplayName,
-      oldStatus: trf.status,
-      newStatus: nextStatus,
-      remarks: remarks || `Verified by ${currentUser.role}`,
-    });
-
-    await get().fetchAllData();
-    return true;
-  } catch (error) {
-    console.error('Verify Error:', error);
-    return false;
-  }
-},
-
-handleApproval: async (
-  trfId: string,
-  currentUser: User,
-  action: WorkflowAction,
-  remarks?: string,
-) => {
-  const trf = get().trfs.find((t) => t.id === trfId);
-  if (!trf) return false;
-
-  try {
-    let nextStatus = getNextStatus(
-      trf.status,
-      currentUser.role,
-      action as Parameters<typeof getNextStatus>[2],
-    );
-
-    if (action === 'APPROVE' || action === 'VERIFY') {
-      nextStatus = get().findNextActiveStatus(nextStatus, trf.department);
-    }
-
-    const now = new Date().toISOString();
-
-    // 🔑 Resolve nama asli dari tabel employees via employeeId,
-    // fallback ke username kalau tidak ketemu (misal HR/PM tidak punya employee_id)
-    const approverEmployee = currentUser.employeeId
-      ? get().employees.find((e) => e.id === currentUser.employeeId)
-      : undefined;
-    const approverDisplayName = approverEmployee?.employeeName ?? currentUser.username;
-
-    const updatePayload: Record<string, unknown> = {
-      status: nextStatus,
-      updated_at: now,
-    };
-
-    if (action === 'APPROVE') {
-      const approvalAction = {
-        status: 'APPROVED' as const,
-        actionAt: now,
-        actionById: currentUser.id,
-        actionByName: approverDisplayName,
-        remarks: remarks || '',
-      };
-
-      if (currentUser.role === 'HOD') {
-        updatePayload.parallel_approval = {
-          ...(trf.parallelApproval || {}),
-          hod: approvalAction,
-        };
-      } else if (currentUser.role === 'HR') {
-        updatePayload.parallel_approval = {
-          ...(trf.parallelApproval || {}),
-          hr: approvalAction,
-        };
-      } else if (currentUser.role === 'PM') {
-        updatePayload.pm_approval = {
-          approved: true,
-          approvedAt: now,
-          approverId: currentUser.id,
-          approverName: approverDisplayName,
-          remarks: remarks || '',
-        };
-      }
-    }
-
-    const { error: updateError } = await supabase
-      .from('trfs')
-      .update(updatePayload)
-      .eq('id', trfId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    await get().addStatusHistory({
-      trfId,
-      changedBy: currentUser.id,
-      changedByName: approverDisplayName,
-      oldStatus: trf.status,
-      newStatus: nextStatus,
-      remarks: remarks || `${action} by ${currentUser.role}`,
-    });
-
-    await get().fetchAllData();
-    return true;
-  } catch (error) {
-    console.error('Workflow Error:', error);
-    return false;
-  }
-},
-// ➕ WAJIB ADA: dipanggil oleh handleVerify & handleApproval untuk skip role yang tidak aktif
-      findNextActiveStatus: (
-        targetStatus: string,
-        trfDepartment?: string,
-      ): TRFStatus => {
-        const activeUsers = get().users;
-
-        const statusToRoleMap: Record<string, string> = {
-          PENDING_APPROVAL: 'HOD',
-          HOD_APPROVED: 'HR',
-          HR_APPROVED: 'PM',
-          PM_APPROVED: 'GA',
-        };
-
-        let currentStatus = targetStatus;
-
-        for (let i = 0; i < 5; i++) {
-          const requiredRole = statusToRoleMap[currentStatus];
-          if (!requiredRole) break;
-
-          const isApproverActive = activeUsers.some((u) => {
-            const matchesRole = u.role === requiredRole;
-            const matchesDept =
-              requiredRole === 'ADMIN_DEPT'
-                ? u.department === trfDepartment
-                : true;
-
-            return matchesRole && matchesDept && u.is_active !== false;
-          });
-                    if (!isApproverActive) {
-            console.warn(
-              `Role ${requiredRole} sedang tidak aktif. Mengalihkan approval otomatis...`,
-            );
-
-            if (currentStatus === 'PENDING_APPROVAL') currentStatus = 'HOD_APPROVED';
-            else if (currentStatus === 'HOD_APPROVED') currentStatus = 'HR_APPROVED';
-            else if (currentStatus === 'HR_APPROVED') currentStatus = 'PM_APPROVED';
-            else if (currentStatus === 'PM_APPROVED') currentStatus = 'APPROVED';
-          } else {
-            break;
-          }
-        }
-
-        return currentStatus as TRFStatus;
+      handleVerify: async (id, _currentUser, action, remarks) => {
+        const verification = action === 'VERIFY' || action === 'REVISE';
+        const endpoint = verification ? 'verify' : action === 'REJECT' ? 'reject' : 'approve';
+        return applyWorkflow(id, endpoint, verification ? { decision: action === 'VERIFY' ? 'YES' : 'NO', remarks } : { remarks });
       },
+      handleApproval: async (id, _currentUser, action, remarks, lumpsum) => {
+        const endpoint = action === 'APPROVE' ? 'approve' : action === 'REJECT' ? 'reject' : action === 'REVISE' ? 'revise' : 'verify';
+        return applyWorkflow(id, endpoint, action === 'VERIFY' ? { decision: 'YES', remarks } : { remarks, ...(lumpsum ? { lumpsum } : {}) });
+      },
+      findNextActiveStatus: (target, department) => findNextActiveStatus(target, get().users, department) as TRFStatus,
       // ============================================
       // USER MANAGEMENT (SUPER ADMIN)
       // ============================================
@@ -1234,18 +893,6 @@ handleApproval: async (
           );
         }
 
-        // Kirim notifikasi WA ke employee untuk setiap transisi status nyata
-        // (verify, approve, reject, revise, edit&approve). Dilewati untuk
-        // penciptaan TRF awal (oldStatus belum ada). Sengaja tidak di-await
-        // supaya latensi WA/Fonnte tidak menghambat alur approval utama.
-        if (entry.oldStatus) {
-          void notifyEmployeeStatusChangeWA({
-            trfId: entry.trfId,
-            newStatus: entry.newStatus as TRFStatus,
-            actorName: entry.changedByName,
-            remarks: entry.remarks,
-          });
-        }
       },
 
       getEmployeeById: (id) => get().employees.find((e) => e.id === id),
@@ -1783,3 +1430,13 @@ export const useDashboardStore =
       }
     },
   }));
+
+async function applyWorkflow(id: string, endpoint: string, body: unknown): Promise<boolean> {
+  const userId = useAuthStore.getState().currentUser?.id;
+  try {
+    const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/' + endpoint, { method: 'POST', body });
+    if (useAuthStore.getState().currentUser?.id !== userId) return false;
+    useTRFStore.setState((state) => ({ trfs: state.trfs.map((item) => item.id === id ? trf : item) }));
+    return true;
+  } catch (error) { console.error('TRF workflow failed:', error); return false; }
+}

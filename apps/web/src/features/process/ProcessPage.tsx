@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog';
 import { useTRFStore, useAuthStore } from '@/store';
 import { gaProcessTRF } from '@/store/supabaseStore';
-import { notifyEmployeeTravelDocumentsWA } from '@/lib/notifyTravelDocumentsWA';
 import type { TRF } from '@/types';
 import {
   Plane,
@@ -39,13 +38,14 @@ const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   // ✅ MENGGUNAKAN forceRefreshTRFs agar UI lebih responsif
-  const { getTRFsForProcessing, forceRefreshTRFs, employees } = useTRFStore();
+  const { getTRFsForProcessing, forceRefreshTRFs } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
   // State dengan tipe data yang sangat spesifik
+  const standalone = !!import.meta.env.VITE_API_BASE_URL;
   const [documents, setDocuments] = useState<Record<string, {name: string, url: string, path?: string}>>({});
   const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
@@ -137,51 +137,21 @@ const ProcessPage: React.FC = () => {
     const hasAtLeastOneDocument = Object.entries(documents).some(
       ([key, doc]) => key !== 'groundInfo' && doc?.url,
     );
-    if (!hasAtLeastOneDocument) {
+    if (!standalone && !hasAtLeastOneDocument) {
       toast.error('Upload minimal 1 dokumen (voucher/tiket) sebelum memproses TRF ini.');
       return;
     }
 
-    const gaEmployee = currentUser.employeeId
-      ? employees.find((e) => e.id === currentUser.employeeId)
-      : undefined;
-    const gaDisplayName = gaEmployee?.employeeName ?? currentUser.username;
     try {
-      // ✅ REVISI FATAL: Ubah gaDocuments menjadi ga_documents agar masuk ke Supabase
-      const { error } = await supabase
-        .from("trfs")
-        .update({
-          ga_documents: {
-            ...documents,
-            groundInfo
-          }
-        })
-        .eq("id", selectedTRF.id);
-
-      if (error) throw error;
-
       // Update status workflow TRF
       await gaProcessTRF(
         selectedTRF.id,
         currentUser.id,
-        gaDisplayName,
-        {}, 
+        currentUser.username,
+        { transportation: groundInfo },
         remarksToEmployee
       );
 
-      const ownerEmployee = employees.find((e) => e.id === selectedTRF.employeeId);
-      const documentsToSend = Object.entries(documents)
-        .filter(([key]) => key !== 'groundInfo')
-        .map(([type, doc]) => ({ type, name: doc.name, url: doc.url, path: doc.path }));
-
-      void notifyEmployeeTravelDocumentsWA({
-        employeePhone: ownerEmployee?.phone,
-        employeeName: ownerEmployee?.employeeName ?? 'Employee',
-        trfNumber: selectedTRF.trfNumber,
-        documents: documentsToSend,
-      });
-
-      // ✅ Pakai fungsi sakti untuk merefresh UI seketika
       await forceRefreshTRFs();
       
       toast.success(`TRF ${selectedTRF.trfNumber} processed successfully`);
@@ -306,7 +276,7 @@ const ProcessPage: React.FC = () => {
               Process TRF {selectedTRF?.trfNumber}
             </DialogTitle>
             <DialogDescription>
-              Upload documents and vouchers for this travel request
+              {standalone ? 'Unggah dokumen belum tersedia. Proses TRF dapat diuji tanpa dokumen.' : 'Upload documents and vouchers for this travel request'}
             </DialogDescription>
           </DialogHeader>
 
@@ -322,7 +292,7 @@ const ProcessPage: React.FC = () => {
                 type="file"
                 accept=".pdf,image/*"
                 onChange={(e) => handleUpload(e, "hotelVoucher")}
-                disabled={isUploading}
+                disabled={isUploading || standalone}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border rounded-md p-1"
               />
             </div>
@@ -337,7 +307,7 @@ const ProcessPage: React.FC = () => {
                 type="file"
                 accept=".pdf,image/*"
                 onChange={(e) => handleUpload(e, "flightTicket")}
-                disabled={isUploading}
+                disabled={isUploading || standalone}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer border rounded-md p-1"
               />
             </div>
@@ -352,7 +322,7 @@ const ProcessPage: React.FC = () => {
                 type="file"
                 accept=".pdf,image/*"
                 onChange={(e) => handleUpload(e, "shipTicket")}
-                disabled={isUploading}
+                disabled={isUploading || standalone}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer border rounded-md p-1"
               />
             </div>

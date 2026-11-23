@@ -7,6 +7,7 @@ vi.mock('@/lib/notifyStatusChangeWA', () => ({ notifyEmployeeStatusChangeWA: vi.
 
 import { useAuthStore, useTRFStore } from './index';
 import type { TRF } from '@/types';
+import { gaProcessTRF, saveHRLumpsum } from './supabaseStore';
 
 const draft: TRF = {
   id: 'draft-1', trfNumber: 'TRF-1', employeeId: 'employee-1', status: 'DRAFT',
@@ -58,4 +59,53 @@ it('clears business data when a session becomes invalid', () => {
   useAuthStore.getState().invalidateSession();
   expect(useTRFStore.getState().trfs).toEqual([]);
   expect(useTRFStore.getState().employees).toEqual([]);
+});
+
+describe('workflow API adapters', () => {
+  const reviewer = { id: 'reviewer', username: 'hr', email: 'hr@example.invalid', role: 'HR' as const };
+  it('sends verification NO with optional remarks to the verify endpoint', async () => {
+    request.mockResolvedValue({ ...draft, status: 'NEEDS_REVISION' });
+    expect(await useTRFStore.getState().handleVerify(draft.id, reviewer, 'REVISE')).toBe(true);
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/verify', { method: 'POST', body: { decision: 'NO', remarks: undefined } });
+  });
+  it('sends HR approval and lumpsum together without trusting the caller identity', async () => {
+    request.mockResolvedValue({ ...draft, status: 'HR_APPROVED', lumpsumAmount: 75_000 });
+    expect(await useTRFStore.getState().handleApproval(draft.id, reviewer, 'APPROVE', 'Approved', { amount: 75_000, note: 'Travel' })).toBe(true);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', body: { remarks: 'Approved', lumpsum: { amount: 75_000, note: 'Travel' } } });
+    expect(useTRFStore.getState().trfs[0]?.status).toBe('HR_APPROVED');
+  });
+  it('sends HR edit and approval as one request', async () => {
+    request.mockResolvedValue({ ...draft, status: 'HR_APPROVED' });
+    const updates = { purposeRemarks: 'Edited' }, lumpsum = { amount: 150_000, note: '' };
+    expect(await useTRFStore.getState().editAndApproveTRF(draft.id, reviewer, updates, 'Note', lumpsum)).toBe(true);
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/edit-approve', { method: 'POST', body: { updates, note: 'Note', lumpsum } });
+  });
+  it('retains cached data when approval fails', async () => {
+    request.mockRejectedValue(new Error('HTTP 409'));
+    expect(await useTRFStore.getState().handleApproval(draft.id, reviewer, 'APPROVE')).toBe(false);
+    expect(useTRFStore.getState().trfs[0]?.status).toBe('DRAFT');
+  });
+  it('does not restore data after session invalidation while approval is in flight', async () => {
+    useAuthStore.setState({ currentUser: reviewer });
+    let resolve!: (trf: TRF) => void;
+    request.mockReturnValue(new Promise<TRF>((done) => { resolve = done; }));
+    const pending = useTRFStore.getState().handleApproval(draft.id, reviewer, 'APPROVE');
+    useAuthStore.getState().invalidateSession();
+    resolve({ ...draft, status: 'HR_APPROVED' });
+    expect(await pending).toBe(false);
+    expect(useTRFStore.getState().trfs).toEqual([]);
+  });
+  it('processes through the API with empty document metadata until WP5', async () => {
+    request.mockResolvedValue({ ...draft, status: 'GA_PROCESSED' });
+    expect(await gaProcessTRF(draft.id, 'spoofed', 'spoofed', { transportation: 'Car' }, 'Done')).toBe(true);
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/process', { method: 'POST', body: {
+      voucherDetails: { transportation: 'Car' }, remarks: 'Done', ga_documents: {},
+    } });
+  });
+  it('keeps the old lumpsum helper as an atomic HR approval adapter', async () => {
+    request.mockResolvedValue({ ...draft, status: 'HR_APPROVED' });
+    await saveHRLumpsum(draft.id, 75_000, 'Travel', 'spoofed');
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', body: { remarks: '', lumpsum: { amount: 75_000, note: 'Travel' } } });
+  });
 });

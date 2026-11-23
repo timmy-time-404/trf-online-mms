@@ -17,7 +17,6 @@ import type { AccommodationEntry } from './components/accommodationEntries';
 import TravelArrangementSection from './components/TravelArrangementSection';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import { saveHRLumpsum } from '@/store/supabaseStore';
 import {
   HR_LUMPSUM_OPTIONS,
   isHRLumpsumAmount,
@@ -215,41 +214,13 @@ const TRFEditPage: React.FC = () => {
       const input = buildUpdateInput();
 
       if (isEditApproveMode) {
-        // Sama seperti alur Approve biasa di ApprovalPage: HR wajib
-        // menyimpan lumpsum dulu sebelum TRF disetujui.
-        if (isHREditApprove) {
-          try {
-            if (
-              lumpsum === '' ||
-              !isHRLumpsumAmount(lumpsum)
-            ) {
-              toast.error(
-                'Pilih nominal lumpsum sebelum menyimpan & approve.',
-              );
-              setIsSubmitting(false);
-              setSubmitDialogOpen(false);
-              return;
-            }
-
-            await saveHRLumpsum(
-              trf.id,
-              lumpsum,
-              lumpsumNote,
-              currentUser.id,
-            );
-          } catch (error) {
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : 'Gagal menyimpan data Lumpsum.',
-            );
-            setIsSubmitting(false);
-            setSubmitDialogOpen(false);
-            return;
-          }
+        if (isHREditApprove && (lumpsum === '' || !isHRLumpsumAmount(lumpsum))) {
+          toast.error('Pilih nominal lumpsum sebelum menyimpan & approve.');
+          return;
         }
 
-        const success = await editAndApproveTRF(trf.id, currentUser, input, noteToEmployee);
+        const success = await editAndApproveTRF(trf.id, currentUser, input, noteToEmployee,
+          isHREditApprove && lumpsum !== '' ? { amount: lumpsum, note: lumpsumNote } : undefined);
         if (!success) throw new Error('Gagal menyimpan perubahan TRF');
 
         await fetchAllData();

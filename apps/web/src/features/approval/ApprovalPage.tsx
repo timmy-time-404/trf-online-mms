@@ -21,8 +21,6 @@ import {
 } from '@/components/ui/dialog';
 
 import { useTRFStore, useAuthStore } from '@/store';
-// ✅ IMPORT FUNGSI LUMPSUM DARI SUPABASE STORE
-import { saveHRLumpsum } from '@/store/supabaseStore';
 import {
   HR_LUMPSUM_OPTIONS,
   isHRLumpsumAmount,
@@ -107,25 +105,11 @@ const ApprovalPage: React.FC = () => {
         return;
       }
 
-      try {
-        await saveHRLumpsum(
-          selectedTRF.id,
-          lumpsum,
-          lumpsumNote,
-          currentUser.id,
-        );
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : 'Gagal menyimpan data Lumpsum.',
-        );
-        return;
-      }
     }
 
     // Panggil fungsi workflow utama
-    const success = await handleApproval(selectedTRF.id, currentUser, action, remarks);
+    const success = await handleApproval(selectedTRF.id, currentUser, action, remarks,
+      userRole === 'HR' && action === 'APPROVE' && lumpsum !== '' ? { amount: lumpsum, note: lumpsumNote } : undefined);
 
     if (success) {
        toast.success(`TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
