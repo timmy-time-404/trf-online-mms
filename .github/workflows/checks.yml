@@ -1,18 +1,36 @@
-name: Check TRF Online
+name: Checks
 
 on:
   pull_request:
+  push:
+    branches: [dev, main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test-and-build:
+  check:
+    name: lint, typecheck, test, build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci --ignore-scripts
-      - run: npm test
-      - run: npm run build
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          # Placeholders: the legacy web build only embeds these, it never calls them in CI.
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder

@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  - package-ecosystem: npm # pnpm workspaces are detected from pnpm-lock.yaml
     directory: /
     schedule:
       interval: weekly
