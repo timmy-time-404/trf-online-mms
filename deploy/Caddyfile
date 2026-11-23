@@ -15,6 +15,8 @@
         reverse_proxy api:3000
     }
     handle {
-        respond "TRF sedang disiapkan untuk pengujian. Fitur aplikasi belum tersedia." 503
+        root * /srv
+        try_files {path} /index.html
+        file_server
     }
 }

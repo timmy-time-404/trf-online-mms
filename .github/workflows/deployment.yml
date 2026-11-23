@@ -35,6 +35,10 @@ jobs:
           docker compose exec -T db psql -X -U trf_owner -d trf -v ON_ERROR_STOP=1 < deploy/verify-schema.sql
           SEED_CONFIRM=trf-development-dummy-only docker compose run --rm db-tools node dist/db/seed.js
           docker compose exec -T db psql -X -U trf_owner -d trf -v ON_ERROR_STOP=1 < db/tests/seed-contract.sql
+      - name: Verify TRF API against disposable PostgreSQL database
+        run: |
+          docker compose exec -T db createdb -U trf_owner trf_wp1_test
+          DB_NAME=trf_wp1_test docker compose run --rm db-tools node dist/modules/trf/integration.js
       - name: Connect restricted API runtime and verify seven-role authentication
         shell: bash
         run: |
@@ -52,7 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent http://127.0.0.1:8080/api/health | python3 -c 'import json,sys; assert json.load(sys.stdin) == {"status": "ok"}'
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/)" = 503
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/)" = 200
+          curl --fail --silent http://127.0.0.1:8080/trf/new | grep -q '<div id="root"></div>'
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/api/missing)" = 404
           test "$(docker compose exec -T db sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_password)" psql -h 127.0.0.1 -U trf_owner -d trf -Atc "SELECT 1"')" = 1
           docker compose stop api

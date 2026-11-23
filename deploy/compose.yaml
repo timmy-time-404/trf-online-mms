@@ -62,7 +62,10 @@ services:
     logging: *logging
 
   gateway:
-    image: ${CADDY_IMAGE:-caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0}
+    image: trf-web:${RELEASE_TAG:?Set RELEASE_TAG to the reviewed release identifier}
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
     user: "1000:1000"
     restart: unless-stopped
     read_only: true

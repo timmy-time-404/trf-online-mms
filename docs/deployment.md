@@ -3,9 +3,11 @@
 ## Status dan batas penggunaan
 
 Konfigurasi `deploy/compose.yaml` menyiapkan PostgreSQL 17, API Hono, dan gateway
-Caddy. API menyediakan `/health` dan autentikasi cookie; frontend dan alur bisnis masih bergantung
-pada Supabase. Gateway menampilkan status pengembangan (HTTP 503) sampai migrasi
-fitur selesai. Login API tersedia; integrasi UI dan migrasi modul bisnis belum selesai.
+Caddy. Image gateway membangun React dengan `VITE_API_BASE_URL=/api`, menyajikan SPA,
+dan meneruskan `/api/*` ke Hono pada origin yang sama. Autentikasi serta inti TRF
+(daftar/detail, buat, edit, resubmit, hapus DRAFT) memakai PostgreSQL. Approval,
+master data, roster, Early Recall, dokumen, dan notifikasi masih menunggu paket berikutnya.
+Konfigurasi ini hanya untuk pengujian fitur yang telah dimigrasi; bukan bukti paritas seluruh sistem.
 Supabase lama tetap tersedia dan tidak diubah oleh konfigurasi ini.
 
 Target saat ini adalah lingkungan uji bersama pada satu VPS. Backup terjadwal
@@ -31,7 +33,7 @@ cp deploy/.env.example deploy/.env
 sh deploy/init-secrets.sh
 # Edit RELEASE_TAG di deploy/.env menjadi identitas rilis yang sudah ditinjau.
 docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet
-docker compose --env-file deploy/.env -f deploy/compose.yaml build api
+docker compose --env-file deploy/.env -f deploy/compose.yaml build api gateway
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --wait --wait-timeout 120
 docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 curl --fail http://127.0.0.1:8080/api/health
@@ -41,8 +43,8 @@ Script secret tidak mengganti password yang sudah ada. PostgreSQL membaca
 password awal dari file Compose secret; perubahan file tersebut setelah database
 dibuat **tidak** merotasi password database. Jangan menaruh isi secret di log.
 User `trf_owner` adalah administrator bootstrap; jangan gunakan untuk request API.
-API belum diberi akses database. Role runtime dengan grant minimum perlu dibuat
-bersama migrasi skema dan otorisasi API, sebelum menghubungkan fitur.
+Hubungkan API ke database menggunakan overlay autentikasi setelah migrasi dan
+provisioning role runtime, sesuai langkah di bawah.
 
 Database tidak memublikasikan port dan memakai jaringan internal tersendiri.
 Gateway hanya terikat ke `127.0.0.1:8080`. Untuk mengakses dari komputer penguji:
@@ -82,8 +84,9 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm -e AUTH_TE
 ```
 
 Gunakan tiga file Compose tersebut untuk operasi rilis berikutnya. Role `trf_api`
-hanya diberi akses tabel autentikasi, tanpa superuser, update user, SELECT TRF atau
-execute fungsi domain. `provision-runtime` menyelaraskan password login DB dengan
+menjadi anggota `trf_auth_runtime`, tanpa superuser atau update user. Migrasi `0002`
+memberi akses baca employee serta CRUD terbatas TRF dan insert history; otorisasi
+per akun diperiksa API. `provision-runtime` menyelaraskan password login DB dengan
 file private `deploy/secrets/runtime_password`; jangan jalankan saat ada rotasi
 password tanpa merencanakan restart API. File mount runtime dapat dibaca proses
 non-root, sementara direktori host tetap mode 0700. File credential akun dummy
@@ -94,7 +97,21 @@ Origin yang tepat untuk mutasi, expiry bergeser 30 menit dengan batas 12 jam,
 dan pembatasan percobaan login per identifier. Belum ada perubahan password atau
 undangan. `VITE_API_BASE_URL=/api` mengaktifkan adapter cookie frontend untuk uji
 integrasi; modul bisnis yang belum dimigrasi mengembalikan error eksplisit.
-Jangan merilis frontend mode ini sebelum akses data dan workflow dipindahkan.
+Inti TRF bisa diuji pada mode ini; workflow WP2 dan modul WP3–WP5 belum tersedia.
+
+Uji integrasi WP1 memakai database PostgreSQL terpisah yang namanya berakhiran
+`_test`, dengan administrator yang dapat menjalankan migrasi dan membuat role uji:
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T db createdb -U trf_owner trf_wp1_test
+DB_NAME=trf_wp1_test docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm db-tools node dist/modules/trf/integration.js
+```
+
+Harness menjalankan API dengan koneksi role terbatas, menguji tujuh peran,
+konflik status, rollback history, dan sesi invalid, lalu menghapus fixture miliknya.
+Untuk PostgreSQL lokal, set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`,
+`DB_PASSWORD_FILE`, dan `DB_MIGRATIONS_DIR`, jalankan build shared lalu
+`pnpm --filter @trf/api test:integration`.
 
 Untuk uji migrasi, buat database kosong terpisah dan atur `DB_NAME` pada task;
 ubah `SEED_CREDENTIALS_FILE` ke path berbeda di `/run/seed` untuk credential uji.
@@ -126,7 +143,7 @@ Lihat [db/README.md](../db/README.md) untuk batas pengujian dan aturan migrasi.
 - Log memakai rotasi 10 MB, maksimal 3 file per layanan. Periksa kesehatan dan
   kapasitas disk secara berkala; belum ada pemantauan eksternal atau job terjadwal.
 
-## Syarat sebelum domain dibuka
+## Syarat sebelum pemakaian seluruh fitur
 
 Migrasikan autentikasi, otorisasi per role, TRF, approval, GA, early recall,
 roster/OS, dokumen, serta notifikasi dan verifikasi terhadap spesifikasi lama.
@@ -137,12 +154,12 @@ Pengiriman WhatsApp uji wajib dibatasi di backend ke dua nomor yang disetujui
 pemilik; layanan pengiriman belum dikonfigurasi pada fondasi ini.
 
 Domain terbaru yang dikonfirmasi pemilik adalah `meong-mms.org`.
-Gateway TLS dapat disiapkan untuk status pengembangan menggunakan overlay berikut:
+Gateway TLS untuk uji WP1 memakai overlay berikut setelah build dan migrasi:
 
 ```sh
 # Set APP_DOMAIN=meong-mms.org di deploy/.env, pastikan A/AAAA benar dan port 80/443 tersedia.
-docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.domain.yaml config --quiet
-docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.domain.yaml up -d --wait
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.auth.yaml -f deploy/compose.domain.yaml config --quiet
+docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.auth.yaml -f deploy/compose.domain.yaml up -d --wait
 curl -I http://meong-mms.org/
 curl -i https://meong-mms.org/
 curl --fail https://meong-mms.org/api/health
@@ -152,7 +169,7 @@ Caddy menyimpan sertifikat di volume persisten. Jangan hapus volume TLS saat ril
 Pastikan record AAAA tidak menunjuk ke hosting lain. Untuk VPS yang baru memakai
 IPv4 ini, hapus AAAA lama pada domain utama sampai IPv6 VPS dikonfigurasi dan diuji.
 Health check kontainer TLS hanya liveness, bukan validitas sertifikat. Respons root
-tetap 503 selama fitur belum tersedia; health API 200 tidak membuktikan paritas bisnis.
+menjadi 200 saat image frontend terpasang; health API 200 tidak membuktikan paritas bisnis.
 Overlay ini belum menambahkan pembatasan akses penguji ketika fitur diaktifkan.
 
 Sebelum fitur diaktifkan untuk penguji: siapkan pembatasan akses penguji,

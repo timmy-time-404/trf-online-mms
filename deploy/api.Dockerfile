@@ -5,7 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
 RUN pnpm install --frozen-lockfile --filter @trf/api...
-RUN pnpm --filter @trf/api build \
+RUN pnpm --filter @trf/shared build && pnpm --filter @trf/api build \
     && pnpm --filter @trf/api deploy --legacy --prod /runtime
 
 FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS runtime
