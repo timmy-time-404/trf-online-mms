@@ -31,7 +31,7 @@ const TRFEditPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { currentUser } = useAuthStore();
-  const { getTRFById, resubmitTRF, editAndApproveTRF, fetchAllData } = useTRFStore();
+  const { getTRFById, updateTRF, resubmitTRF, editAndApproveTRF, fetchAllData } = useTRFStore();
 
   const trf = id ? getTRFById(id) : undefined;
 
@@ -270,12 +270,14 @@ const TRFEditPage: React.FC = () => {
         return;
       }
 
-      const success = await resubmitTRF(trf.id, currentUser.id, currentUser.username, input);
+      const success = trf.status === 'DRAFT'
+        ? await updateTRF(trf.id, input)
+        : await resubmitTRF(trf.id, currentUser.id, currentUser.username, input);
 
       if (!success) throw new Error('Gagal resubmit TRF');
 
       await fetchAllData();
-      toast.success('TRF berhasil diperbarui dan dikirim ulang untuk verifikasi');
+      toast.success(trf.status === 'DRAFT' ? 'Draft TRF berhasil diperbarui' : 'TRF berhasil diperbarui dan dikirim ulang untuk verifikasi');
       navigate(`/trf/${trf.id}`);
     } catch {
       toast.error(isEditApproveMode ? 'Gagal menyimpan perubahan TRF' : 'Gagal mengirim ulang TRF');
@@ -464,7 +466,7 @@ const TRFEditPage: React.FC = () => {
           ) : (
             <>
               <Send className="w-4 h-4 mr-2" />
-              Resubmit TRF
+              {trf.status === 'DRAFT' ? 'Simpan Draft' : 'Resubmit TRF'}
             </>
           )}
         </Button>
@@ -478,17 +480,17 @@ const TRFEditPage: React.FC = () => {
             ? 'Konfirmasi Simpan & Approve'
             : isGAEditOnly
               ? 'Konfirmasi Simpan Perubahan'
-              : 'Confirm Resubmission'
+              : trf.status === 'DRAFT' ? 'Konfirmasi Simpan Draft' : 'Confirm Resubmission'
         }
         description={
           isHREditApprove
             ? 'Perubahan akan disimpan, TRF akan langsung disetujui ke tahap berikutnya, dan notifikasi berisi catatanmu akan dikirim ke employee. Lanjutkan?'
             : isGAEditOnly
               ? 'Perubahan akan disimpan dan employee akan mendapat notifikasi. TRF ini BELUM disetujui kamu akan diarahkan ke halaman Process untuk upload dokumen. Lanjutkan?'
-              : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
+              : trf.status === 'DRAFT' ? 'Simpan perubahan draft TRF ini?' : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
         }
         onConfirm={handleSubmit}
-        confirmText={isHREditApprove ? 'Simpan & Approve' : isGAEditOnly ? 'Simpan Perubahan' : 'Resubmit'}
+        confirmText={isHREditApprove ? 'Simpan & Approve' : isGAEditOnly || trf.status === 'DRAFT' ? 'Simpan Perubahan' : 'Resubmit'}
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}

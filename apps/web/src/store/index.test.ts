@@ -1,18 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { query, from, enabled } = vi.hoisted(() => {
-  const query = {
-    delete: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(), maybeSingle: vi.fn(),
-    then: undefined,
-  };
-  return { query, from: vi.fn(() => query), enabled: vi.fn(() => true) };
-});
-
-vi.mock('@/lib/supabase', () => ({ supabase: { from }, isSupabaseEnabled: enabled }));
+const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('@/api/client', () => ({ apiRequest: request }));
+vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn() }, isSupabaseEnabled: () => false }));
 vi.mock('@/lib/notifyStatusChangeWA', () => ({ notifyEmployeeStatusChangeWA: vi.fn() }));
 
-import { useTRFStore } from './index';
+import { useAuthStore, useTRFStore } from './index';
 import type { TRF } from '@/types';
 
 const draft: TRF = {
@@ -24,39 +17,45 @@ const draft: TRF = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  enabled.mockReturnValue(true);
+
   useTRFStore.setState({ trfs: [draft, { ...draft, id: 'draft-2' }] });
 });
 
 describe('delete TRF', () => {
   it('reports database rejection and retains the cached request', async () => {
-    query.maybeSingle.mockResolvedValue({ data: null, error: { message: 'Access denied' } });
+    request.mockRejectedValue(new Error('Access denied'));
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(false);
     expect(useTRFStore.getState().trfs).toHaveLength(2);
   });
 
   it('does not report success when no draft was deleted (RLS, changed status, or missing row)', async () => {
-    query.maybeSingle.mockResolvedValue({ data: null, error: null });
+    request.mockResolvedValue({});
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(false);
     expect(useTRFStore.getState().trfs).toHaveLength(2);
   });
 
   it('only removes the request after the database confirms deletion', async () => {
-    query.maybeSingle.mockResolvedValue({ data: { id: draft.id }, error: null });
+    request.mockResolvedValue({ id: draft.id });
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(true);
-    expect(query.eq).toHaveBeenCalledWith('status', 'DRAFT');
+    expect(request).toHaveBeenCalledWith('/trfs/' + draft.id, { method: 'DELETE' });
     expect(useTRFStore.getState().trfs.map((trf) => trf.id)).toEqual(['draft-2']);
   });
 
   it('reports unexpected transport failures without deleting local data', async () => {
-    query.maybeSingle.mockRejectedValue(new Error('Connection lost'));
+    request.mockRejectedValue(new Error('Connection lost'));
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(false);
     expect(useTRFStore.getState().trfs).toHaveLength(2);
   });
 
   it('does not claim deletion when backend is unavailable', async () => {
-    enabled.mockReturnValue(false);
+    request.mockRejectedValue(new Error('Backend unavailable'));
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(false);
-    expect(from).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
   });
+});
+
+it('clears business data when a session becomes invalid', () => {
+  useAuthStore.getState().invalidateSession();
+  expect(useTRFStore.getState().trfs).toEqual([]);
+  expect(useTRFStore.getState().employees).toEqual([]);
 });
