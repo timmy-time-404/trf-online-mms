@@ -13,11 +13,11 @@ BEGIN
     'Unexpected view count';
   ASSERT (SELECT count(*) FROM pg_sequences WHERE schemaname = 'public') = 2,
     'Unexpected sequence count';
-  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 97,
+  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 98,
     'Unexpected index count';
-  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 165,
+  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 167,
     'Unexpected constraint count';
-  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 45,
+  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 46,
     'Unexpected routine count';
   ASSERT (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
     WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) = 12,
