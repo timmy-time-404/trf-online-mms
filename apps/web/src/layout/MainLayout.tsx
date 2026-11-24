@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import {
   Link,
   Outlet,
@@ -732,6 +733,7 @@ const MainLayout: React.FC = () => {
       .find((item) =>
         isNavItemActive(item.path),
       )?.label ?? 'Dashboard';
+  useDocumentTitle(currentPageTitle);
 
   const renderNavigation = (
     expanded: boolean,

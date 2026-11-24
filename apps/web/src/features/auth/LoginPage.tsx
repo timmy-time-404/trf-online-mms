@@ -22,8 +22,10 @@ import {
   loginWithAppSession,
 } from '@/lib/appSession';
 import { useAuthStore } from '@/store';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const LoginPage: React.FC = () => {
+  useDocumentTitle('Login');
   const navigate = useNavigate();
   const login = useAuthStore(
     (state) => state.login,

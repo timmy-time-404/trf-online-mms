@@ -23,8 +23,10 @@ import {
   changeAppPassword,
 } from '@/lib/appSession';
 import { useAuthStore } from '@/store';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const ChangePasswordPage: React.FC = () => {
+  useDocumentTitle('Ganti Password');
   const navigate = useNavigate();
 
   const currentUser = useAuthStore(

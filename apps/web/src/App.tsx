@@ -46,6 +46,7 @@ const HotelManagementPage = lazy(() => import('@/features/hotels/HotelManagement
 const ProcessPage = lazy(() => import('@/features/process/ProcessPage'));
 const SuperAdminPage = lazy(() => import('@/features/super-admin/SuperAdminPage'));
 const VerifyPage = lazy(() => import('@/features/verify/VerifyPage'));
+const NotFoundPage = lazy(() => import('@/features/not-found/NotFoundPage'));
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -607,10 +608,9 @@ const App: React.FC = () => {
         <Route
           path="*"
           element={
-            <Navigate
-              to="/"
-              replace
-            />
+            <ProtectedRoute>
+              <NotFoundPage />
+            </ProtectedRoute>
           }
         />
       </Routes>

@@ -8,13 +8,26 @@
     header {
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
-        Cache-Control no-store
+        # Internal app: never framed, never indexed.
+        Content-Security-Policy "frame-ancestors 'none'"
+        X-Frame-Options DENY
+        X-Robots-Tag "noindex, nofollow"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
         -Server
     }
     handle_path /api/* {
+        header Cache-Control no-store
         reverse_proxy api:3000
     }
+    # Vite assets have content hashes in their names, so they can be cached forever.
+    @assets path /assets/*
+    handle @assets {
+        header Cache-Control "public, max-age=31536000, immutable"
+        root * /srv
+        file_server
+    }
     handle {
+        header Cache-Control no-store
         root * /srv
         try_files {path} /index.html
         file_server
