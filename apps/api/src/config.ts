@@ -8,4 +8,6 @@ const envSchema = z.object({
 
 export type Config = z.infer<typeof envSchema>;
 
-export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config => envSchema.parse(env);
+// API_PORT wins over PORT so local tooling that injects PORT (e.g. for Vite) cannot move the API.
+export const loadConfig = (env: NodeJS.ProcessEnv = process.env): Config =>
+  envSchema.parse({ ...env, PORT: env.API_PORT ?? env.PORT });

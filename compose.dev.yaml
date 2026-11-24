@@ -1,0 +1,29 @@
+# Local development database only. Production runs from deploy/compose.yaml.
+# Start with `pnpm dev:db`; data lives in the `trf-dev-local-db` volume.
+name: trf-local
+
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: trf
+      POSTGRES_USER: trf_owner
+      POSTGRES_PASSWORD_FILE: /run/secrets/owner_password
+    secrets: [owner_password]
+    ports:
+      - "127.0.0.1:${DEV_DB_PORT:-5433}:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U trf_owner -d trf"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+secrets:
+  owner_password:
+    file: ./.dev/owner_password
+
+volumes:
+  db:
+    name: trf-dev-local-db
