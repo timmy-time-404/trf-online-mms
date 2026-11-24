@@ -215,3 +215,7 @@ pemulihan sebelum data penting mulai digunakan.
 Referensi: [Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/),
 [image PostgreSQL](https://hub.docker.com/_/postgres),
 [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy).
+
+## Catatan rilis
+
+Hapus folder source lama sebelum mengekstrak arsip rilis (`rm -rf apps packages db`), supaya file yang sudah dihapus di Git tidak ikut ter-build. Jangan hapus `deploy/.env` dan `deploy/secrets`. Ambil `pg_dump -Fc` ke `/opt/trf-dev/backups` sebelum menjalankan migrasi.
