@@ -11,6 +11,11 @@
     reverse_proxy gateway:8080
 }
 
+# www is only an alias; send it to the canonical domain.
+www.{$APP_DOMAIN} {
+    redir https://{$APP_DOMAIN}{uri} permanent
+}
+
 # Container-only liveness; public certificate validity is checked separately.
 :8081 {
     respond /health "ok" 200
