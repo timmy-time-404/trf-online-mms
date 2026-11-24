@@ -1,3 +1,4 @@
+import { formatPurposes } from '@/features/trf/components/travelPurposeEntries';
 import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -232,7 +233,7 @@ const ProcessPage: React.FC = () => {
                         <MapPin className="w-4 h-4 text-gray-400" />
                         <div>
                           <p className="text-xs text-gray-500">Purpose</p>
-                          <p className="text-sm font-medium text-gray-900">{trf.travelPurpose}</p>
+                          <p className="text-sm font-medium text-gray-900">{formatPurposes(trf.travelPurpose)}</p>
                         </div>
                       </div>
                     </div>
@@ -280,7 +281,7 @@ const ProcessPage: React.FC = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Hotel className="w-4 h-4 text-blue-600" /> Hotel Voucher</span>
-                {documents.hotelVoucher && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
+                {documents.hotelVoucher && <span className="text-xs text-green-600 font-semibold">Terunggah</span>}
               </label>
               <input
                 type="file"
@@ -289,13 +290,18 @@ const ProcessPage: React.FC = () => {
                 disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border rounded-md p-1"
               />
+              {documents.hotelVoucher && (
+                <a href={documents.hotelVoucher.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 hover:underline">
+                  {documents.hotelVoucher.name} — buka / unduh (pilih file baru untuk mengganti)
+                </a>
+              )}
             </div>
 
             {/* Flight Ticket */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Ticket className="w-4 h-4 text-green-600" /> Flight Ticket</span>
-                {documents.flightTicket && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
+                {documents.flightTicket && <span className="text-xs text-green-600 font-semibold">Terunggah</span>}
               </label>
               <input
                 type="file"
@@ -304,13 +310,18 @@ const ProcessPage: React.FC = () => {
                 disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer border rounded-md p-1"
               />
+              {documents.flightTicket && (
+                <a href={documents.flightTicket.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 hover:underline">
+                  {documents.flightTicket.name} — buka / unduh (pilih file baru untuk mengganti)
+                </a>
+              )}
             </div>
 
             {/* Ship Ticket */}
             <div className="space-y-2">
               <label className="text-sm font-medium flex items-center justify-between">
                 <span className="flex items-center gap-2"><Ship className="w-4 h-4 text-cyan-600" /> Ship Ticket</span>
-                {documents.shipTicket && <span className="text-xs text-green-600 font-semibold">✅ Uploaded</span>}
+                {documents.shipTicket && <span className="text-xs text-green-600 font-semibold">Terunggah</span>}
               </label>
               <input
                 type="file"
@@ -319,6 +330,11 @@ const ProcessPage: React.FC = () => {
                 disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer border rounded-md p-1"
               />
+              {documents.shipTicket && (
+                <a href={documents.shipTicket.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 hover:underline">
+                  {documents.shipTicket.name} — buka / unduh (pilih file baru untuk mengganti)
+                </a>
+              )}
             </div>
 
             {/* Ground Info Textarea */}

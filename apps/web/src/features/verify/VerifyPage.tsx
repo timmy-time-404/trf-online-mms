@@ -1,3 +1,4 @@
+import { formatPurposes } from '@/features/trf/components/travelPurposeEntries';
 import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -182,7 +183,7 @@ const VerifyPage: React.FC = () => {
                         <MapPin className="w-4 h-4 text-gray-400" />
                         <div>
                           <p className="text-xs text-gray-500">Purpose</p>
-                          <p className="text-sm font-medium text-gray-900">{trf.travelPurpose}</p>
+                          <p className="text-sm font-medium text-gray-900">{formatPurposes(trf.travelPurpose)}</p>
                         </div>
                       </div>
                     </div>

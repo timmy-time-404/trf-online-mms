@@ -161,19 +161,7 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     icon: Building2,
     roles: ['GA', 'SUPER_ADMIN'],
   },
-  {
-    path: '/reports',
-    label: 'Reports',
-    icon: Briefcase,
-    roles: [
-      'ADMIN_DEPT',
-      'HOD',
-      'HR',
-      'PM',
-      'GA',
-      'SUPER_ADMIN',
-    ],
-  },
+  // Reports is hidden until it has real content; TRF list already exports to Excel.
   {
     path: '/admin/users',
     label: 'User Management',

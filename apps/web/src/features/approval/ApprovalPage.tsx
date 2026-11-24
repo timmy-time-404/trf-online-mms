@@ -1,3 +1,4 @@
+import { formatPurposes } from '@/features/trf/components/travelPurposeEntries';
 import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -163,7 +164,7 @@ const ApprovalPage: React.FC = () => {
                 </p>
 
                 <p className="text-sm text-gray-500 mt-1">
-                  {trf.travelPurpose}
+                  {formatPurposes(trf.travelPurpose)}
                 </p>
               </div>
 
