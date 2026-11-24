@@ -13,8 +13,10 @@
     "test:integration": "pnpm build && node dist/modules/trf/integration.js",
     "test:workflow": "pnpm build && node dist/modules/trf/workflow.integration.js",
     "test:master-data": "pnpm build && node dist/master-data.integration.js",
+    "test:operations": "pnpm build && node dist/operations.integration.js",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed-features": "tsx src/db/seed-features-cli.ts"
   },
   "dependencies": {
     "@trf/shared": "workspace:*",
