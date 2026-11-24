@@ -178,7 +178,8 @@ const formatDate = (
 ): string => {
   if (!value) return '-';
 
-  const date = new Date(`${value}T00:00:00`);
+  // The API sends date columns as ISO timestamps ("2026-11-08T00:00:00.000Z"); use the calendar date part.
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
 
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -1294,7 +1295,7 @@ const RosterOperationsPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1080px] border-collapse text-sm">
+                  <table className="w-full min-w-[960px] border-collapse text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                         <th className="px-3 py-3">
@@ -1312,7 +1313,8 @@ const RosterOperationsPage: React.FC = () => {
                         <th className="px-3 py-3">
                           Exposure
                         </th>
-                        <th className="px-3 py-3 text-right">
+                        {/* Sticky so the action stays visible when the table scrolls sideways. */}
+                        <th className="sticky right-0 bg-gray-50 px-3 py-3 text-right">
                           {canProcessMovement
                             ? 'Process'
                             : 'Access'}
@@ -1404,7 +1406,7 @@ const RosterOperationsPage: React.FC = () => {
                             )}
                           </td>
 
-                          <td className="px-3 py-4 text-right">
+                          <td className="sticky right-0 bg-white px-3 py-4 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]">
                             {canProcessMovement ? (
                               <Button
                                 type="button"

@@ -36,6 +36,13 @@ import {
 import { toast } from 'sonner';
 import { apiRequest } from '@/api/client';
 
+/** Labels shown to GA; the keys are the API document slots. */
+const DOCUMENT_LABELS: Record<string, string> = {
+  hotelVoucher: 'Hotel Voucher',
+  flightTicket: 'Flight Ticket',
+  shipTicket: 'Ship Ticket',
+};
+
 const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
@@ -108,6 +115,7 @@ const ProcessPage: React.FC = () => {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (!file || !selectedTRF) return;
+    const label = DOCUMENT_LABELS[type] ?? type;
     setIsUploading(true);
     try {
       const form = new FormData();
@@ -117,9 +125,9 @@ const ProcessPage: React.FC = () => {
       });
       setSelectedTRF(updated);
       applyDocuments(updated);
-      toast.success(`${type} berhasil diunggah.`);
+      toast.success(`${label} berhasil diunggah.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Gagal mengunggah ${type}.`);
+      toast.error(err instanceof Error ? err.message : `Gagal mengunggah ${label}.`);
     } finally {
       setIsUploading(false);
       e.target.value = '';
