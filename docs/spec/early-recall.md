@@ -35,3 +35,7 @@ Daftar dan detail Early Recall sudah **difilter per peran di server** (Edge Func
 ## Perhitungan
 
 Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculateInclusiveDays` di `EarlyRecallFormPage.tsx`. [kode] Rumus OS yang terbentuk (`os_generated_days`) dihitung di server. [DB?]
+
+## Tanggal kembali aktual (#12)
+
+Sejak migrasi `0008_actual_dates_not_future`, `confirm_return` menolak Actual Return Date yang lebih dari tanggal bisnis hari ini (WITA), di samping syarat lama (setelah awal cuti dan tidak melewati akhir cuti). OS baru terbentuk setelah karyawan benar-benar kembali. Sistem lama menerima tanggal masa depan.

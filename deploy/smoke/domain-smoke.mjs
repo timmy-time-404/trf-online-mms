@@ -127,7 +127,7 @@ if (recall) {
   linked = (await api('GA', 'POST', `/trf-documents/${linked.id}/flightTicket`, { form: f2, version: linked.version })).json;
   await api('GA', 'POST', `/trfs/${linked.id}/process`, { body: { remarks: 'Tiket recall' }, version: linked.version });
   await rstep('GA', 'ga_start'); await rstep('GA', 'travel_booked'); await rstep('EMPLOYEE', 'acknowledge');
-  await rstep('GA', 'confirm_return', { actualReturnDate: day(3) });
+  await rstep('GA', 'confirm_return', { actualReturnDate: day(0) }); // actual dates cannot be in the future (#12)
   check('Recall selesai → OS_GENERATED', recall.status === 'OS_GENERATED', recall.status);
 }
 check('Roster saya (EMPLOYEE)', (await api('EMPLOYEE', 'POST', '/roster-operations', { body: { action: 'my_summary' } })).status === 200);
