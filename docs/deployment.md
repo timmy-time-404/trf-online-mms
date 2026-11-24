@@ -7,8 +7,9 @@ Caddy. Image gateway membangun React dengan `VITE_API_BASE_URL=/api`, menyajikan
 dan meneruskan `/api/*` ke Hono pada origin yang sama. Autentikasi serta inti TRF
 (daftar/detail, buat, edit, resubmit, hapus DRAFT), serta workflow approval memakai
 PostgreSQL. Perubahan workflow, history, dan outbox berada dalam satu transaksi;
-outbox belum dikirim. Master data, roster, Early Recall, dokumen, dan pembacaan
-notifikasi masih menunggu paket berikutnya.
+outbox belum dikirim. WP3 menambahkan master data, notifikasi in-app milik sendiri,
+dan statistik dashboard. Onboarding HR penuh, roster, Early Recall, dan dokumen
+masih menunggu paket berikutnya.
 Konfigurasi ini hanya untuk pengujian fitur yang telah dimigrasi; bukan bukti paritas seluruh sistem.
 Supabase lama tetap tersedia dan tidak diubah oleh konfigurasi ini.
 
@@ -129,6 +130,24 @@ outbox, indeks pending, dan grant terbatas. Jangan mengubah migrasi WP1 yang sud
 Upload masih ditunda hingga WP5; pengujian GA sementara dapat menyelesaikan proses
 dengan metadata dokumen kosong. Outbox memakai nomor employee dari DB; worker WP5
 wajib menangani nomor kosong dan membatasi pengiriman ke nomor uji yang disetujui.
+
+WP3 memerlukan migrasi `0004_master_data` sebelum image API baru diaktifkan.
+Migrasi menambah tabel hotel minimal dan grant kolom terbatas untuk master data.
+CREATE user mengembalikan password acak sekali kepada SUPER_ADMIN; password tidak
+tersimpan di state bisnis/localStorage dan hanya hash Argon2id disimpan di DB.
+User baru tetap wajib mengganti password, sementara endpoint ganti password
+menunggu WP4. DELETE user berarti nonaktif dan mencabut semua sesi, bukan hapus fisik.
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec -T db createdb -U trf_owner trf_wp3_test
+DB_NAME=trf_wp3_test docker compose --env-file deploy/.env -f deploy/compose.yaml run --rm db-tools node dist/master-data.integration.js
+```
+
+Untuk PostgreSQL lokal gunakan `DB_NAME=trf_wp3_test` dengan variabel koneksi yang
+sama, lalu `pnpm --filter @trf/api test:master-data`. Harness memerlukan database
+disposable tanpa user aplikasi. CI menjalankan regresi WP1, WP2, dan WP3 pada DB terpisah.
+Data kamar contoh statis dihapus. CRUD hotel menyimpan nama/kapasitas opsional;
+okupansi belum dihitung karena belum ada sumber dan aturan yang disepakati.
 
 Untuk uji migrasi, buat database kosong terpisah dan atur `DB_NAME` pada task;
 ubah `SEED_CREDENTIALS_FILE` ke path berbeda di `/run/seed` untuk credential uji.
