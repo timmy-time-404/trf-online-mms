@@ -1,0 +1,208 @@
+import LateSubmissionField from './components/LateSubmissionField';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import SearchableEmployeeInfoSection from './components/SearchableEmployeeInfoSection';
+import TravelPurposeSection from './components/TravelPurposeSection';
+import { createEmptyPurposeEntry } from './components/travelPurposeEntries';
+import AccommodationSection from './components/AccommodationSection';
+import type { AccommodationEntry } from './components/accommodationEntries';
+import TravelArrangementSection from './components/TravelArrangementSection';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { useTRFStore, useAuthStore } from '@/store';
+import type { CreateTRFInput, TravelArrangement, TravelPurposeEntry } from '@/types';
+import { Send, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { validateTravelPurposeEntries } from '@/lib/trfValidation';
+
+const TRFNewPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { currentUser } = useAuthStore();
+  const { createTRF, fetchAllData, employees } = useTRFStore();
+
+  // ── State: multi-purpose entries ──────────────────────────
+  const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>([
+    createEmptyPurposeEntry(),
+  ]);
+
+  // ── State: multi-accommodation entries ────────────────────
+  const [accommodationEntries, setAccommodationEntries] = useState<AccommodationEntry[]>([]);
+
+  // ── State: travel arrangements (sudah multi dari sebelumnya) ─
+  const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>([]);
+
+  // ── State: employee ID ────────────────────────────────────
+  const [lateSubmissionReason,setLateSubmissionReason] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [department, setDepartment]  = useState('');
+
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting]         = useState(false);
+
+  // ── Auto-fill employee untuk role EMPLOYEE ────────────────
+  useEffect(() => {
+    if (currentUser?.role === 'EMPLOYEE') {
+      const emp = employees.find(e => e.userId === currentUser.id);
+      if (emp) {
+        setEmployeeId(emp.id);
+        setDepartment(emp.department);
+      }
+    }
+  }, [currentUser, employees]);
+
+  const handleEmployeeChange = (nextEmployeeId: string) => {
+    const selectedEmployee = employees.find(
+      employee => employee.id === nextEmployeeId,
+    );
+
+    setEmployeeId(nextEmployeeId);
+    setDepartment(selectedEmployee?.department ?? '');
+  };
+
+  // ── Build CreateTRFInput dari state ───────────────────────
+  // Field lama diisi dari entry pertama untuk backward-compat dengan store.
+  const buildCreateInput = (): CreateTRFInput => {
+    const firstPurpose = purposeEntries[0];
+    const firstAccom   = accommodationEntries[0];
+
+    return {
+      employeeId, lateSubmissionReason,
+      department,
+
+      // Backward-compat: single fields dari entry pertama
+      travelPurpose : firstPurpose?.travelPurpose ?? '',
+      startDate     : firstPurpose?.startDate     ?? '',
+      endDate       : firstPurpose?.endDate       ?? '',
+      purposeRemarks: firstPurpose?.purposeRemarks ?? '',
+
+      // Multi entries (untuk PDF)
+      purposeEntries  : purposeEntries,
+      accommodations  : accommodationEntries.map(({ _id, ...rest }) => rest),
+
+      // Backward-compat: single accommodation
+      accommodation: firstAccom
+        ? {
+            hotelName   : firstAccom.hotelName,
+            checkInDate : firstAccom.checkInDate,
+            checkOutDate: firstAccom.checkOutDate,
+            remarks     : firstAccom.remarks,
+          }
+        : undefined,
+
+      travelArrangements,
+    };
+  };
+
+  // ── Validation ────────────────────────────────────────────
+  const validateForm = (): boolean => {
+    if (!employeeId) {
+      toast.error('Akun employee tidak tertaut dengan sistem.');
+      return false;
+    }
+
+    const error = validateTravelPurposeEntries(purposeEntries);
+    if (error) {
+      toast.error(error);
+      return false;
+    }
+
+    return true;
+  };
+
+  // ── Submit ────────────────────────────────────────────────
+  const handleSubmit = async (draft = false) => {
+    if (!currentUser || (draft ? !employeeId : !validateForm())) return;
+
+    setIsSubmitting(true);
+    try {
+      const input  = buildCreateInput();
+      const newTRF = await createTRF({...input,draft});
+      if (!newTRF) throw new Error('Gagal membuat data');
+
+      await fetchAllData();
+
+      toast.success(draft ? 'Draft tersimpan' : 'TRF terkirim');
+      navigate(`/trf/${newTRF.id}`);
+    } catch {
+      toast.error('Failed to submit TRF');
+    } finally {
+      setIsSubmitting(false);
+      setSubmitDialogOpen(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────
+  return (
+    <div className="space-y-6 max-w-4xl mx-auto">
+      {/* Page header */}
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-4 -ml-2 text-gray-500"
+          onClick={() => navigate('/trf')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back to List
+        </Button>
+        <h1 className="text-2xl font-bold text-gray-900">New Travel Request</h1>
+        <p className="text-gray-500 mt-1">Buat Formulir Permintaan Perjalanan Baru</p>
+      </div>
+
+      {/* Form sections */}
+      <div className="space-y-6">
+        <SearchableEmployeeInfoSection
+          employees={employees}
+          selectedEmployeeId={employeeId}
+          onEmployeeChange={handleEmployeeChange}
+          selectionLocked={currentUser?.role === 'EMPLOYEE'}
+        />
+
+        {/* ── Multi Travel Purpose ── */}
+        <TravelPurposeSection
+          entries={purposeEntries}
+          onChange={setPurposeEntries}
+        />
+
+        <LateSubmissionField start={purposeEntries[0]?.startDate} value={lateSubmissionReason} onChange={setLateSubmissionReason} />
+        {/* ── Multi Accommodation ── */}
+        <AccommodationSection
+          entries={accommodationEntries}
+          onChange={setAccommodationEntries}
+        />
+
+        {/* ── Travel Arrangement (sudah multi dari sebelumnya) ── */}
+        <TravelArrangementSection
+          arrangements={travelArrangements}
+          onChange={setTravelArrangements}
+        />
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
+        <Button variant="outline" onClick={() => navigate('/trf')}>
+          Cancel
+        </Button>
+        <Button onClick={() => setSubmitDialogOpen(true)} disabled={isSubmitting}>
+          <Send className="w-4 h-4 mr-2" />
+          Submit TRF
+        </Button>
+      </div>
+
+      <Button variant="outline" disabled={isSubmitting || !employeeId} onClick={()=>void handleSubmit(true)}>Simpan draft</Button>
+      <ConfirmDialog
+        open={submitDialogOpen}
+        onOpenChange={setSubmitDialogOpen}
+        title="Confirm Submission"
+        description="Are you sure you want to submit this TRF for approval?"
+        onConfirm={()=>handleSubmit(false)}
+        confirmText="Submit"
+        cancelText="Cancel"
+        variant="warning"
+        loading={isSubmitting}
+      />
+    </div>
+  );
+};
+
+export default TRFNewPage;

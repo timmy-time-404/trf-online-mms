@@ -1,0 +1,175 @@
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  User,
+  Building,
+  MapPin,
+  Calendar,
+  Phone,
+  Mail,
+  Loader2,
+  AlertTriangle
+} from 'lucide-react';
+import { useTRFStore, useAuthStore } from '@/store';
+
+interface EmployeeInfoSectionProps {
+  selectedEmployeeId?: string;
+  onEmployeeChange?: (employeeId: string) => void;
+  disabled?: boolean;
+}
+
+/* ================= INFO ROW ================= */
+// ✅ REVISION: Moved InfoRow outside the main component to prevent re-creation on every render
+const InfoRow = ({
+  icon: Icon,
+  label,
+  value
+}: {
+  icon: React.ElementType;
+  label: string;
+  value?: string;
+}) => (
+  <div className="flex items-start gap-3">
+    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+      <Icon className="w-4 h-4 text-gray-500" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-sm font-medium text-gray-900 truncate">
+        {value || '-'}
+      </p>
+    </div>
+  </div>
+);
+
+const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
+  selectedEmployeeId,
+  onEmployeeChange,
+  disabled = false
+}) => {
+  const { employees } = useTRFStore();
+  const { currentUser } = useAuthStore();
+
+  const selectedEmployee =
+    currentUser?.role === "EMPLOYEE"
+      ? employees.find(e => e.userId === currentUser.id)
+      : employees.find(e => e.id === selectedEmployeeId);
+
+  /* ================= UI ================= */
+  return (
+    <Card className="border shadow-sm">
+      <CardHeader className="pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <User className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <CardTitle className="text-lg">
+              Employee Information
+            </CardTitle>
+            <p className="text-sm text-gray-500">
+              Pilih dan Periksa Informasi Karyawan
+            </p>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-6">
+        {/* ================= SELECT ================= */}
+        <div className="space-y-2">
+          <Label>
+            Employee Name
+            <span className="text-red-500">*</span>
+          </Label>
+
+          {/* ✅ LOGIC UNTUK EMPLOYEE (READ-ONLY) */}
+          {currentUser?.role === "EMPLOYEE" ? (
+            <div className="p-3 border rounded-md bg-gray-50 text-sm font-medium text-gray-700">
+              {employees.length === 0 ? (
+                <span className="flex items-center text-gray-500">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Memuat data...
+                </span>
+              ) : selectedEmployee ? (
+                selectedEmployee.employeeName
+              ) : (
+                <span className="flex items-center text-red-600">
+                  <AlertTriangle className="w-4 h-4 mr-2" /> 
+                  Akun belum ditautkan ke Master Employee (Hubungi HR)
+                </span>
+              )}
+            </div>
+          ) : (
+            <Select
+              value={selectedEmployeeId || ""}
+              onValueChange={(value) => onEmployeeChange && onEmployeeChange(value)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select an employee" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.id}>
+                    {emp.employeeName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* ================= DETAILS ================= */}
+        {selectedEmployee && (
+          <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-lg font-semibold text-blue-700">
+                  {selectedEmployee.employeeName.charAt(0)}
+                </span>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-gray-900">
+                  {selectedEmployee.employeeName}
+                </h4>
+                <p className="text-sm text-gray-500">
+                  {selectedEmployee.jobTitle || 'N/A'}
+                </p>
+              </div>
+
+              <div className="ml-auto">
+                <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  selectedEmployee.employeeType === 'EMPLOYEE'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-purple-100 text-purple-800'
+                }`}>
+                  {selectedEmployee.employeeType}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <InfoRow icon={Building} label="Department" value={selectedEmployee.department || '-'} />
+              <InfoRow icon={MapPin} label="Section" value={selectedEmployee.section || '-'} />
+              <InfoRow icon={MapPin} label="Point of Hire" value={selectedEmployee.pointOfHire || '-'} />
+              <InfoRow icon={Mail} label="Email" value={selectedEmployee.email || '-'} />
+              <InfoRow icon={Phone} label="Phone" value={selectedEmployee.phone || '-'} />
+              <InfoRow icon={Calendar} label="Date of Hire" value={selectedEmployee.dateOfHire || '-'} />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default EmployeeInfoSection;

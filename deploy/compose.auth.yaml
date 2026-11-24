@@ -1,0 +1,27 @@
+services:
+  api:
+    environment:
+      DB_HOST: db
+      DB_NAME: trf
+      DB_USER: trf_api
+      DB_PASSWORD_FILE: /run/secrets/runtime_password
+      APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN}
+      DOCUMENTS_DIR: /data/documents
+      DOCUMENT_SIGNING_KEY_FILE: /run/secrets/document_signing_key
+      # Empty token file keeps WhatsApp delivery off; the outbox stays pending.
+      FONNTE_TOKEN_FILE: /run/secrets/fonnte_token
+      # Development safety net: only these numbers ever receive messages.
+      WA_ALLOWLIST: ${WA_ALLOWLIST:-}
+    secrets: [runtime_password, document_signing_key, fonnte_token]
+    networks: [database, application]
+    depends_on:
+      db:
+        condition: service_healthy
+
+secrets:
+  runtime_password:
+    file: ./secrets/runtime_password
+  document_signing_key:
+    file: ./secrets/document_signing_key
+  fonnte_token:
+    file: ./secrets/fonnte_token

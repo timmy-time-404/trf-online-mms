@@ -1,0 +1,33 @@
+name: Laporan bug
+description: Sesuatu tidak berjalan seperti seharusnya
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Apa yang terjadi?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Langkah untuk mengulang
+      placeholder: "1. Login sebagai HOD\n2. Buka /approvals\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Yang seharusnya terjadi
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Peran pengguna
+      options: [EMPLOYEE, ADMIN_DEPT, HOD, HR, PM, GA, SUPER_ADMIN, Tidak relevan]
+  - type: textarea
+    id: context
+    attributes:
+      label: Lingkungan dan bukti
+      description: Browser, environment (lokal/staging/produksi), screenshot. Jangan tempel password atau token.
