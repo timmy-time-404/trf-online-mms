@@ -2,6 +2,8 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { etag, expectedVersion } from './concurrency.ts';
 import { requireRole, requireSession, type AuthEnv } from '../../middleware/auth.ts';
 import type { openDatabase } from '../../db/connection.ts';
 import { createTRFService } from './service.ts';
@@ -28,20 +30,23 @@ export function createTRFRoutes(db: ReturnType<typeof openDatabase>, origin: str
   const body = async (request: { json: () => Promise<unknown> }) => {
     try { return await request.json(); } catch { throw new HTTPException(400, { message: 'JSON tidak valid.' }); }
   };
-  app.get('/', async (c) => c.json(await service.list(c.get('actor'))));
+  app.get('/', async (c) => { const items=await service.list(c.get('actor'));
+    c.header('ETag',`"${createHash('sha256').update(JSON.stringify(items)).digest('hex')}"`); return c.json(items); });
   app.get('/context', async (c) => c.json(await service.context(c.get('actor'))));
   app.get('/queue', async (c) => c.json(await workflow.queue(c.get('actor'))));
-  app.get('/:id', async (c) => c.json(await service.detail(c.get('actor'), c.req.param('id'))));
-  app.post('/', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.create(c.get('actor'), await body(c.req)), 201));
-  app.put('/:id', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), false)));
-  app.post('/:id/resubmit', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), true)));
-  app.delete('/:id', async (c) => c.json(await service.remove(c.get('actor'), c.req.param('id'))));
-  app.post('/:id/verify', requireRole('ADMIN_DEPT'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'verify', await body(c.req))));
-  app.post('/:id/approve', requireRole('HOD', 'HR', 'PM'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'approve', await body(c.req))));
-  app.post('/:id/reject', requireRole('ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'reject', await body(c.req))));
-  app.post('/:id/revise', requireRole('ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'revise', await body(c.req))));
-  app.post('/:id/edit-approve', requireRole('HR', 'GA'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'edit-approve', await body(c.req))));
-  app.post('/:id/process', requireRole('GA'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'process', await body(c.req))));
+  app.get('/:id', async (c) => { const item=await service.detail(c.get('actor'),c.req.param('id')); c.header('ETag',etag(item.version)); return c.json(item); });
+  app.post('/', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.create(c.get('actor'), await body(c.req), expectedVersion(c.req.header('If-Match'))), 201));
+  app.put('/:id', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), false, expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/resubmit', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), true, expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/submit', async (c) => c.json(await service.change(c.get('actor'),c.req.param('id'),await body(c.req),true,expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/cancel', async (c) => c.json(await service.cancel(c.get('actor'),c.req.param('id'),await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.delete('/:id', async (c) => c.json(await service.remove(c.get('actor'), c.req.param('id'),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/verify', requireRole('ADMIN_DEPT'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'verify', await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/approve', requireRole('HOD', 'HR', 'PM'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'approve', await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/reject', requireRole('ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'reject', await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/revise', requireRole('ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'revise', await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/edit-approve', requireRole('HR', 'GA'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'edit-approve', await body(c.req),expectedVersion(c.req.header('If-Match')))));
+  app.post('/:id/process', requireRole('GA'), async (c) => c.json(await workflow.act(c.get('actor'), c.req.param('id'), 'process', await body(c.req),expectedVersion(c.req.header('If-Match')))));
   app.onError((error, c) => {
     if (error instanceof HTTPException) return c.json({ message: error.message }, error.status);
     console.error('TRF request failed.', error instanceof Error ? error.name : 'UnknownError');

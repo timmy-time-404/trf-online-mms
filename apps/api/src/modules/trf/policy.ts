@@ -1,7 +1,8 @@
 import { HTTPException } from 'hono/http-exception';
 import type { Actor } from '../../middleware/auth.ts';
+import { normalizeDepartment } from '@trf/shared';
 
-export const normalizeDepartment = (value: string | null | undefined) => value?.trim().toLowerCase() ?? '';
+export { normalizeDepartment } from '@trf/shared';
 export const canSeeTRF = (actor: Actor, trf: { employee_id: string; department: string | null }) => {
   switch (actor.role) {
     case 'EMPLOYEE': return !!actor.employeeId && trf.employee_id === actor.employeeId;
@@ -11,7 +12,7 @@ export const canSeeTRF = (actor: Actor, trf: { employee_id: string; department: 
   }
 };
 export function assertCanEdit(actor: Actor, trf: { employee_id: string; status: string }) {
-  if (actor.role !== 'SUPER_ADMIN' && (actor.role !== 'EMPLOYEE' || actor.employeeId !== trf.employee_id)) {
+  if (actor.employeeId !== trf.employee_id) {
     throw new HTTPException(403, { message: 'TRF hanya dapat diedit pemiliknya.' });
   }
 }

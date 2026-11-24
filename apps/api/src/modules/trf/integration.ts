@@ -55,10 +55,13 @@ try {
     assert.ok(cookie.startsWith('__Host-trf-session='));
     cookies.set(role, cookie);
   }
-  const request = async (role: string | null, path: string, method = 'GET', body?: unknown) => app.request('/trfs' + path, {
-    method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}) },
+  // D13: legacy regression requests carry the version they read before mutation.
+  const request = async (role: string | null, path: string, method = 'GET', body?: unknown) => {
+    const id=path.split('/')[1]; const version=id && /^[0-9a-f-]{36}$/.test(id) ? (await admin`select version from public.trfs where id=${id}`)[0]?.version ?? 0 : 0;
+    return app.request('/trfs' + path, {
+    method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}), 'If-Match': `"${version}"` },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  }); };
   const expectStatus = async (promise: Promise<Response>, status: number) => {
     const response = await promise;
     assert.equal(response.status, status, `${checks}: expected HTTP ${status}, received ${response.status}`);
@@ -89,7 +92,8 @@ try {
   await admin`update public.users set department=' HRMD ' where id=${userIds.get('HOD')!}`;
   await expectStatus(request('EMPLOYEE', '/context'), 200);
   await expectStatus(request('HOD', '/not-an-id'), 400);
-  const input = { employeeId: employeeA, department: 'spoofed', travelPurpose: 'TRAINING', startDate: '2026-12-01', endDate: '2026-12-02', purposeRemarks: 'Training', travelArrangements: [] };
+  // D8: preserve the legacy fixture dates with a late submission reason.
+  const input = { lateSubmissionReason: 'Integration fixture', employeeId: employeeA, department: 'spoofed', travelPurpose: 'TRAINING', startDate: '2026-12-01', endDate: '2026-12-02', purposeRemarks: 'Training', travelArrangements: [] };
   const created = await (await expectStatus(request('EMPLOYEE', '', 'POST', input), 201)).json() as { id: string; status: string; trfNumber: string; department: string };
   createdTRFs.push(created.id);
   assert.equal(created.status, 'SUBMITTED'); assert.equal(created.department, ' HrMd ');
@@ -112,7 +116,7 @@ try {
   await expectStatus(request('GA', '/' + draftId, 'PUT', input), 403);
   await expectStatus(request('EMPLOYEE', '/' + draftId, 'PUT', { purposeRemarks: 'Updated' }), 200);
   await expectStatus(request('EMPLOYEE', '/' + draftId, 'PUT', { employeeId: employeeC }), 403);
-  await expectStatus(request('EMPLOYEE', '/' + draftId + '/resubmit', 'POST', input), 409);
+  await expectStatus(request('EMPLOYEE', '/' + draftId + '/resubmit', 'POST', input), 200);
   await admin`update public.trfs set status='NEEDS_REVISION' where id=${draftId}`;
   await expectStatus(request('EMPLOYEE', '/' + draftId, 'PUT', { purposeRemarks: 'Revision saved' }), 200);
   await expectStatus(request('EMPLOYEE', '/' + draftId, 'DELETE'), 409);
@@ -121,8 +125,9 @@ try {
   const [resubmission] = await admin`select count(*) as total from public.status_history where trf_id=${draftId} and old_status='NEEDS_REVISION' and new_status='SUBMITTED'`;
   assert.equal(Number(resubmission?.total), 1);
   await expectStatus(request('EMPLOYEE', '/' + createdTRFs[2], 'DELETE'), 403);
-  await expectStatus(request('HOD', '/' + createdTRFs[1], 'DELETE'), 200);
-  await expectStatus(request('HOD', '/' + createdTRFs[1]), 404);
+  // D9: deletion belongs to the owner, even when another role sees the draft.
+  await expectStatus(request('HOD', '/' + createdTRFs[1], 'DELETE'), 403);
+  await expectStatus(request('HOD', '/' + createdTRFs[1]), 200);
   // A failed history insert must also roll back the newly created request.
   await admin`revoke insert on public.status_history from trf_auth_runtime`;
   try {

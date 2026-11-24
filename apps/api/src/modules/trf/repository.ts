@@ -1,17 +1,17 @@
 import type postgres from 'postgres';
-import type { CreateTRF } from '@trf/shared';
+import { normalizeDepartment, isUrgent, businessDate, type CreateTRF } from '@trf/shared';
 import type { Actor } from '../../middleware/auth.ts';
 export type Connection = postgres.Sql | postgres.TransactionSql;
 export interface TrfRow extends postgres.Row {
-  id: string; employee_id: string; department: string | null; status: string;
+  id: string; employee_id: string; department: string | null; status: string; version: number;
   travel_purpose: string; start_date: string; end_date: string; purpose_remarks: string | null;
 }
 
 const visibility = (sql: Connection, actor: Actor) => {
   if (actor.role === 'EMPLOYEE') return sql`t.employee_id=${actor.employeeId}`;
   if (actor.role === 'ADMIN_DEPT' || actor.role === 'HOD') {
-    const department = actor.department?.trim().toLowerCase() ?? '';
-    return sql`${department}<>'' and lower(btrim(t.department))=${department}`;
+    const department = normalizeDepartment(actor.department);
+    return sql`${department}<>'' and public.normalize_department(t.department)=${department}`;
   }
   return sql`true`;
 };
@@ -29,30 +29,32 @@ export const findEmployee = async (sql: Connection, id: string) => {
   const [row] = await sql`select * from public.employees where id=${id}`;
   return row;
 };
+export const employeeScope = (sql: Connection, actor: Actor) => actor.role==='EMPLOYEE' ? sql`id=${actor.employeeId}`
+  : ['ADMIN_DEPT','HOD'].includes(actor.role) ? sql`${normalizeDepartment(actor.department)}<>'' and public.normalize_department(department)=${normalizeDepartment(actor.department)}` : sql`true`;
 export const formEmployees = (sql: Connection, actor: Actor) => sql`
-  select * from public.employees where is_active=true
-    and (${actor.role === 'SUPER_ADMIN'} or id=${actor.employeeId}) order by employee_name`;
-export const fields = (sql: Connection, input: CreateTRF) => ({
-  travel_purpose: input.travelPurpose, start_date: input.startDate, end_date: input.endDate,
+  select * from public.employees where is_active=true and ${employeeScope(sql,actor)} order by employee_name`;
+export const fields = (sql: Connection, input: Partial<CreateTRF>) => ({
+  travel_purpose: input.travelPurpose ?? '', start_date: input.startDate || null, end_date: input.endDate || null,
+  late_submission_reason: input.lateSubmissionReason?.trim() || null,
   purpose_remarks: input.purposeRemarks ?? null,
   purpose_entries: sql.json(input.purposeEntries ?? []),
   accommodation: input.accommodation ? sql.json(input.accommodation) : null,
-  accommodations: sql.json(input.accommodations ?? []), travel_arrangements: sql.json(input.travelArrangements),
+  accommodations: sql.json(input.accommodations ?? []), travel_arrangements: sql.json(input.travelArrangements ?? []),
 });
-export const insertRow = async (sql: Connection, input: CreateTRF, department: string) => {
+export const insertRow = async (sql: Connection, input: Partial<CreateTRF>, department: string, draft = false) => {
   const [row] = await sql<TrfRow[]>`insert into public.trfs ${sql({ ...fields(sql, input),
-    employee_id: input.employeeId, department, status: 'SUBMITTED', submitted_at: new Date() })} returning *`;
+    employee_id: input.employeeId!, department, status: draft ? 'DRAFT' : 'SUBMITTED', submitted_at: draft ? null : new Date() })} returning *`;
   return row!;
 };
-export const changeRow = async (sql: Connection, row: TrfRow, input: CreateTRF, resubmit: boolean) => {
+export const changeRow = async (sql: Connection, row: TrfRow, input: Partial<CreateTRF>, resubmit: boolean) => {
   const payload = { ...fields(sql, input), updated_at: new Date(),
     ...(resubmit ? { status: 'SUBMITTED', submitted_at: new Date() } : {}) };
   const [changed] = await sql<TrfRow[]>`update public.trfs set ${sql(payload)}
-    where id=${row.id} and status=${row.status} and employee_id=${row.employee_id} returning *`;
+    where id=${row.id} and version=${row.version} and status=${row.status} and employee_id=${row.employee_id} returning *`;
   return changed;
 };
 export const removeRow = (sql: Connection, row: TrfRow) => sql`delete from public.trfs
-  where id=${row.id} and status='DRAFT' returning id`;
+  where id=${row.id} and version=${row.version} and status='DRAFT' returning id`;
 export const writeHistory = (sql: Connection, actor: Actor, id: string, oldStatus: string | null, newStatus: string, remarks: string) =>
   sql`insert into public.status_history(trf_id,changed_by,changed_by_name,old_status,new_status,remarks)
     values (${id},${actor.id},${actor.displayName},${oldStatus},${newStatus},${remarks})`;
@@ -66,8 +68,10 @@ export function employeeDTO(row: postgres.Row) {
 }
 export function trfDTO(row: TrfRow) {
   return { id: row.id, trfNumber: row.trf_number, employeeId: row.employee_id,
+    version: row.version, etag: `"${row.version}"`, lateSubmissionReason: row.late_submission_reason ?? undefined,
+    urgent: isUrgent(row.purpose_entries?.[0]?.startDate ?? row.start_date,row.submitted_at ? businessDate(new Date(row.submitted_at)) : businessDate()),
     employee: row.employee ? employeeDTO(row.employee) : undefined, department: row.department,
-    travelPurpose: row.travel_purpose, startDate: row.start_date, endDate: row.end_date,
+    travelPurpose: row.travel_purpose, startDate: row.start_date ?? '', endDate: row.end_date ?? '',
     purposeRemarks: row.purpose_remarks ?? undefined, status: row.status,
     purposeEntries: row.purpose_entries ?? [], accommodations: row.accommodations ?? [],
     accommodation: row.accommodation ?? undefined, travelArrangements: row.travel_arrangements ?? [],

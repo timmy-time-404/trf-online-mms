@@ -49,7 +49,7 @@ try {
     await admin`insert into public.notifications(user_id,title,message) values (${id},'WP3','Private notification')`;
   }
   const request = (role: UserRole | null, path: string, method = 'GET', body?: unknown) => app.request(path, {
-    method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}) },
+    method, headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}), ...(path==='/trfs' && method==='POST' ? {'If-Match':'"0"'} : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const expectStatus = async (pending: Response | Promise<Response>, status: number) => {
@@ -72,7 +72,7 @@ try {
   assert.ok(await verify(secret.password_hash, managed.temporaryPassword));
   const second = await (await expectStatus(request('SUPER_ADMIN', '/users', 'POST', { ...body, username: randomUUID(), email: 'second@example.invalid' }), 201)).json() as typeof managed;
   users.push(second.user.id); assert.notEqual(managed.temporaryPassword === second.temporaryPassword, true);
-  const managementPaths = ['/users', '/employees', '/hotels', '/reference', '/locations?keyword=WP3&type=CITY', '/notifications', '/dashboard/stats', '/dashboard/weekly', '/dashboard/rooms'];
+  const managementPaths = ['/users', '/employees', '/hotels', '/reference', '/locations?keyword=WP3&type=CITY', '/notifications', '/dashboard/stats', '/dashboard/weekly'];
   for (const path of managementPaths) await expectStatus(request(null, path), 401);
   for (const role of USER_ROLES) {
     const adminOnly = role === 'SUPER_ADMIN', hr = role === 'HR' || adminOnly, ga = role === 'GA' || adminOnly;
@@ -137,7 +137,7 @@ try {
   monday.setUTCDate(monday.getUTCDate() + (monday.getUTCDay() === 0 ? -6 : 1 - monday.getUTCDay()));
   const weekStart = monday.toISOString().slice(0,10);
   const createdTRF = await (await expectStatus(request('EMPLOYEE', '/trfs', 'POST', {
-    employeeId: owner, travelPurpose: 'TRAINING', startDate: today, endDate: today, purposeRemarks: 'API fixture',
+    employeeId: owner, travelPurpose: 'TRAINING', startDate: today, endDate: today, purposeRemarks: 'API fixture', lateSubmissionReason: 'Integration fixture',
     travelArrangements: [{ id: 'route-1', travelType: 'TRAVEL_IN', arrangementType: 'BY_SITE_SERVICE',
       transportation: 'CAR', travelDate: '2000-01-01', fromLocation: 'A', toLocation: 'B', specialArrangement: false }],
   }), 201)).json() as { id: string };
@@ -150,14 +150,15 @@ try {
       values (${id},${'WP3-' + id},${employeeId!},${department!},${status!},'TRAINING',${start.toISOString().slice(0,10)},${end.toISOString().slice(0,10)},'Test',${JSON.stringify(travel)}::jsonb)`;
   }
   for (const role of USER_ROLES) {
-    const total = role === 'EMPLOYEE' ? 1 : role === 'ADMIN_DEPT' || role === 'HOD' ? 2 : 4;
+    const total = role === 'EMPLOYEE' ? 1 : role === 'ADMIN_DEPT' || role === 'HOD' ? 3 : 4;
     const stats = await (await expectStatus(request(role, '/dashboard/stats?userId=' + managed.user.id), 200)).json();
     assert.deepEqual(stats, { totalTravelIn: total, totalTravelOut: total, siteEntry: 0, onSiteActive: total, daysInSite: 2*total });
     const weekly = await (await expectStatus(request(role, '/dashboard/weekly?weekStart=' + weekStart), 200)).json() as { travelIn: number; travelOut: number }[];
-    const weeklyTotal = role === 'EMPLOYEE' ? 1 : role === 'ADMIN_DEPT' || role === 'HOD' ? 3 : 5;
+    const weeklyTotal = role === 'EMPLOYEE' ? 1 : role === 'ADMIN_DEPT' || role === 'HOD' ? 4 : 5;
     assert.equal(weekly[0]?.travelIn, weeklyTotal); assert.equal(weekly[0]?.travelOut, weeklyTotal);
     assert.ok(weekly.slice(1).every((row) => row.travelIn === 0 && row.travelOut === 0));
-    assert.deepEqual(await (await expectStatus(request(role, '/dashboard/rooms'), 200)).json(), []);
+    // D5: room occupancy endpoint was removed.
+    await expectStatus(request(role, '/dashboard/rooms'), 404);
   }
   await expectStatus(request('EMPLOYEE', '/dashboard/weekly?weekStart=2026-02-30'), 400);
   const login = () => app.request('/auth/login', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ username: body.username, password: managed.temporaryPassword }) });

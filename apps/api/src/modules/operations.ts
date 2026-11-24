@@ -1,16 +1,17 @@
 import { z } from 'zod';
+import { businessDate } from '@trf/shared';
 import type postgres from 'postgres';
 import { HTTPException } from 'hono/http-exception';
 import type { UserRole } from '@trf/shared';
 import type { Actor } from '../middleware/auth.ts';
-import { found, parse, type Database } from '../http.ts';
+import { found, parse, applicationSqlError, type Database } from '../http.ts';
 
 export type Transaction = postgres.TransactionSql;
 export const text = z.string().trim().min(1);
 export const optionalText = z.string().trim().nullish().transform((v) => v || null);
 export const date = z.iso.date();
 export const optionalId = z.preprocess((v) => v === '' ? null : v, z.uuid().nullish().transform((v) => v ?? null));
-export const today = () => new Date().toISOString().slice(0, 10);
+export const today = businessDate;
 export function authorize(actor: Actor, roles: readonly UserRole[]) {
   if (!roles.includes(actor.role)) throw new HTTPException(403, { message: 'Akses ditolak untuk peran ini.' });
 }
@@ -41,14 +42,12 @@ export async function rpc(tx: Transaction, name: string, args: Record<string, un
       }
     }
   } catch (error) {
+    const business = applicationSqlError(error);
+    if (business) throw business;
     const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
     if (code === '42501') throw new HTTPException(403, { message: 'Akses ditolak.' });
     if (code === 'P0002') throw new HTTPException(404, { message: 'Data tidak ditemukan.' });
-    if (code === '23505' || code === '55000') throw new HTTPException(409, { message: 'Data sudah diproses atau berubah.' });
-    // Legacy routines use P0001 for both business validation and status errors.
-    if (code === '22003') throw new HTTPException(400, { message: 'Saldo OS tidak cukup atau jumlah melampaui batas.' });
-    if (code === '22023' || code === '22007' || code === '22008' || code === '23514' || code === 'P0001')
-      throw new HTTPException(400, { message: 'Data tidak sesuai aturan proses. Periksa tanggal, referensi, dan status terkait.' });
+    if (code === '23505') throw new HTTPException(409, { message: 'Data sudah diproses atau berubah.' });
     throw error;
   }
 }

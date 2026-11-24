@@ -7,7 +7,7 @@ export const activeApprovers = (sql: Connection) => sql<{ role: string; departme
 
 export const saveWorkflow = async (sql: Connection, row: TrfRow, payload: Record<string, postgres.SerializableParameter>) => {
   const [changed] = await sql<TrfRow[]>`update public.trfs set ${sql(payload)}
-    where id=${row.id} and status=${row.status} returning *`;
+    where id=${row.id} and version=${row.version} and status=${row.status} returning *`;
   return changed;
 };
 
@@ -18,10 +18,10 @@ export const enqueueNotification = (sql: Connection, row: TrfRow, actor: Actor,
       ${sql.json({ trfId: row.id, trfNumber: row.trf_number, employeeName: row.employee?.employee_name ?? 'Employee',
         oldStatus: row.status, newStatus: status, actorId: actor.id, actorName: actor.displayName, remarks, editedOnly })})`;
 
-export const notifyOwner = (sql: Connection, row: TrfRow, actor: Actor, note: string) => sql`
+export const notifyOwner = (sql: Connection, row: TrfRow, actor: Actor, note: string, title?: string) => sql`
   insert into public.notifications(user_id,trf_id,trf_number,title,message,created_by,created_by_name)
   select u.id,${row.id},${row.trf_number},
-    ${actor.role === 'HR' ? `TRF ${row.trf_number} diperbarui & disetujui oleh HR` : `TRF ${row.trf_number} diedit oleh GA`},
+    ${title ?? (actor.role === 'HR' ? `TRF ${row.trf_number} diperbarui & disetujui oleh HR` : `TRF ${row.trf_number} diedit oleh GA`)},
     ${note.trim() || (actor.role === 'HR'
       ? `${actor.displayName} (HR) telah memperbarui dan menyetujui TRF ini.`
       : `${actor.displayName} (GA) memperbarui detail TRF ini. TRF masih menunggu proses dokumen (voucher/tiket) sebelum final disetujui.`)},

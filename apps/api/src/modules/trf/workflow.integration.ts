@@ -42,9 +42,12 @@ try {
       values (${user},${createHash('sha256').update(token).digest('hex')},now()+interval '30 minutes')`;
     cookies.set(role, '__Host-trf-session=' + token);
   }
-  const request = (role: UserRole | null, id: string, endpoint: string, body: unknown = {}) => app.request('/trfs/' + id + '/' + endpoint, {
-    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}) }, body: JSON.stringify(body),
-  });
+  // D13: send the version captured before each request, including concurrent requests.
+  const request = async (role: UserRole | null, id: string, endpoint: string, body: unknown = {}) => {
+    const version=/^[0-9a-f-]{36}$/.test(id) ? (await admin`select version from public.trfs where id=${id}`)[0]?.version ?? 0 : 0;
+    return app.request('/trfs/' + id + '/' + endpoint, {
+    method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(role ? { Cookie: cookies.get(role)! } : {}), 'If-Match': `"${version}"` }, body: JSON.stringify(body),
+  }); };
   const expectStatus = async (promise: Promise<Response> | Response, expected: number) => {
     const response = await promise;
     assert.equal(response.status, expected, `HTTP check ${checks}: ${await response.clone().text()}`);
@@ -52,8 +55,8 @@ try {
   };
   const fixture = async (status: string, department = ' HRMD ') => {
     const id = randomUUID();
-    await admin`insert into public.trfs(id,trf_number,employee_id,department,status,travel_purpose,start_date,end_date,purpose_remarks)
-      values (${id},${'WP2-' + id},${employees.get('EMPLOYEE')!},${department},${status},'TRAINING','2026-12-01','2026-12-02','Training')`;
+    await admin`insert into public.trfs(id,trf_number,employee_id,department,status,travel_purpose,start_date,end_date,purpose_remarks,late_submission_reason)
+      values (${id},${'WP2-' + id},${employees.get('EMPLOYEE')!},${department},${status},'TRAINING','2026-12-01','2026-12-02','Training','Integration fixture')`;
     trfs.push(id); return id;
   };
   const counts = async (id: string) => {
@@ -180,14 +183,14 @@ try {
   assert.ok(snapshot);
   await admin`update public.trfs set status='HOD_APPROVED' where id=${stale}`;
   assert.equal(await saveWorkflow(runtime, snapshot, { status: 'HOD_APPROVED' }), undefined);
-  // Same legacy skip outcomes, with active users read from PostgreSQL inside each mutation.
+  // D2: every unavailable-approver scenario retains PENDING_APPROVAL; never APPROVED.
   for (const scenario of ['none', 'hr', 'inactive-hod', 'other-dept-hod']) {
     await admin`update public.users set is_active=false where role in ('HOD','HR','PM','GA')`;
     if (scenario === 'hr' || scenario === 'inactive-hod') await admin`update public.users set is_active=true where id=${users.get('HR')!}`;
     if (scenario === 'other-dept-hod') await admin`update public.users set is_active=true,department='Survey' where id=${users.get('HOD')!}`;
     const id = await fixture('SUBMITTED');
     await expectStatus(request('ADMIN_DEPT', id, 'verify', { decision: 'YES' }), 200);
-    await assertMutation(id, scenario === 'none' ? 'APPROVED' : scenario === 'other-dept-hod' ? 'PENDING_APPROVAL' : 'HOD_APPROVED', 'ADMIN_DEPT');
+    await assertMutation(id, 'PENDING_APPROVAL', 'ADMIN_DEPT');
   }
   await admin`update public.users set is_active=true,department=' HRMD '`;
   await admin`update public.users set employee_id=null where id=${users.get('PM')!}`;
@@ -203,7 +206,8 @@ try {
     const response = await expectStatus(app.request('/trfs/queue', { headers: { Cookie: cookies.get(role)! } }), 200);
     const rows = await response.json() as { id: string; status: string }[];
     const status = { ADMIN_DEPT: 'SUBMITTED', HOD: 'PENDING_APPROVAL', HR: 'HOD_APPROVED', PM: 'HR_APPROVED', GA: 'PM_APPROVED', SUPER_ADMIN: null, EMPLOYEE: null }[role];
-    if (!status) assert.deepEqual(rows, []);
+    if (role==='SUPER_ADMIN') assert.ok(rows.some((row)=>row.id===foreignQueue));
+    else if (!status) assert.deepEqual(rows, []);
     else { assert.ok(rows.some((row) => row.id === queueIds.get(status))); assert.ok(rows.every((row) => row.status === status)); }
     if (role === 'HOD') assert.ok(rows.every((row) => row.id !== foreignQueue));
   }

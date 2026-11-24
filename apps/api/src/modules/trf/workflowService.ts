@@ -1,4 +1,4 @@
-import { createTRFSchema, trfPatchSchema, getNextStatus, findNextActiveStatus,
+import { createTRFSchema, trfPatchSchema, getNextStatus, missingApprover,
   isHRLumpsumAmount, REVIEW_STATUSES, type TrfStatus, type WorkflowAction } from '@trf/shared';
 import { HTTPException } from 'hono/http-exception';
 import type postgres from 'postgres';
@@ -8,6 +8,7 @@ import type { openDatabase } from '../../db/connection.ts';
 import { assertStatus, canSeeTRF } from './policy.ts';
 import * as repo from './repository.ts';
 import * as workflow from './workflowRepository.ts';
+import { assertVersion } from './concurrency.ts';
 
 const lumpsumSchema = z.object({
   amount: z.number().refine(isHRLumpsumAmount, 'Nominal lumpsum tidak tersedia pada daftar resmi.'),
@@ -35,15 +36,21 @@ function nextStatus(current: string, actor: Actor, action: WorkflowAction) {
 }
 export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
   queue: async (actor: Actor) => {
+    if (actor.role==='SUPER_ADMIN') {
+      const users = await workflow.activeApprovers(db);
+      return (await repo.listRows(db,actor)).filter((row) => missingApprover(row.status,users,row.department))
+        .map((row) => ({...repo.trfDTO(row),blockedBy:missingApprover(row.status,users,row.department)}));
+    }
     const status = { ADMIN_DEPT: 'SUBMITTED', HOD: 'PENDING_APPROVAL', HR: 'HOD_APPROVED',
       PM: 'HR_APPROVED', GA: 'PM_APPROVED', SUPER_ADMIN: null, EMPLOYEE: null }[actor.role];
     if (!status) return [];
     return (await repo.listRows(db, actor)).filter((row) => row.status === status).map(repo.trfDTO);
   },
-  act: async (actor: Actor, id: string, kind: WorkflowKind, body: unknown) => db.begin(async (tx) => {
+  act: async (actor: Actor, id: string, kind: WorkflowKind, body: unknown, expected: number) => db.begin(async (tx) => {
     const row = await repo.findRow(tx, id, true);
     if (!row) throw new HTTPException(404, { message: 'TRF tidak ditemukan.' });
     if (!canSeeTRF(actor, row)) throw new HTTPException(403, { message: 'Akses TRF ditolak.' });
+    assertVersion(row.version,expected);
     if (!REVIEW_STATUSES[actor.role].length) throw new HTTPException(403, { message: 'Peran tidak boleh menjalankan workflow.' });
     const now = new Date();
     const stamp = now.toISOString();
@@ -73,7 +80,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
         travelPurpose: current.travelPurpose, startDate: current.startDate, endDate: current.endDate,
         purposeRemarks: current.purposeRemarks, purposeEntries: current.purposeEntries.length ? current.purposeEntries : undefined,
         accommodation: current.accommodation, accommodations: current.accommodations,
-        travelArrangements: current.travelArrangements, ...input.updates });
+        travelArrangements: current.travelArrangements, lateSubmissionReason: current.lateSubmissionReason, ...input.updates });
       Object.assign(payload, repo.fields(tx, changed));
       lumpsum = input.lumpsum;
       if (editedOnly && lumpsum) throw new HTTPException(400, { message: 'Lumpsum hanya dapat diisi HR.' });
@@ -92,7 +99,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
       payload.ga_documents = tx.json(row.ga_documents ?? {});
     } else {
       const input = kind === 'approve' ? parse(approveSchema, body)
-        : kind === 'revise' ? parse(reviseSchema, body) : parse(remarksSchema, body);
+        : parse(reviseSchema, body);
       note = input.remarks;
       action = kind === 'approve' ? 'APPROVE' : kind === 'reject' ? 'REJECT' : 'REVISE';
       remarks = input.remarks || `${action} by ${actor.role}`;
@@ -100,8 +107,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     }
     if (action) {
       target = nextStatus(row.status, actor, action);
-      if ((action === 'VERIFY' || action === 'APPROVE') && kind !== 'process')
-        target = findNextActiveStatus(target, await workflow.activeApprovers(tx), row.department);
+      // D2: no stage is skipped, regardless of active approver availability.
       if (action === 'APPROVE' && kind !== 'process') {
         const approval = { status: 'APPROVED', actionAt: stamp, actionById: actor.id,
           actionByName: actor.displayName, remarks: note };
@@ -121,6 +127,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     await repo.writeHistory(tx, actor, id, row.status, target, remarks);
     await workflow.enqueueNotification(tx, row, actor, target, remarks, editedOnly);
     if (kind === 'edit-approve') await workflow.notifyOwner(tx, row, actor, note);
+    if (kind === 'reject') await workflow.notifyOwner(tx,row,actor,note,`TRF ${row.trf_number} ditolak`);
     return repo.trfDTO((await repo.findRow(tx, id))!);
   }),
 });

@@ -10,7 +10,7 @@ const patch = fields.partial().refine((value) => Object.keys(value).length > 0, 
 export function createEmployeesRoutes(db: Database, origin: string) {
   const app = protectedRoutes(db, origin);
   // Active employee lists previously backed forms and lookups for every authenticated role.
-  app.get('/', async (c) => c.json((await repo.list(db)).map(employeeDTO)));
+  app.get('/', async (c) => c.json((await repo.list(db,c.get('actor'))).map(employeeDTO)));
   app.post('/', requireRole('HR', 'SUPER_ADMIN'), async (c) => c.json(employeeDTO(found(await repo.create(db, await jsonBody(createInput, c.req)))), 201));
   app.put('/:id', requireRole('HR', 'SUPER_ADMIN'), async (c) => c.json(employeeDTO(found(await repo.update(db, uuid(c.req.param('id')), await jsonBody(patch, c.req))))));
   app.delete('/:id', requireRole('HR', 'SUPER_ADMIN'), async (c) => c.json(found(await repo.deactivate(db, uuid(c.req.param('id'))))));

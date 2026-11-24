@@ -38,7 +38,7 @@ export function createRosterOperationsRoutes(db: Database, origin: string) {
           s.cycle_number as earned_site_cycle_number,s.status as earned_site_cycle_status
           from public.employee_os_ledger l join public.employees e on e.id=l.employee_id
           left join public.employee_site_cycles s on s.id=l.earned_site_cycle_id
-          where l.remaining_days>0 and (${actor.role} <> 'HOD' or lower(btrim(e.department))=lower(btrim(${actor.department})))
+          where l.remaining_days>0 and (${actor.role} <> 'HOD' or public.normalize_department(e.department)=public.normalize_department(${actor.department}))
           order by l.generated_date,l.created_at limit 1000`;
         return { items, total: items.length, summary: { employeeCount: new Set(items.map((i) => i.employee_id)).size,
           activeBucketCount: items.length, totalRemainingDays: items.reduce((sum, i) => sum + i.remaining_days, 0) } };

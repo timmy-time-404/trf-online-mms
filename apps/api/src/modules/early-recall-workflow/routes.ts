@@ -1,3 +1,4 @@
+import { normalizeDepartment } from '@trf/shared';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import type { Actor } from '../../middleware/auth.ts';
@@ -30,7 +31,7 @@ const allowedStatuses: Record<string, readonly string[]> = {
 };
 function canView(actor: Actor, row: { employee_id: string; department: string }) {
   if (actor.role === 'EMPLOYEE') return !!actor.employeeId && actor.employeeId === row.employee_id;
-  if (actor.role === 'HOD' || actor.role === 'ADMIN_DEPT') return !!actor.department && actor.department === row.department;
+  if (actor.role === 'HOD' || actor.role === 'ADMIN_DEPT') return !!normalizeDepartment(actor.department) && normalizeDepartment(actor.department) === normalizeDepartment(row.department);
   return true;
 }
 async function details(tx: Transaction, ids: string[]) {
@@ -61,12 +62,12 @@ export function createEarlyRecallRoutes(db: Database, origin: string) {
     const { action, body } = actionBody(await jsonBody(z.record(z.string(), z.unknown()), c.req), RECALL_ACTION_ROLES, actor);
     const response = await db.begin(async (tx) => {
       if (action === 'list') {
-        if (actor.role === 'EMPLOYEE' && !actor.employeeId || ['HOD','ADMIN_DEPT'].includes(actor.role) && !actor.department)
+        if (actor.role === 'EMPLOYEE' && !actor.employeeId || ['HOD','ADMIN_DEPT'].includes(actor.role) && !normalizeDepartment(actor.department))
           throw new HTTPException(403, { message: 'Scope akun belum dikonfigurasi.' });
         const status = parse(optionalText, body.status), search = parse(optionalText, body.search);
         const rows = await tx`select id from public.early_recall_requests where
           (${actor.role} <> 'EMPLOYEE' or employee_id=${actor.employeeId}) and
-          (${!['HOD','ADMIN_DEPT'].includes(actor.role)} or department=${actor.department}) and
+          (${!['HOD','ADMIN_DEPT'].includes(actor.role)} or public.normalize_department(department)=${normalizeDepartment(actor.department)}) and
           (${status}::text is null or status=${status}) and (${search}::text is null or recall_number ilike ${'%' + (search ?? '') + '%'})
           order by created_at desc limit 500`;
         const items = await details(tx, rows.map((row) => row.id));
@@ -93,7 +94,7 @@ export function createEarlyRecallRoutes(db: Database, origin: string) {
         if (action === 'create') {
           args.p_employee_id = parse(z.uuid(), body.employeeId);
           const employee = found((await tx`select department from public.employees where id=${String(args.p_employee_id)}`)[0]);
-          if (actor.role === 'HOD' && (!actor.department || actor.department !== employee.department))
+          if (actor.role === 'HOD' && (!actor.department || normalizeDepartment(actor.department) !== normalizeDepartment(employee.department)))
             throw new HTTPException(403, { message: 'HOD hanya dapat membuat Early Recall department sendiri.' });
         }
       }

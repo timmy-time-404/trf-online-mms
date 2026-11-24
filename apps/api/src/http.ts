@@ -7,6 +7,12 @@ import { requireRole, requireSession, type AuthEnv } from './middleware/auth.ts'
 import type { openDatabase } from './db/connection.ts';
 
 export type Database = ReturnType<typeof openDatabase>;
+export function applicationSqlError(error: unknown) {
+  if (!error || typeof error!=='object' || !('code' in error) || !('where' in error) ||
+    typeof error.where!=='string' || !/at RAISE\b/.test(error.where) || !(error instanceof Error)) return null;
+  if (!['P0001','22023','22003','23514','55000'].includes(String(error.code))) return null;
+  return new HTTPException(error.code==='55000' ? 409 : 400,{message:error.message});
+}
 export function protectedRoutes(db: Database, origin: string, roles?: UserRole[]) {
   const app = new Hono<AuthEnv>();
   app.use('*', requireSession(db));
@@ -19,6 +25,8 @@ export function protectedRoutes(db: Database, origin: string, roles?: UserRole[]
   app.use('*', bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ message: 'Data terlalu besar.' }, 413) }));
   app.onError((error, c) => {
     if (error instanceof HTTPException) return c.json({ message: error.message }, error.status);
+    const business = applicationSqlError(error);
+    if (business) return c.json({message:business.message},business.status);
     const code = 'code' in error ? error.code : undefined;
     if (code === '23505') return c.json({ message: 'Data sudah digunakan.' }, 409);
     if (code === '23503') return c.json({ message: 'Data tertaut tidak ditemukan atau masih digunakan.' }, 409);
