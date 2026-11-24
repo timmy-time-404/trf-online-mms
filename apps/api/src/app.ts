@@ -14,12 +14,17 @@ import { createEmployeeManagementRoutes } from './modules/employee-management/ro
 import { createRosterOperationsRoutes } from './modules/roster-operations/routes.ts';
 import { createManpowerDashboardRoutes } from './modules/manpower-dashboard/routes.ts';
 import { createEarlyRecallRoutes } from './modules/early-recall-workflow/routes.ts';
+import { createDocumentRoutes, createPublicDocumentRoutes } from './modules/documents/routes.ts';
+import type { FileStorage } from './modules/documents/storage.ts';
+
+/** Optional services; document routes are mounted only when storage is configured. */
+export interface AppServices { storage?: FileStorage; documentSigningKey?: string }
 
 /**
  * Builds the HTTP application without starting a server, so tests can call it directly.
  * Feature modules register their routes here (src/modules/<domain>/routes.ts).
  */
-export const createApp = (database?: ReturnType<typeof openDatabase>, origin?: string) => {
+export const createApp = (database?: ReturnType<typeof openDatabase>, origin?: string, services: AppServices = {}) => {
   const app = new Hono();
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
@@ -38,6 +43,9 @@ export const createApp = (database?: ReturnType<typeof openDatabase>, origin?: s
     app.route('/locations', createLocationsRoutes(database, origin));
     app.route('/notifications', createNotificationsRoutes(database, origin));
     app.route('/dashboard', createDashboardRoutes(database, origin));
+    if (services.storage) app.route('/trf-documents', createDocumentRoutes(database, origin, services.storage));
+    if (services.storage && services.documentSigningKey)
+      app.route('/public/documents', createPublicDocumentRoutes(database, services.storage, services.documentSigningKey));
   }
 
   return app;

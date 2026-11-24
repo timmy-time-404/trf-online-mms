@@ -13,7 +13,7 @@ export function applicationSqlError(error: unknown) {
   if (!['P0001','22023','22003','23514','55000'].includes(String(error.code))) return null;
   return new HTTPException(error.code==='55000' ? 409 : 400,{message:error.message});
 }
-export function protectedRoutes(db: Database, origin: string, roles?: UserRole[]) {
+export function protectedRoutes(db: Database, origin: string, roles?: UserRole[], maxBodyBytes = 64 * 1024) {
   const app = new Hono<AuthEnv>();
   app.use('*', requireSession(db));
   if (roles) app.use('*', requireRole(...roles));
@@ -22,7 +22,7 @@ export function protectedRoutes(db: Database, origin: string, roles?: UserRole[]
       return c.json({ message: 'Origin tidak diizinkan.' }, 403);
     await next();
   });
-  app.use('*', bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ message: 'Data terlalu besar.' }, 413) }));
+  app.use('*', bodyLimit({ maxSize: maxBodyBytes, onError: (c) => c.json({ message: 'Data terlalu besar.' }, 413) }));
   app.onError((error, c) => {
     if (error instanceof HTTPException) return c.json({ message: error.message }, error.status);
     const business = applicationSqlError(error);

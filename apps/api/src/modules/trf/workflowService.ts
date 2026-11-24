@@ -57,6 +57,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     const payload: Record<string, postgres.SerializableParameter> = { updated_at: now };
     let target = row.status;
     let remarks = '';
+    let requiresDocument = false;
     let note = '';
     let action: WorkflowAction | undefined;
     let lumpsum: z.output<typeof lumpsumSchema> | undefined;
@@ -95,8 +96,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
       remarks = input.remarks || 'TRF Processed by GA';
       payload.ga_process = tx.json({ processed: true, processedAt: stamp, processorId: actor.id,
         processorName: actor.displayName, voucherDetails: input.voucherDetails ?? {}, remarksToEmployee: input.remarks });
-      // Document uploads and trusted non-empty metadata are introduced in WP5.
-      payload.ga_documents = tx.json(row.ga_documents ?? {});
+      requiresDocument = true;
     } else {
       const input = kind === 'approve' ? parse(approveSchema, body)
         : parse(reviseSchema, body);
@@ -107,6 +107,10 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     }
     if (action) {
       target = nextStatus(row.status, actor, action);
+      // D4: checked after role/status so an illegal action still reports 403/409.
+      if (requiresDocument && !Object.values((row.ga_documents ?? {}) as Record<string, unknown>)
+        .some((doc) => typeof doc === 'object' && doc !== null && 'path' in doc))
+        throw new HTTPException(400, { message: 'Upload minimal 1 dokumen (voucher/tiket) sebelum memproses TRF ini.' });
       // D2: no stage is skipped, regardless of active approver availability.
       if (action === 'APPROVE' && kind !== 'process') {
         const approval = { status: 'APPROVED', actionAt: stamp, actionById: actor.id,
