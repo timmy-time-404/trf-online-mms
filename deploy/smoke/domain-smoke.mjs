@@ -116,8 +116,13 @@ check('EMPLOYEE tidak bisa membuat recall', (await api('EMPLOYEE', 'POST', '/ear
 const active = ((await api('HOD', 'POST', '/early-recall-workflow', { body: { action: 'list' } })).json?.items ?? [])
   .find((x) => x.employee_id === employeeId && !['OS_GENERATED', 'REJECTED', 'CANCELLED'].includes(x.status));
 if (active) await api('PM', 'POST', '/early-recall-workflow', { body: { action: 'cancel', earlyRecallId: active.id, remarks: 'Audit: bersihkan recall lama' } });
-let recall = (await api('HOD', 'POST', '/early-recall-workflow', { body: { action: 'create', employeeId, approvedLeaveStart: day(-5), approvedLeaveEnd: day(10), proposedReturnDate: day(3), reason: 'Audit E2E' } })).json?.item;
-check('HOD membuat Early Recall', recall?.status === 'DRAFT', recall?.status);
+const recallBody = { action: 'create', employeeId, approvedLeaveStart: day(-5), approvedLeaveEnd: day(10), proposedReturnDate: day(3), reason: 'Audit E2E' };
+const created = await api('HOD', 'POST', '/early-recall-workflow', { body: recallBody });
+let recall = created.json?.item;
+// A previous audit within the last ~15 days already converted this leave period into OS (#13).
+if (created.status === 400 && /sudah pernah dikonversi/.test(created.json?.message ?? ''))
+  check('Recall periode yang sudah jadi OS ditolak (#13); siklus recall dilewati', true, created.json.message);
+else check('HOD membuat Early Recall', recall?.status === 'DRAFT', recall?.status);
 const rstep = async (role, action, extra = {}) => { const r = await api(role, 'POST', '/early-recall-workflow', { body: { action, earlyRecallId: recall.id, ...extra } }); if (r.status === 200) recall = r.json.item; return r.status; };
 if (recall) {
   await rstep('HOD', 'submit'); await rstep('HR', 'hr_validate'); await rstep('PM', 'pm_approve');
@@ -129,6 +134,8 @@ if (recall) {
   await rstep('GA', 'ga_start'); await rstep('GA', 'travel_booked'); await rstep('EMPLOYEE', 'acknowledge');
   await rstep('GA', 'confirm_return', { actualReturnDate: day(0) }); // actual dates cannot be in the future (#12)
   check('Recall selesai → OS_GENERATED', recall.status === 'OS_GENERATED', recall.status);
+  const again = await api('HOD', 'POST', '/early-recall-workflow', { body: recallBody });
+  check('Recall kedua untuk periode yang sama ditolak (#13)', again.status === 400, again.status);
 }
 check('Roster saya (EMPLOYEE)', (await api('EMPLOYEE', 'POST', '/roster-operations', { body: { action: 'my_summary' } })).status === 200);
 for (const role of ['GA', 'HOD', 'HR', 'SUPER_ADMIN']) check(`Antrean roster ${role}`, (await api(role, 'POST', '/roster-operations', { body: { action: 'queue' } })).status === 200);

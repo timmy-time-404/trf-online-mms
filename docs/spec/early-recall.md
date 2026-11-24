@@ -39,3 +39,9 @@ Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculat
 ## Tanggal kembali aktual (#12)
 
 Sejak migrasi `0008_actual_dates_not_future`, `confirm_return` menolak Actual Return Date yang lebih dari tanggal bisnis hari ini (WITA), di samping syarat lama (setelah awal cuti dan tidak melewati akhir cuti). OS baru terbentuk setelah karyawan benar-benar kembali. Sistem lama menerima tanggal masa depan.
+
+## Satu periode cuti hanya sekali menjadi OS (#13)
+
+Sejak migrasi `0009_early_recall_os_overlap`, `create` dan `update` menolak periode approved leave yang tumpang tindih dengan Early Recall karyawan yang sama yang sudah `OS_GENERATED` ("Periode cuti ini sudah pernah dikonversi menjadi OS (ER-...)"). Recall `REJECTED` dan `CANCELLED` tidak menghalangi. Sistem lama hanya melarang dua recall aktif bersamaan, sehingga cuti yang sama bisa menghasilkan OS dua kali.
+
+> Status: menunggu konfirmasi pemilik proses (lihat issue #13) sebelum dirilis ke `main`.
