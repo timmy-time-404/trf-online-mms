@@ -23,7 +23,9 @@ export const createTRFService = (db: ReturnType<typeof openDatabase>) => ({
   detail: async (actor: Actor, id: string) => {
     const row = await repo.findRow(db, id);
     if (!row || !canSeeTRF(actor, row)) throw new HTTPException(404, { message: 'TRF tidak ditemukan.' });
-    return repo.trfDTO(row);
+    // Same held-TRF hint as the list, so SUPER_ADMIN sees it on the detail endpoint too (#16).
+    if (actor.role !== 'SUPER_ADMIN') return repo.trfDTO(row);
+    return { ...repo.trfDTO(row), blockedBy: missingApprover(row.status, await activeApprovers(db), row.department) ?? null };
   },
   create: async (actor: Actor, body: unknown, expected: number) => {
     assertVersion(0,expected);
