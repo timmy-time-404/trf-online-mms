@@ -20,3 +20,11 @@ test -s secrets/runtime_password
 # Host directory remains private (0700); the bind-mounted file must be readable
 # by the non-root API user inside its container.
 chmod 444 secrets/runtime_password
+# Signs expiring document links sent over WhatsApp.
+if [ ! -e secrets/document_signing_key ]; then
+    (set -C; openssl rand -hex 32 > secrets/document_signing_key)
+fi
+test -s secrets/document_signing_key
+# Fonnte token is supplied by the owner on the host; an empty file disables delivery.
+[ -e secrets/fonnte_token ] || : > secrets/fonnte_token
+chmod 444 secrets/document_signing_key secrets/fonnte_token

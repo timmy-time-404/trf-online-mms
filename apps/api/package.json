@@ -15,6 +15,7 @@
     "test:master-data": "pnpm build && node dist/master-data.integration.js",
     "test:decisions": "pnpm build && node dist/decisions.integration.js",
     "test:operations": "pnpm build && node dist/operations.integration.js",
+    "test:documents": "pnpm build && node dist/documents.integration.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-features": "tsx src/db/seed-features-cli.ts"

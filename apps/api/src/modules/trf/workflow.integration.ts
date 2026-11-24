@@ -53,10 +53,14 @@ try {
     assert.equal(response.status, expected, `HTTP check ${checks}: ${await response.clone().text()}`);
     checks++; return response;
   };
-  const fixture = async (status: string, department = ' HRMD ') => {
+  // D4: TRFs waiting for GA carry one stored document so process is allowed.
+  const withDocument = (id: string) => admin`update public.trfs set ga_documents=${JSON.stringify({ flightTicket: {
+    name: 'ticket.pdf', url: '/api/trf-documents/' + id + '/flightTicket', path: id + '/fixture.pdf' } })}::jsonb where id=${id}`;
+  const fixture = async (status: string, department = ' HRMD ', document = true) => {
     const id = randomUUID();
     await admin`insert into public.trfs(id,trf_number,employee_id,department,status,travel_purpose,start_date,end_date,purpose_remarks,late_submission_reason)
       values (${id},${'WP2-' + id},${employees.get('EMPLOYEE')!},${department},${status},'TRAINING','2026-12-01','2026-12-02','Training','Integration fixture')`;
+    if (status === 'PM_APPROVED' && document) await withDocument(id);
     trfs.push(id); return id;
   };
   const counts = async (id: string) => {
@@ -169,6 +173,8 @@ try {
   await expectStatus(request('HOD', chain, 'approve'), 200);
   await expectStatus(request('HR', chain, 'approve', { lumpsum: { amount: 200_000 } }), 200);
   await expectStatus(request('PM', chain, 'approve'), 200);
+  await expectStatus(request('GA', await fixture('PM_APPROVED', ' HRMD ', false), 'process', { remarks: 'No document' }), 400);
+  await withDocument(chain);
   const processed = await (await expectStatus(request('GA', chain, 'process', { voucherDetails: { transportation: 'Car' }, remarks: 'Ready', ga_documents: {} }), 200)).json() as {
     status: string; gaProcess: { voucherDetails: { transportation: string }; remarksToEmployee: string }; lumpsumAmount: number;
   };

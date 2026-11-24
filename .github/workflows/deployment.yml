@@ -47,6 +47,8 @@ jobs:
           DB_NAME=trf_wp4_test docker compose run --rm db-tools node dist/operations.integration.js
           docker compose exec -T db createdb -U trf_owner trf_wp4b_test
           DB_NAME=trf_wp4b_test docker compose run --rm db-tools node dist/decisions.integration.js
+          docker compose exec -T db createdb -U trf_owner trf_wp5_test
+          DB_NAME=trf_wp5_test docker compose run --rm db-tools node dist/documents.integration.js
       - name: Connect restricted API runtime and verify seven-role authentication
         shell: bash
         run: |
