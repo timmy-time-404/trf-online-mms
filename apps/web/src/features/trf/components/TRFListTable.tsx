@@ -1,3 +1,4 @@
+import { formatPurposes } from '@/features/trf/components/travelPurposeEntries';
 import TRFNotice from '@/features/trf/components/TRFNotice';
 import { useAuthStore } from '@/store';
 import React from 'react';
@@ -106,7 +107,7 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <p className="text-sm text-gray-900">{trf.travelPurpose}</p>
+                  <p className="text-sm text-gray-900">{formatPurposes(trf.travelPurpose)}</p>
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">

@@ -92,6 +92,7 @@ const EntryCard: React.FC<{
               `}
             >
               <Checkbox
+                aria-label={opt.label}
                 checked={selectedPurposes.includes(opt.key)}
                 onCheckedChange={() => !disabled && togglePurpose(opt.key)}
                 disabled={disabled}

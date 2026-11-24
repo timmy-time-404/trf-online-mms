@@ -8,6 +8,12 @@ export default defineConfig({
   // like /trf/123 must resolve assets from "/" rather than relative to the URL.
   base: '/',
   plugins: [react()],
+  // Same-origin /api like production (Caddy strips the prefix there too).
+  server: {
+    proxy: {
+      '/api': { target: 'http://localhost:3000', rewrite: (path) => path.replace(/^\/api/, '') },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -13,3 +13,6 @@ docs/internal/
 
 # Deployment credentials stay on the host.
 deploy/secrets/
+
+# Local development secrets, database credentials and uploads.
+.dev/

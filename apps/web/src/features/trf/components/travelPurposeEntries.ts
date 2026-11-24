@@ -1,4 +1,5 @@
 import type { TravelPurposeEntry } from '@/types';
+import { getPurposeLabel } from '@/constants/travelPurposeOptions';
 
 const genId = () => `purpose-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -22,3 +23,7 @@ export const createEmptyPurposeEntry = (): TravelPurposeEntry => ({
   endDate       : '',
   purposeRemarks: '',
 });
+
+/** Human-readable purposes, e.g. '["BUSINESS_TRIP","TRAINING"]' -> "Business Trip, Training / Meeting". */
+export const formatPurposes = (raw: string | string[] | undefined): string =>
+  parsePurposes(raw).map(getPurposeLabel).join(', ') || '-';
