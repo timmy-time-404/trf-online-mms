@@ -16,5 +16,6 @@ Setiap aturan diberi label sumber:
 | [early-recall.md](early-recall.md) | State machine Early Recall |
 | [roster-os.md](roster-os.md) | Roster site/cuti dan saldo OS |
 | [notifications.md](notifications.md) | Notifikasi WhatsApp dan in-app |
+| [decisions-2026-11-24.md](decisions-2026-11-24.md) | **Keputusan pemilik yang mengubah perilaku lama** (berlaku di atas dokumen lain) |
 
 Tes yang mengunci perilaku ini ada di `apps/web/src/**/*.characterization.test.ts`.
