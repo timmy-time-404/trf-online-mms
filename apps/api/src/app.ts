@@ -9,6 +9,11 @@ import { createReferenceRoutes } from './modules/reference/routes.ts';
 import { createLocationsRoutes } from './modules/locations/routes.ts';
 import { createNotificationsRoutes } from './modules/notifications/routes.ts';
 import { createDashboardRoutes } from './modules/dashboard/routes.ts';
+import { createChangePasswordRoutes } from './modules/change-password/routes.ts';
+import { createEmployeeManagementRoutes } from './modules/employee-management/routes.ts';
+import { createRosterOperationsRoutes } from './modules/roster-operations/routes.ts';
+import { createManpowerDashboardRoutes } from './modules/manpower-dashboard/routes.ts';
+import { createEarlyRecallRoutes } from './modules/early-recall-workflow/routes.ts';
 
 /**
  * Builds the HTTP application without starting a server, so tests can call it directly.
@@ -21,6 +26,11 @@ export const createApp = (database?: ReturnType<typeof openDatabase>, origin?: s
   if (database && origin) app.route('/auth', createAuthRoutes(database, origin));
   if (database && origin) app.route('/trfs', createTRFRoutes(database, origin));
   if (database && origin) {
+    app.route('/auth/change-password', createChangePasswordRoutes(database, origin));
+    app.route('/employee-management', createEmployeeManagementRoutes(database, origin));
+    app.route('/roster-operations', createRosterOperationsRoutes(database, origin));
+    app.route('/manpower-dashboard', createManpowerDashboardRoutes(database, origin));
+    app.route('/early-recall-workflow', createEarlyRecallRoutes(database, origin));
     app.route('/users', createUsersRoutes(database, origin));
     app.route('/employees', createEmployeesRoutes(database, origin));
     app.route('/hotels', createHotelsRoutes(database, origin));
