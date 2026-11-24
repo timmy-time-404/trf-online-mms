@@ -173,7 +173,7 @@ const TRFListPage: React.FC = () => {
     try {
       const { exportAllTRFsToExcel } = await import('@/utils/exportAllTRFsToExcel');
 
-      exportAllTRFsToExcel(
+      await exportAllTRFsToExcel(
         filteredTRFs,
         currentUser?.role,
       );

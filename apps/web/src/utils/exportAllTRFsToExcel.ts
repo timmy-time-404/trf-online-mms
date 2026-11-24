@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import writeXlsxFile from 'write-excel-file/browser';
 import type { TRF, TravelArrangement, UserRole } from '@/types';
 
 // ─────────────────────────────────────────────────────────────
@@ -139,10 +139,10 @@ function buildRowsForTRF(trf: TRF): (string | number)[][] {
 // ─────────────────────────────────────────────────────────────
 // MAIN EXPORT FUNCTION — bulk / all TRFs
 // ─────────────────────────────────────────────────────────────
-export function exportAllTRFsToExcel(
+export async function exportAllTRFsToExcel(
   trfs: TRF[],
   role?: UserRole | string,
-): void {
+): Promise<void> {
   if (trfs.length === 0) return;
 
   // Kumpulkan semua baris dari semua TRF
@@ -153,29 +153,15 @@ export function exportAllTRFsToExcel(
     allRows.push(...rows);
   });
 
-  // Build sheet
-  const wsData: (string | number)[][] = [HEADERS, ...allRows];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Auto column width
-  ws['!cols'] = HEADERS.map((header, colIdx) => {
-    const maxContent = Math.max(
-      header.length,
-      ...allRows.map((row) => String(row[colIdx] ?? '').length)
-    );
-    return { wch: Math.min(maxContent + 2, 45) };
-  });
-
-  // Freeze header row
-  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'TRF Report');
+  // Column width follows the longest value (capped), header row stays frozen.
+  const columns = HEADERS.map((header, colIdx) => ({
+    width: Math.min(Math.max(header.length, ...allRows.map((row) => String(row[colIdx] ?? '').length)) + 2, 45),
+  }));
 
   // Nama file dengan tanggal export dan role
   const today     = new Date().toISOString().split('T')[0];
   const roleLabel = role ? `_${String(role).toUpperCase()}` : '';
   const fileName  = `TRF_Export${roleLabel}_${today}.xlsx`;
 
-  XLSX.writeFile(wb, fileName);
+  await writeXlsxFile([HEADERS, ...allRows], { sheet: 'TRF Report', columns, stickyRowsCount: 1 }).toFile(fileName);
 }

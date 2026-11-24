@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import writeXlsxFile from 'write-excel-file/browser';
 import type { TRF } from '@/types';
 
 // Helper untuk format tanggal
@@ -11,7 +11,7 @@ const fmtDate = (d?: string): string => {
   });
 };
 
-export const exportTRFToExcel = (trf: TRF): void => {
+export const exportTRFToExcel = async (trf: TRF): Promise<void> => {
   // Pisahkan jadwal perjalanan keberangkatan (Out) dan kepulangan (In)
   // Pisahkan jadwal perjalanan sesuai TravelType yang aktif di aplikasi.
   const travelOut = trf.travelArrangements?.find(
@@ -96,22 +96,9 @@ export const exportTRFToExcel = (trf: TRF): void => {
     trf.status?.replace(/_/g, ' ') ?? '-',
   ];
 
-  // ── 3. BANGUN WORKBOOK DAN WORKSHEET ───────────────────────────────────
-  const wb = XLSX.utils.book_new();
-  
-  // Gabungkan Header dan Data
-  const wsData = [headers, row];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Tambahkan AutoFilter di baris pertama (A1 sampai AA1) seperti di gambar
-  ws['!autofilter'] = { ref: `A1:AA1` };
-
-  // Atur lebar kolom agar lebih mudah dibaca saat diekspor
-  ws['!cols'] = headers.map(() => ({ wch: 20 }));
-
-  XLSX.utils.book_append_sheet(wb, ws, 'TRF Data');
-
-  // ── 4. SIMPAN FILE ─────────────────────────────────────────────────────
+  // ── 3. SIMPAN FILE (header beku, lebar kolom seragam) ───────────────
   const fileName = `TRF_${trf.trfNumber}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  await writeXlsxFile([headers, row], {
+    sheet: 'TRF Data', columns: headers.map(() => ({ width: 20 })), stickyRowsCount: 1,
+  }).toFile(fileName);
 };

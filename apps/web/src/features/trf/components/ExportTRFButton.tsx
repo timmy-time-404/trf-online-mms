@@ -37,7 +37,7 @@ const ExportTRFButton: React.FC<ExportTRFButtonProps> = ({ trf }) => {
     setIsExportingExcel(true);
     try {
       const { exportTRFToExcel } = await import('@/utils/exportTRFToExcel');
-      exportTRFToExcel(trf);
+      await exportTRFToExcel(trf);
     } catch (err) {
       console.error('Excel export failed:', err);
       toast.error('Ekspor Excel gagal. Silakan coba kembali.');
