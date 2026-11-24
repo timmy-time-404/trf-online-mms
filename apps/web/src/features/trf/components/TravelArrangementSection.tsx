@@ -30,7 +30,7 @@ import type {
   TravelType,
 } from '@/types';
 import { cn } from '@/lib/utils';
-import { isSupabaseEnabled, supabase } from '@/lib/supabase';
+import { apiRequest } from '@/api/client';
 
 interface TravelArrangementSectionProps {
   arrangements: TravelArrangement[];
@@ -323,7 +323,7 @@ const ArrangementItem: React.FC<ArrangementItemProps> = ({
     keyword: string,
     field: 'from' | 'to',
   ) => {
-    if (!isBySiteService || !isSupabaseEnabled()) return;
+    if (!isBySiteService) return;
 
     const normalizedKeyword = normalizeSearchKeyword(keyword);
 
@@ -342,41 +342,11 @@ const ArrangementItem: React.FC<ArrangementItemProps> = ({
     setSearching(field, true);
 
     try {
-      let query = supabase
-        .from('locations')
-        .select(
-          'id,name,type,code,city,province,priority,is_active',
-        )
-        .eq('is_active', true)
-        .in('type', typeFilter);
+      const params = new URLSearchParams({ keyword: normalizedKeyword, types: typeFilter.join(',') });
+      if (arrangement.transportation === 'CAR') params.set('provinces', CAR_ALLOWED_PROVINCES.join(','));
+      const data = await apiRequest<LocationResult[]>(`/locations?${params.toString()}`);
 
-      if (arrangement.transportation === 'CAR') {
-        query = query.in('province', CAR_ALLOWED_PROVINCES);
-      }
-
-      if (normalizedKeyword.length >= 2) {
-        query = query.or(
-          [
-            `name.ilike.%${normalizedKeyword}%`,
-            `code.ilike.%${normalizedKeyword}%`,
-            `city.ilike.%${normalizedKeyword}%`,
-            `province.ilike.%${normalizedKeyword}%`,
-          ].join(','),
-        );
-      }
-
-      const { data, error } = await query
-        .order('priority', { ascending: true })
-        .order('name', { ascending: true })
-        .limit(10);
-
-      if (error) {
-        console.error('Search location error:', error);
-        setSearchResults(field, []);
-        return;
-      }
-
-      setSearchResults(field, (data as LocationResult[] | null) || []);
+      setSearchResults(field, data);
     } catch (error) {
       console.error('Unexpected location search error:', error);
       setSearchResults(field, []);
