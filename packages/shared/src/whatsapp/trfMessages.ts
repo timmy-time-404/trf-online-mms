@@ -1,7 +1,7 @@
 // Template pesan WhatsApp untuk setiap perubahan status TRF.
 // Semua teks dalam Bahasa Indonesia, ringkas & jelas untuk dibaca di HP.
 
-import type { TRFStatus } from '@/types';
+import type { TrfStatus as TRFStatus } from '../domain.ts';
 
 export interface WaMessageParams {
   trfNumber: string;

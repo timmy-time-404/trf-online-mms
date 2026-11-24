@@ -9,7 +9,7 @@
 
 import { supabase, isSupabaseEnabled } from './supabase';
 import { sendWhatsAppNotification } from './whatsapp';
-import { buildTrfStatusWaMessage } from './waMessageTemplates';
+import { buildTrfStatusWaMessage } from '@trf/shared';
 import type { TRFStatus } from '@/types';
 
 export interface NotifyStatusChangeParams {

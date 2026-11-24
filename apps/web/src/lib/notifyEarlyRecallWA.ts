@@ -1,7 +1,7 @@
 import {
   buildEarlyRecallWaMessage,
   type EarlyRecallWAMessageParams,
-} from './earlyRecallWaMessageTemplates';
+} from '@trf/shared';
 import { sendWhatsAppMessage } from './whatsapp';
 
 export type NotifyEarlyRecallWAParams = EarlyRecallWAMessageParams & {
