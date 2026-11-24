@@ -1,59 +1,69 @@
-name: Deploy TRF Online to Hostinger
+name: Deploy
 
+# main = production. Every push to main is checked, then waits for an approval
+# in the "production" environment before it is released to the VPS.
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: Release tag to roll back to (leave empty to deploy this commit)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  check:
+    if: ${{ !inputs.rollback_to }}
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Vite application
+  deploy:
+    needs: check
+    if: ${{ always() && (needs.check.result == 'success' || inputs.rollback_to) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://meong-mms.org
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare SSH
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run build
-
-      - name: Create SPA routing configuration
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          cat > dist/.htaccess <<'EOF'
-          RewriteEngine On
-
-          RewriteCond %{REQUEST_FILENAME} !-f
-          RewriteCond %{REQUEST_FILENAME} !-d
-
-          RewriteRule ^ index.html [L]
-          EOF
-
-      - name: Verify production build
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Release
+        if: ${{ !inputs.rollback_to }}
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          echo "Production files:"
-          find dist -maxdepth 2 -type f
-          test -f dist/index.html
-          test -f dist/.htaccess
-
-      - name: Deploy production build to Hostinger
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 21
-          local-dir: ./dist/
-          server-dir: ./
+          tag="v-$(date -u +%Y%m%d%H%M)-${GITHUB_SHA::7}"
+          git archive --format=tar.gz HEAD | ssh -i ~/.ssh/deploy "$DEPLOY_HOST" "release $tag"
+          echo "Released $tag" >> "$GITHUB_STEP_SUMMARY"
+      - name: Roll back
+        if: ${{ inputs.rollback_to }}
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          TAG: ${{ inputs.rollback_to }}
+        run: ssh -i ~/.ssh/deploy "$DEPLOY_HOST" "rollback $TAG"
+      - name: Public health check
+        run: curl -fsS https://meong-mms.org/api/health && curl -fsS -o /dev/null https://meong-mms.org/

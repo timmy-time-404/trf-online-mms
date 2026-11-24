@@ -1,0 +1,137 @@
+import { Button } from '@/components/ui/button';
+import { apiRequest } from '@/api/client';
+import { useAuthStore } from '@/store';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import TRFDetailView from './components/TRFDetailView';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { useTRFStore } from '@/store';
+import { toast } from 'sonner';
+import ExportTRFButton from '@/features/trf/components/ExportTRFButton';
+
+// ✅ IMPORT COMPONENT CARD
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Banknote } from 'lucide-react';
+
+const TRFDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { getTRFById, deleteTRF, fetchAllData } = useTRFStore();
+  const {currentUser} = useAuthStore();
+  const [cancelOpen,setCancelOpen] = useState(false);
+  const [cancelReason,setCancelReason] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  const trf = id ? getTRFById(id) : undefined;  
+  
+  if (!trf) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-semibold text-gray-900">Loading TRF...</h2>
+        <p className="text-gray-500 mt-2">Fetching latest data....</p>
+        <button
+          onClick={() => navigate('/trf')}
+          className="mt-4 text-blue-600 hover:text-blue-700"
+        >
+          Back to TRF List
+        </button>
+      </div>
+    );
+  }
+
+  const handleEdit = () => {
+    navigate(`/trf/${trf.id}/edit`);
+  };
+
+  const handleDelete = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      if (!await deleteTRF(trf.id,trf.version)) {
+        toast.error('TRF gagal dihapus. Muat ulang data dan coba kembali.');
+        return;
+      }
+      toast.success('TRF berhasil dihapus.');
+      navigate('/trf');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+
+  return (
+    <div className="space-y-6">
+      <TRFDetailView
+        trf={trf}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+        <div className="flex justify-end max-w-4xl">
+        <ExportTRFButton trf={trf} />
+      </div>
+      {/* ✅ KOTAK LUMPSUM (TAMBAHAN MAHA RAJA) */}
+      {trf.lumpsumAmount !== undefined && trf.lumpsumAmount > 0 && (
+        <Card className="max-w-4xl border shadow-sm">
+          <CardHeader className="bg-green-50 rounded-t-xl border-b border-green-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-green-700" />
+              <CardTitle className="text-green-800 text-lg">HR Lumpsum Allowance</CardTitle>
+            </div>
+          </CardHeader>
+
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-green-600">
+              Rp {trf.lumpsumAmount.toLocaleString("id-ID")}
+            </div>
+
+            {trf.lumpsumNote && (
+              <div className="mt-4 p-3 bg-gray-50 border-l-4 border-green-400 rounded-r-md">
+                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Catatan HR:</p>
+                <p className="text-sm text-gray-700 italic">
+                  "{trf.lumpsumNote}"
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {currentUser?.employeeId===trf.employeeId && !['GA_PROCESSED','REJECTED','CANCELLED'].includes(trf.status) &&
+        <Button variant="destructive" onClick={()=>setCancelOpen(true)}>Batalkan TRF</Button>}
+      {cancelOpen && <div className="rounded-xl border p-4 space-y-3">
+        <label htmlFor="cancel-reason">Alasan pembatalan</label>
+        <textarea id="cancel-reason" className="block w-full border rounded p-3" value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} maxLength={4000} />
+        <Button disabled={!cancelReason.trim() || isDeleting} onClick={async()=>{
+          setIsDeleting(true);
+          try { await apiRequest('/trfs/'+trf.id+'/cancel',{method:'POST',version:trf.version ?? 0,body:{remarks:cancelReason}});
+            await fetchAllData(); setCancelOpen(false); toast.success('TRF dibatalkan'); }
+          catch { /* API client displays the actionable server error. */ }
+          finally {setIsDeleting(false);}
+        }}>Konfirmasi pembatalan</Button>
+        <Button variant="outline" onClick={()=>setCancelOpen(false)}>Kembali</Button>
+      </div>}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete TRF"
+        description={`Are you sure you want to delete ${trf.trfNumber}? This action cannot be undone.`}
+        onConfirm={confirmDelete}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isDeleting}
+      />
+    </div>
+  );
+};
+
+export default TRFDetailPage;

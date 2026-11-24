@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependencies may only run install scripts when listed here (supply-chain hardening).
+onlyBuiltDependencies:
+  - esbuild
+
+ignoredBuiltDependencies:
+  - core-js # postinstall only prints a funding banner

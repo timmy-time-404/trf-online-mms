@@ -6,3 +6,13 @@
 # Production build
 dist/
 node_modules
+.vitest/
+
+# Internal notes (audit, security findings) — never pushed
+docs/internal/
+
+# Deployment credentials stay on the host.
+deploy/secrets/
+
+# Local development secrets, database credentials and uploads.
+.dev/

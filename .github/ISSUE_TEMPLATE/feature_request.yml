@@ -1,0 +1,21 @@
+name: Permintaan fitur
+description: Usulan fitur atau perubahan aturan bisnis
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Masalah yang ingin diselesaikan
+      description: Siapa yang terdampak dan seberapa sering.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Usulan solusi
+  - type: checkboxes
+    id: business
+    attributes:
+      label: Aturan bisnis
+      options:
+        - label: Mengubah aturan bisnis (approval, H-14, lumpsum, roster/OS) dan sudah dikonfirmasi pemilik proses
