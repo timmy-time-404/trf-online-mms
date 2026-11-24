@@ -17,7 +17,7 @@ jobs:
       RELEASE_TAG: ci-${{ github.sha }}
       COMPOSE_FILE: deploy/compose.yaml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create temporary database secret
         # Root-owned like on the VPS: db-tools runs as root without CAP_DAC_OVERRIDE.
         run: sudo sh deploy/init-secrets.sh
