@@ -48,7 +48,7 @@ export const createAuthRoutes = (db: Database, origin: string) => {
         const [attempts] = await tx`select count(*) as total from public.app_login_attempts
           where identifier_hash=${identifier} and not succeeded and attempted_at > now() - interval '15 minutes'`;
         if (Number(attempts?.total) >= 10) return { limited: true } as const;
-        const [user] = await tx<Account[]>`select * from public.users where username=${username}`;
+        const [user] = await tx<Account[]>`select * from public.users where username=${username} for update`;
         const valid = await verify(user?.password_hash ?? await dummyHash, password).catch(() => false);
         const success = valid && user?.is_active === true;
         await tx`insert into public.app_login_attempts(identifier_hash, user_id, succeeded, failure_reason)
