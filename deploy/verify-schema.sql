@@ -15,12 +15,12 @@ BEGIN
     'Unexpected sequence count';
   ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 98,
     'Unexpected index count';
-  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 167,
+  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 170, -- +3 in 0006/0007
     'Unexpected constraint count';
-  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 46,
+  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 49, -- +3 in 0006
     'Unexpected routine count';
   ASSERT (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-    WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) = 12,
+    WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) = 13, -- +1 in 0006
     'Unexpected trigger count';
   ASSERT (SELECT confrelid = 'public.users'::regclass FROM pg_constraint
     WHERE conname = 'approval_hierarchy_user_id_fkey'), 'Unexpected hierarchy FK';
