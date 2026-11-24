@@ -1,3 +1,4 @@
+import { businessDate } from '@trf/shared';
 import { apiRequest } from '@/api/client';
 
 export const ROSTER_OPERATIONS_UPDATED_EVENT =
@@ -331,18 +332,7 @@ const invokeRosterOperations = <
 ): Promise<TResponse> =>
   apiRequest<TResponse>('/roster-operations', { method: 'POST', body });
 
-export const getLocalDateInputValue = (
-  date = new Date(),
-): string => {
-  const localTime = new Date(
-    date.getTime() -
-      date.getTimezoneOffset() * 60_000,
-  );
-
-  return localTime
-    .toISOString()
-    .slice(0, 10);
-};
+export const getLocalDateInputValue = (date = new Date()): string => businessDate(date);
 
 export const getMyRosterSummary = (
   asOfDate = getLocalDateInputValue(),

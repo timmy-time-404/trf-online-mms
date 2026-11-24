@@ -64,6 +64,7 @@ const statusConfig: Record<string, {
     textColor: 'text-green-700',
     borderColor: 'border-green-300'
   },
+  CANCELLED: { label: 'Cancelled', bgColor: 'bg-gray-100', textColor: 'text-gray-700', borderColor: 'border-gray-300' },
   REJECTED: {
     label: 'Rejected',
     bgColor: 'bg-red-100',

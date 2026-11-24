@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button';
+import { apiRequest } from '@/api/client';
+import { useAuthStore } from '@/store';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TRFDetailView from './components/TRFDetailView';
@@ -14,6 +17,9 @@ const TRFDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getTRFById, deleteTRF, fetchAllData } = useTRFStore();
+  const {currentUser} = useAuthStore();
+  const [cancelOpen,setCancelOpen] = useState(false);
+  const [cancelReason,setCancelReason] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -50,7 +56,7 @@ const TRFDetailPage: React.FC = () => {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      if (!await deleteTRF(trf.id)) {
+      if (!await deleteTRF(trf.id,trf.version)) {
         toast.error('TRF gagal dihapus. Muat ulang data dan coba kembali.');
         return;
       }
@@ -99,6 +105,20 @@ const TRFDetailPage: React.FC = () => {
         </Card>
       )}
 
+      {currentUser?.employeeId===trf.employeeId && !['GA_PROCESSED','REJECTED','CANCELLED'].includes(trf.status) &&
+        <Button variant="destructive" onClick={()=>setCancelOpen(true)}>Batalkan TRF</Button>}
+      {cancelOpen && <div className="rounded-xl border p-4 space-y-3">
+        <label htmlFor="cancel-reason">Alasan pembatalan</label>
+        <textarea id="cancel-reason" className="block w-full border rounded p-3" value={cancelReason} onChange={(e)=>setCancelReason(e.target.value)} maxLength={4000} />
+        <Button disabled={!cancelReason.trim() || isDeleting} onClick={async()=>{
+          setIsDeleting(true);
+          try { await apiRequest('/trfs/'+trf.id+'/cancel',{method:'POST',version:trf.version ?? 0,body:{remarks:cancelReason}});
+            await fetchAllData(); setCancelOpen(false); toast.success('TRF dibatalkan'); }
+          catch { /* API client displays the actionable server error. */ }
+          finally {setIsDeleting(false);}
+        }}>Konfirmasi pembatalan</Button>
+        <Button variant="outline" onClick={()=>setCancelOpen(false)}>Kembali</Button>
+      </div>}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

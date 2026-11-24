@@ -1,6 +1,7 @@
+import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';  
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -32,11 +33,11 @@ import type { WorkflowAction } from '@/workflow/trfWorkflow';
 const VerifyPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  
-  const { 
-    getTRFsForVerification, 
-    fetchTRFs, 
-    handleVerify 
+
+  const {
+    getTRFsForVerification,
+    fetchTRFs,
+    handleVerify
   } = useTRFStore();
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
@@ -50,7 +51,7 @@ const VerifyPage: React.FC = () => {
   }, [fetchTRFs]);
 
   // Get TRFs for current Admin Dept's department
-  const trfsForVerification = currentUser?.department 
+  const trfsForVerification = currentUser?.role==='ADMIN_DEPT' && currentUser.department
     ? getTRFsForVerification(currentUser.department)
     : [];
 
@@ -66,13 +67,13 @@ const VerifyPage: React.FC = () => {
 
     // ✅ Perubahan diterapkan di sini:
     const actionToEngine: WorkflowAction = verifyAction === 'YES' ? 'VERIFY' : 'REVISE';
-    
+
     // Panggil sang Mandor
     const success = await handleVerify(
-        selectedTRF.id, 
-        currentUser, 
-        actionToEngine, 
-        remarks
+        selectedTRF.id,
+        currentUser,
+        actionToEngine,
+        remarks, selectedTRF.version
     );
 
     if (success) {
@@ -154,7 +155,7 @@ const VerifyPage: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       <FileText className="w-5 h-5 text-gray-400" />
-                      <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}<TRFNotice trf={trf} /></h3>
                       <Badge variant="outline" className="text-blue-700 bg-blue-100 border-blue-300">
                         SUBMITTED
                       </Badge>
@@ -251,7 +252,7 @@ const VerifyPage: React.FC = () => {
               {verifyAction === 'YES' ? 'Verify TRF' : 'Return to Employee'}
             </DialogTitle>
             <DialogDescription className="text-base text-center">
-              {verifyAction === 'YES' 
+              {verifyAction === 'YES'
                 ? `Verify ${selectedTRF?.trfNumber} and send to approval process?`
                 : `Return ${selectedTRF?.trfNumber} to employee for revision?`
               }
@@ -263,8 +264,8 @@ const VerifyPage: React.FC = () => {
               Remarks {verifyAction === 'NO' && <span className="text-red-500">*</span>}
             </label>
             <Textarea
-              placeholder={verifyAction === 'YES' 
-                ? "Add any comments (optional)..." 
+              placeholder={verifyAction === 'YES'
+                ? "Add any comments (optional)..."
                 : "Explain why this TRF cannot be verified..."
               }
               value={remarks}
@@ -287,8 +288,8 @@ const VerifyPage: React.FC = () => {
               onClick={confirmVerify}
               className={cn(
                 "flex-1",
-                verifyAction === 'YES' 
-                  ? "bg-green-600 hover:bg-green-700 text-white" 
+                verifyAction === 'YES'
+                  ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-red-600 hover:bg-red-700 text-white"
               )}
               disabled={verifyAction === 'NO' && !remarks.trim()}

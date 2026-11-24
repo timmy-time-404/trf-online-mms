@@ -1,3 +1,4 @@
+import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,7 +51,7 @@ const ProcessPage: React.FC = () => {
   const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
 
-  const trfsForProcessing = getTRFsForProcessing();
+  const trfsForProcessing = currentUser?.role==='GA' ? getTRFsForProcessing() : [];
 
   /* =========================================================================
      ✅ LOGIC PARSING SUPER AMAN (Menjawab "Lihat Setiap Kemungkinan")
@@ -210,7 +211,7 @@ const ProcessPage: React.FC = () => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       <FileText className="w-5 h-5 text-gray-400" />
-                      <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900">{trf.trfNumber}<TRFNotice trf={trf} /></h3>
                       <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
                         PM APPROVED
                       </Badge>

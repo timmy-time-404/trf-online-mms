@@ -23,6 +23,7 @@ export type TRFStatus =
   | 'PM_APPROVED'
   | 'GA_PROCESSED'
   | 'REJECTED'
+  | 'CANCELLED'
   | 'NEEDS_REVISION'
   | 'REVISED';
 
@@ -175,6 +176,11 @@ export interface Notification {
 // ============================================
 
 export interface TRF {
+  version?: number;
+  etag?: string;
+  urgent?: boolean;
+  blockedBy?: string | null;
+  lateSubmissionReason?: string;
   id: string;
   trfNumber: string;
   employeeId: string;
@@ -215,6 +221,8 @@ export interface TRF {
 // ============================================
 
 export interface CreateTRFInput {
+  draft?: boolean;
+  lateSubmissionReason?: string;
   employeeId: string;
   department?: string;
   travelPurpose: string;
@@ -228,5 +236,6 @@ export interface CreateTRFInput {
 }
 
 export interface UpdateTRFInput extends Partial<CreateTRFInput> {
+  expectedVersion?: number;
   status?: TRFStatus;
 }

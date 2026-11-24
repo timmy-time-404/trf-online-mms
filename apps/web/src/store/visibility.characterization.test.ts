@@ -87,24 +87,25 @@ describe('work queues', () => {
   });
 });
 
-describe('skip-approver policy (intentionally unchanged until the owner decides)', () => {
+// D2: the owner removed automatic stage skipping. Preserve these cases with the new expectations.
+describe('approver availability policy (D2)', () => {
   const next = (target: TRFStatus) => useTRFStore.getState().findNextActiveStatus(target, 'Survey');
 
-  it('skips every remaining stage when no user list is loaded, ending in undeclared APPROVED', () => {
-    expect(next('PENDING_APPROVAL')).toBe('APPROVED');
+  it('skips every remaining stage when no user list is loaded, retaining the waiting stage (D2)', () => {
+    expect(next('PENDING_APPROVAL')).toBe('PENDING_APPROVAL');
   });
 
   it('stops at the first stage that has an active approver', () => {
     useTRFStore.setState({ users: [user('HR')] });
-    expect(next('PENDING_APPROVAL')).toBe('HOD_APPROVED');
+    expect(next('PENDING_APPROVAL')).toBe('PENDING_APPROVAL');
   });
 
   it('treats inactive users as missing', () => {
     useTRFStore.setState({ users: [user('HOD', { is_active: false }), user('HR')] });
-    expect(next('PENDING_APPROVAL')).toBe('HOD_APPROVED');
+    expect(next('PENDING_APPROVAL')).toBe('PENDING_APPROVAL');
   });
 
-  it('counts an HOD from any department as active', () => {
+  it('retains the stage when only an HOD from another department exists (D2/D6)', () => {
     useTRFStore.setState({ users: [user('HOD', { department: 'Geotechnical' })] });
     expect(next('PENDING_APPROVAL')).toBe('PENDING_APPROVAL');
   });

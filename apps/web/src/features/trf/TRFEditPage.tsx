@@ -1,3 +1,4 @@
+import LateSubmissionField from './components/LateSubmissionField';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,8 @@ const TRFEditPage: React.FC = () => {
 
   const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>([]);
 
+  const [lateSubmissionReason,setLateSubmissionReason] = useState('');
+  const [displayVersion,setDisplayVersion] = useState<number | undefined>();
   const [isLoaded, setIsLoaded] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,6 +102,8 @@ const TRFEditPage: React.FC = () => {
     }
 
     setTravelArrangements(trf.travelArrangements ?? []);
+    setLateSubmissionReason(trf.lateSubmissionReason ?? '');
+    setDisplayVersion(trf.version);
 
     if (
       trf.lumpsumAmount !== undefined &&
@@ -127,7 +132,7 @@ const TRFEditPage: React.FC = () => {
   }
 
   const isEmployeeEditableStatus = trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
-  const isEditable = isEmployeeEditableStatus || isEditApproveMode;
+  const isEditable = (isEmployeeEditableStatus && currentUser?.employeeId===trf.employeeId) || isEditApproveMode;
 
   if (!isEditable) {
     return (
@@ -206,12 +211,12 @@ const TRFEditPage: React.FC = () => {
     return true;
   };
 
-  const handleSubmit = async () => {
-    if (!validateForm() || !currentUser || !trf) return;
+  const handleSubmit = async (send = false) => {
+    if (!currentUser || !trf || ((trf.status!=='DRAFT' || send) && !validateForm())) return;
 
     setIsSubmitting(true);
     try {
-      const input = buildUpdateInput();
+      const input = {...buildUpdateInput(),lateSubmissionReason,expectedVersion:displayVersion};
 
       if (isEditApproveMode) {
         if (isHREditApprove && (lumpsum === '' || !isHRLumpsumAmount(lumpsum))) {
@@ -241,7 +246,7 @@ const TRFEditPage: React.FC = () => {
         return;
       }
 
-      const success = trf.status === 'DRAFT'
+      const success = trf.status === 'DRAFT' && !send
         ? await updateTRF(trf.id, input)
         : await resubmitTRF(trf.id, currentUser.id, currentUser.username, input);
 
@@ -443,6 +448,8 @@ const TRFEditPage: React.FC = () => {
         </Button>
       </div>
 
+      <LateSubmissionField start={purposeEntries[0]?.startDate} value={lateSubmissionReason} onChange={setLateSubmissionReason} />
+      {trf.status==='DRAFT' && <Button disabled={isSubmitting} onClick={()=>void handleSubmit(true)}>Kirim</Button>}
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
@@ -460,7 +467,7 @@ const TRFEditPage: React.FC = () => {
               ? 'Perubahan akan disimpan dan employee akan mendapat notifikasi. TRF ini BELUM disetujui kamu akan diarahkan ke halaman Process untuk upload dokumen. Lanjutkan?'
               : trf.status === 'DRAFT' ? 'Simpan perubahan draft TRF ini?' : 'Apakah kamu yakin ingin mengirim ulang TRF ini untuk diverifikasi?'
         }
-        onConfirm={handleSubmit}
+        onConfirm={()=>handleSubmit(false)}
         confirmText={isHREditApprove ? 'Simpan & Approve' : isGAEditOnly || trf.status === 'DRAFT' ? 'Simpan Perubahan' : 'Resubmit'}
         cancelText="Cancel"
         variant="warning"

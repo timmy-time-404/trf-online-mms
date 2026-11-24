@@ -1,3 +1,4 @@
+import TRFNotice from '@/features/trf/components/TRFNotice';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -134,15 +135,16 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
 
+  const isOwner = !!currentUser?.employeeId && currentUser.employeeId===trf.employeeId;
   const canEdit =
-    trf.status === 'DRAFT' ||
-    trf.status === 'NEEDS_REVISION' ||
+    isOwner && (trf.status === 'DRAFT' ||
+    trf.status === 'NEEDS_REVISION') ||
     (currentUser?.role === 'HR' &&
       trf.status === 'HOD_APPROVED') ||
     (currentUser?.role === 'GA' &&
       trf.status === 'PM_APPROVED');
 
-  const canDelete = trf.status === 'DRAFT';
+  const canDelete = isOwner && trf.status === 'DRAFT';
   const isEmployee = currentUser?.role === 'EMPLOYEE';
 
   const canSeeVoucher =
@@ -674,7 +676,7 @@ const TRFDetailView: React.FC<TRFDetailViewProps> = ({
               {trf.trfNumber}
             </h1>
 
-            <StatusBadge status={trf.status} />
+            <TRFNotice trf={trf} /><StatusBadge status={trf.status} />
           </div>
 
           <p className="mt-1 text-gray-500">

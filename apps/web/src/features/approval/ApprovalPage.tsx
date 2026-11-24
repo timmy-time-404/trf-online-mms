@@ -1,3 +1,4 @@
+import TRFNotice from '@/features/trf/components/TRFNotice';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -52,7 +53,7 @@ const ApprovalPage: React.FC = () => {
 
   const [selectedTRF, setSelectedTRF] = useState<TRF | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [action, setAction] = useState<'APPROVE' | 'REVISE' | null>(null);
+  const [action, setAction] = useState<'APPROVE' | 'REVISE' | 'REJECT' | null>(null);
 
   // ✅ STATE UNTUK LUMPSUM
   const [lumpsum, setLumpsum] = useState<number | ''>('');
@@ -77,7 +78,7 @@ const ApprovalPage: React.FC = () => {
      ACTION HANDLERS
   ========================================================= */
 
-  const openDialog = (trf: TRF, act: 'APPROVE' | 'REVISE') => {
+  const openDialog = (trf: TRF, act: 'APPROVE' | 'REVISE' | 'REJECT') => {
     setSelectedTRF(trf);
     setAction(act);
     setRemarks('');
@@ -88,7 +89,7 @@ const ApprovalPage: React.FC = () => {
   const executeAction = async () => {
     if (!selectedTRF || !currentUser || !action) return;
 
-    if (action === 'REVISE' && !remarks.trim()) {
+    if (action !== 'APPROVE' && !remarks.trim()) {
       toast.error('Remarks wajib diisi untuk revisi');
       return;
     }
@@ -109,7 +110,7 @@ const ApprovalPage: React.FC = () => {
 
     // Panggil fungsi workflow utama
     const success = await handleApproval(selectedTRF.id, currentUser, action, remarks,
-      userRole === 'HR' && action === 'APPROVE' && lumpsum !== '' ? { amount: lumpsum, note: lumpsumNote } : undefined);
+      userRole === 'HR' && action === 'APPROVE' && lumpsum !== '' ? { amount: lumpsum, note: lumpsumNote } : undefined, selectedTRF.version);
 
     if (success) {
        toast.success(`TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
@@ -152,7 +153,7 @@ const ApprovalPage: React.FC = () => {
                 <div className="flex items-center gap-3 mb-2">
                   <FileText className="w-5 h-5 text-gray-500" />
                   <h3 className="font-semibold text-lg">
-                    {trf.trfNumber}
+                    {trf.trfNumber}<TRFNotice trf={trf} />
                   </h3>
                   <Badge variant="secondary">{trf.status}</Badge>
                 </div>
@@ -191,7 +192,7 @@ const ApprovalPage: React.FC = () => {
                   </Button>
                 )}
 
-                {/* Tombol Approve */}
+                {userRole !== 'SUPER_ADMIN' && <>
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
@@ -202,7 +203,7 @@ const ApprovalPage: React.FC = () => {
                     if (userRole === 'HR') {
                       openDialog(trf, 'APPROVE');
                     } else {
-                      const success = await handleApproval(trf.id, currentUser, 'APPROVE');
+                      const success = await handleApproval(trf.id, currentUser, 'APPROVE',undefined,undefined,trf.version);
                       if (success) {
                           toast.success(`TRF ${trf.trfNumber} !`);
                       } else {
@@ -215,21 +216,13 @@ const ApprovalPage: React.FC = () => {
                   Approve
                 </Button>
 
+                </>}
                 {/* Tombol Reject */}
                 <Button
                   size="sm"
                   variant="outline"
                   className="text-red-600 border-red-300 hover:bg-red-50"
-                  onClick={async () => {
-                    if (!currentUser) return;
-
-                    const success = await handleApproval(trf.id, currentUser, 'REJECT');
-                    if (success) {
-                         toast.error(`TRF ${trf.trfNumber} Rejected!`);
-                    } else {
-                         toast.error('Gagal melakukan Reject.');
-                    }
-                  }}
+                  onClick={() => openDialog(trf,'REJECT')}
                 >
                   <XCircle className="w-4 h-4 mr-1"/>
                   Reject
@@ -260,16 +253,16 @@ const ApprovalPage: React.FC = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {action === 'REVISE' ? 'Revise Request' : 'HR Approval & Lumpsum'}
+              {action === 'REJECT' ? 'Konfirmasi penolakan TRF' : action === 'REVISE' ? 'Revise Request' : 'HR Approval & Lumpsum'}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
 
             {/* JIKA ACTION === REVISE */}
-            {action === 'REVISE' && (
+            {action !== 'APPROVE' && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Alasan Revisi <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium">{action === 'REJECT' ? 'Alasan Penolakan' : 'Alasan Revisi'} <span className="text-red-500">*</span></label>
                 <Textarea
                   placeholder="Berikan alasan kenapa TRF ini dikembalikan..."
                   value={remarks}
@@ -349,7 +342,7 @@ const ApprovalPage: React.FC = () => {
               onClick={executeAction}
               className={action === 'APPROVE' ? "bg-green-600 hover:bg-green-700" : ""}
             >
-              {action === 'REVISE' ? 'Confirm Revise' : 'Approve & Save Lumpsum'}
+              {action === 'REJECT' ? 'Konfirmasi penolakan' : action === 'REVISE' ? 'Confirm Revise' : 'Approve & Save Lumpsum'}
             </Button>
           </DialogFooter>
         </DialogContent>

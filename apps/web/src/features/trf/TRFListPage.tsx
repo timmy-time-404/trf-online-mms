@@ -77,6 +77,7 @@ const STATUS_FILTER_OPTIONS: {
     label: 'GA Processed',
   },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'CANCELLED', label: 'Cancelled' },
   {
     value: 'NEEDS_REVISION',
     label: 'Needs Revision',

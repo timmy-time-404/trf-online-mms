@@ -452,10 +452,10 @@ export const pmApproveTRF = async (
 
 export const gaProcessTRF = async (
   id: string, _gaId: string, _gaName: string,
-  voucherDetails: GAProcess['voucherDetails'], remarks: string,
+  voucherDetails: GAProcess['voucherDetails'], remarks: string, version?: number,
 ): Promise<boolean> => {
   await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/process', {
-    method: 'POST', body: { voucherDetails, remarks, ga_documents: {} },
+    method: 'POST', version: version ?? 0, body: { voucherDetails, remarks, ga_documents: {} },
   });
   return true;
 };
@@ -466,11 +466,11 @@ export const gaProcessTRF = async (
 
 // Compatibility entry point: saving lumpsum now completes HR approval atomically.
 export const saveHRLumpsum = async (
-  trfId: string, amount: number, note: string, _hrUserId: string, remarks = '',
+  trfId: string, amount: number, note: string, _hrUserId: string, remarks = '', version?: number,
 ): Promise<TRF> => {
   if (!isHRLumpsumAmount(amount)) throw new Error('Nominal lumpsum tidak tersedia pada daftar resmi.');
   return apiRequest<TRF>('/trfs/' + encodeURIComponent(trfId) + '/approve', {
-    method: 'POST', body: { remarks, lumpsum: { amount, note } },
+    method: 'POST', version: version ?? 0, body: { remarks, lumpsum: { amount, note } },
   });
 };
 

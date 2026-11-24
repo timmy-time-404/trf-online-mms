@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const { deleteTRF, getTRFById, navigate, fetchAllData } = vi.hoisted(() => ({
   deleteTRF: vi.fn(), getTRFById: vi.fn(), navigate: vi.fn(), fetchAllData: vi.fn(),
 }));
-vi.mock('@/store', () => ({ useTRFStore: () => ({ deleteTRF, getTRFById, fetchAllData }) }));
+vi.mock('@/store', () => ({ useTRFStore: () => ({ deleteTRF, getTRFById, fetchAllData }), useAuthStore: () => ({currentUser:{employeeId:'employee'}}) }));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'draft-1' }), useNavigate: () => navigate }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('./components/TRFDetailView', () => ({ default: ({ onDelete }: { onDelete: () => void }) => <button onClick={onDelete}>Delete</button> }));

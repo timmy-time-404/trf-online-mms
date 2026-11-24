@@ -1,3 +1,4 @@
+import { normalizeDepartment, businessWeekStart } from '@trf/shared';
 import { create } from 'zustand';
 import { apiRequest } from '@/api/client';
 import { persist } from 'zustand/middleware';
@@ -214,13 +215,14 @@ interface TRFState {
   changedByName: string,
   updates: UpdateTRFInput,
 ) => Promise<boolean>;
-  deleteTRF: (id: string, hardDelete?: boolean) => Promise<boolean>;
+  deleteTRF: (id: string, version?: number) => Promise<boolean>;
   editAndApproveTRF: (
     id: string,
     currentUser: User,
     updates: UpdateTRFInput,
     note: string,
     lumpsum?: LumpsumInput,
+    version?: number,
   ) => Promise<boolean>;
   getVisibleTRFs: (user: User) => TRF[];
   getTRFsForVerification: (department: string) => TRF[];
@@ -244,6 +246,7 @@ interface TRFState {
     currentUser: User,
     action: WorkflowAction,
     remarks?: string,
+    version?: number,
   ) => Promise<boolean>;
   handleApproval: (
     trfId: string,
@@ -251,6 +254,7 @@ interface TRFState {
     action: WorkflowAction,
     remarks?: string,
     lumpsum?: LumpsumInput,
+    version?: number,
   ) => Promise<boolean>;
 
   findNextActiveStatus: (
@@ -371,10 +375,7 @@ export const useTRFStore = create<TRFState>()(
 
       getTRFsByDepartment: (department) => {
         const normalizedDepartment =
-          department
-            ?.trim()
-            .toLocaleLowerCase('id-ID') ??
-          '';
+          normalizeDepartment(department);
 
         if (!normalizedDepartment) {
           return [];
@@ -384,11 +385,7 @@ export const useTRFStore = create<TRFState>()(
           .trfs.filter(
             (trf) =>
               (
-                trf.department
-                  ?.trim()
-                  .toLocaleLowerCase(
-                    'id-ID',
-                  ) ?? ''
+                normalizeDepartment(trf.department)
               ) ===
               normalizedDepartment,
           )
@@ -405,7 +402,7 @@ export const useTRFStore = create<TRFState>()(
       createTRF: async (trfData) => {
         const userId = useAuthStore.getState().currentUser?.id;
         try {
-          const trf = await apiRequest<TRF>('/trfs', { method: 'POST', body: trfData });
+          const trf = await apiRequest<TRF>('/trfs', { method: 'POST', version: 0, body: trfData });
           if (useAuthStore.getState().currentUser?.id !== userId) return null;
           set((state) => ({ trfs: [trf, ...state.trfs] }));
           return trf;
@@ -415,7 +412,7 @@ export const useTRFStore = create<TRFState>()(
       updateTRF: async (id, updates) => {
         const userId = useAuthStore.getState().currentUser?.id;
         try {
-          const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id), { method: 'PUT', body: updates });
+          const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id), { method: 'PUT', version: updates.expectedVersion ?? get().getTRFById(id)?.version ?? 0, body: (({expectedVersion: _version,...data}) => data)(updates) });
           if (useAuthStore.getState().currentUser?.id !== userId) return false;
           set((state) => ({ trfs: state.trfs.map((item) => item.id === id ? trf : item) }));
           return true;
@@ -424,15 +421,15 @@ export const useTRFStore = create<TRFState>()(
       resubmitTRF: async (id, _changedBy, _changedByName, updates) => {
         const userId = useAuthStore.getState().currentUser?.id;
         try {
-          const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/resubmit', { method: 'POST', body: updates });
+          const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/resubmit', { method: 'POST', version: updates.expectedVersion ?? get().getTRFById(id)?.version ?? 0, body: (({expectedVersion: _version,...data}) => data)(updates) });
           if (useAuthStore.getState().currentUser?.id !== userId) return false;
           set((state) => ({ trfs: state.trfs.map((item) => item.id === id ? trf : item) }));
           return true;
         } catch (error) { console.error('Resubmit TRF failed:', error); return false; }
       },
-      deleteTRF: async (id) => {
+      deleteTRF: async (id,version) => {
         try {
-          const result = await apiRequest<{ id: string }>('/trfs/' + encodeURIComponent(id), { method: 'DELETE' });
+          const result = await apiRequest<{ id: string }>('/trfs/' + encodeURIComponent(id), { method: 'DELETE', version: version ?? get().getTRFById(id)?.version ?? 0 });
           if (result.id !== id) return false;
           set((state) => ({ trfs: state.trfs.filter((trf) => trf.id !== id),
             statusHistory: state.statusHistory.filter((entry) => entry.trfId !== id) }));
@@ -440,8 +437,8 @@ export const useTRFStore = create<TRFState>()(
         } catch (error) { console.error('Delete TRF failed:', error); return false; }
       },
 
-      editAndApproveTRF: async (id, _currentUser, updates, note, lumpsum) =>
-        applyWorkflow(id, 'edit-approve', { updates, note, lumpsum }),
+      editAndApproveTRF: async (id, _currentUser, updates, note, lumpsum, version) =>
+        applyWorkflow(id, 'edit-approve', { updates: (({expectedVersion: _version,...data}) => data)(updates), note, lumpsum },version ?? updates.expectedVersion),
 
       getVisibleTRFs: (user) => {
   const allTRFs = get().trfs;
@@ -478,14 +475,12 @@ export const useTRFStore = create<TRFState>()(
     case 'ADMIN_DEPT':
     case 'HOD': {
       const userDepartment =
-        user.department?.trim().toLowerCase();
+        normalizeDepartment(user.department);
 
       filtered = userDepartment
         ? allTRFs.filter(
             (trf) =>
-              trf.department
-                ?.trim()
-                .toLowerCase() === userDepartment,
+              normalizeDepartment(trf.department) === userDepartment,
           )
         : [];
 
@@ -517,10 +512,7 @@ export const useTRFStore = create<TRFState>()(
         department: string,
       ) => {
         const normalizedDepartment =
-          department
-            ?.trim()
-            .toLocaleLowerCase('id-ID') ??
-          '';
+          normalizeDepartment(department);
 
         if (!normalizedDepartment) {
           return [];
@@ -532,11 +524,7 @@ export const useTRFStore = create<TRFState>()(
               trf.status ===
                 'SUBMITTED' &&
               (
-                trf.department
-                  ?.trim()
-                  .toLocaleLowerCase(
-                    'id-ID',
-                  ) ?? ''
+                normalizeDepartment(trf.department)
               ) ===
                 normalizedDepartment,
           )
@@ -556,11 +544,7 @@ export const useTRFStore = create<TRFState>()(
           .filter((trf) => {
             if (role === 'HOD') {
               const normalizedDepartment =
-                department
-                  ?.trim()
-                  .toLocaleLowerCase(
-                    'id-ID',
-                  ) ?? '';
+                normalizeDepartment(department);
 
               return (
                 trf.status ===
@@ -569,11 +553,7 @@ export const useTRFStore = create<TRFState>()(
                   normalizedDepartment,
                 ) &&
                 (
-                  trf.department
-                    ?.trim()
-                    .toLocaleLowerCase(
-                      'id-ID',
-                    ) ?? ''
+                  normalizeDepartment(trf.department)
                 ) ===
                   normalizedDepartment
               );
@@ -581,6 +561,7 @@ export const useTRFStore = create<TRFState>()(
 
             if (role === 'HR') return trf.status === 'HOD_APPROVED';
             if (role === 'PM') return trf.status === 'HR_APPROVED';
+            if (role === 'SUPER_ADMIN') return !!trf.blockedBy;
             return false;
           })
           .map((t) => ({
@@ -598,14 +579,14 @@ export const useTRFStore = create<TRFState>()(
           }));
       },
 
-      handleVerify: async (id, _currentUser, action, remarks) => {
+      handleVerify: async (id, _currentUser, action, remarks, version) => {
         const verification = action === 'VERIFY' || action === 'REVISE';
         const endpoint = verification ? 'verify' : action === 'REJECT' ? 'reject' : 'approve';
-        return applyWorkflow(id, endpoint, verification ? { decision: action === 'VERIFY' ? 'YES' : 'NO', remarks } : { remarks });
+        return applyWorkflow(id, endpoint, verification ? { decision: action === 'VERIFY' ? 'YES' : 'NO', remarks } : { remarks },version);
       },
-      handleApproval: async (id, _currentUser, action, remarks, lumpsum) => {
+      handleApproval: async (id, _currentUser, action, remarks, lumpsum, version) => {
         const endpoint = action === 'APPROVE' ? 'approve' : action === 'REJECT' ? 'reject' : action === 'REVISE' ? 'revise' : 'verify';
-        return applyWorkflow(id, endpoint, action === 'VERIFY' ? { decision: 'YES', remarks } : { remarks, ...(lumpsum ? { lumpsum } : {}) });
+        return applyWorkflow(id, endpoint, action === 'VERIFY' ? { decision: 'YES', remarks } : { remarks, ...(lumpsum ? { lumpsum } : {}) },version);
       },
       findNextActiveStatus: (target, department) => findNextActiveStatus(target, get().users, department) as TRFStatus,
       // ============================================
@@ -706,12 +687,6 @@ interface DashboardState {
 
   isLoadingStats: boolean;
 
-  roomAvailability: {
-    hotelName: string;
-    total: number;
-    occupied: number;
-    available: number;
-  }[];
 
   weeklyTravel: {
     day: string;
@@ -752,7 +727,6 @@ export const useDashboardStore =
 
     isLoadingStats: false,
 
-    roomAvailability: [],
 
     weeklyTravel: createEmptyWeeklyTravel(),
 
@@ -760,23 +734,17 @@ export const useDashboardStore =
       const userId = useAuthStore.getState().currentUser?.id;
       set({ isLoadingStats: true });
       try {
-        const [stats, roomAvailability] = await Promise.all([
-          apiRequest<DashboardState['stats']>('/dashboard/stats'),
-          apiRequest<DashboardState['roomAvailability']>('/dashboard/rooms'),
-        ]);
-        if (useAuthStore.getState().currentUser?.id === userId) set({ stats, roomAvailability });
+        const stats = await apiRequest<DashboardState['stats']>('/dashboard/stats');
+        if (useAuthStore.getState().currentUser?.id === userId) set({ stats });
       } catch (error) {
         console.error('Dashboard failed:', error);
-        if (useAuthStore.getState().currentUser?.id === userId) set({ stats: EMPTY_DASHBOARD_STATS, roomAvailability: [] });
+        if (useAuthStore.getState().currentUser?.id === userId) set({ stats: EMPTY_DASHBOARD_STATS });
       }
       finally { if (useAuthStore.getState().currentUser?.id === userId) set({ isLoadingStats: false }); }
     },
     fetchWeeklyTravel: async (_user) => {
       const userId = useAuthStore.getState().currentUser?.id;
-      const now = new Date(), monday = new Date(now);
-      monday.setDate(now.getDate() + (now.getDay() === 0 ? -6 : 1 - now.getDay()));
-      monday.setHours(0, 0, 0, 0);
-      const weekStart = monday.toISOString().slice(0, 10);
+      const weekStart = businessWeekStart();
       try {
         const weeklyTravel = await apiRequest<DashboardState['weeklyTravel']>('/dashboard/weekly?' + new URLSearchParams({ weekStart }));
         if (useAuthStore.getState().currentUser?.id === userId) set({ weeklyTravel });
@@ -790,14 +758,14 @@ export const useDashboardStore =
 function clearBusinessData() {
   useTRFStore.setState({ trfs: [], employees: [], users: [], statusHistory: [],
     referenceMaster: { departments: [], purposes: [], transports: [], accommodations: [] } });
-  useDashboardStore.setState({ stats: EMPTY_DASHBOARD_STATS, weeklyTravel: createEmptyWeeklyTravel(), roomAvailability: [], isLoadingStats: false });
+  useDashboardStore.setState({ stats: EMPTY_DASHBOARD_STATS, weeklyTravel: createEmptyWeeklyTravel(), isLoadingStats: false });
   useNotificationStore.getState().reset();
 }
 
-async function applyWorkflow(id: string, endpoint: string, body: unknown): Promise<boolean> {
+async function applyWorkflow(id: string, endpoint: string, body: unknown, version?: number): Promise<boolean> {
   const userId = useAuthStore.getState().currentUser?.id;
   try {
-    const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/' + endpoint, { method: 'POST', body });
+    const trf = await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/' + endpoint, { method: 'POST', body, version: version ?? useTRFStore.getState().getTRFById(id)?.version ?? 0 });
     if (useAuthStore.getState().currentUser?.id !== userId) return false;
     useTRFStore.setState((state) => ({ trfs: state.trfs.map((item) => item.id === id ? trf : item) }));
     return true;

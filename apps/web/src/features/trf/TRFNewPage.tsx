@@ -1,3 +1,4 @@
+import LateSubmissionField from './components/LateSubmissionField';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ const TRFNewPage: React.FC = () => {
   const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>([]);
 
   // ── State: employee ID ────────────────────────────────────
+  const [lateSubmissionReason,setLateSubmissionReason] = useState('');
   const [employeeId, setEmployeeId] = useState('');
   const [department, setDepartment]  = useState('');
 
@@ -64,7 +66,7 @@ const TRFNewPage: React.FC = () => {
     const firstAccom   = accommodationEntries[0];
 
     return {
-      employeeId,
+      employeeId, lateSubmissionReason,
       department,
 
       // Backward-compat: single fields dari entry pertama
@@ -108,18 +110,18 @@ const TRFNewPage: React.FC = () => {
   };
 
   // ── Submit ────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    if (!validateForm() || !currentUser) return;
+  const handleSubmit = async (draft = false) => {
+    if (!currentUser || (draft ? !employeeId : !validateForm())) return;
 
     setIsSubmitting(true);
     try {
       const input  = buildCreateInput();
-      const newTRF = await createTRF(input);
+      const newTRF = await createTRF({...input,draft});
       if (!newTRF) throw new Error('Gagal membuat data');
 
       await fetchAllData();
 
-      toast.success('TRF submitted successfully');
+      toast.success(draft ? 'Draft tersimpan' : 'TRF terkirim');
       navigate(`/trf/${newTRF.id}`);
     } catch {
       toast.error('Failed to submit TRF');
@@ -162,6 +164,7 @@ const TRFNewPage: React.FC = () => {
           onChange={setPurposeEntries}
         />
 
+        <LateSubmissionField start={purposeEntries[0]?.startDate} value={lateSubmissionReason} onChange={setLateSubmissionReason} />
         {/* ── Multi Accommodation ── */}
         <AccommodationSection
           entries={accommodationEntries}
@@ -186,12 +189,13 @@ const TRFNewPage: React.FC = () => {
         </Button>
       </div>
 
+      <Button variant="outline" disabled={isSubmitting || !employeeId} onClick={()=>void handleSubmit(true)}>Simpan draft</Button>
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
         title="Confirm Submission"
         description="Are you sure you want to submit this TRF for approval?"
-        onConfirm={handleSubmit}
+        onConfirm={()=>handleSubmit(false)}
         confirmText="Submit"
         cancelText="Cancel"
         variant="warning"

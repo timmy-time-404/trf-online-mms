@@ -9,7 +9,9 @@ import { useAuthStore, useTRFStore } from './index';
 import type { TRF } from '@/types';
 import { gaProcessTRF, saveHRLumpsum } from './supabaseStore';
 
+// D13: adapter fixtures carry the version displayed to the user.
 const draft: TRF = {
+  version: 1,
   id: 'draft-1', trfNumber: 'TRF-1', employeeId: 'employee-1', status: 'DRAFT',
   travelPurpose: 'TRAINING', startDate: '2026-11-18', endDate: '2026-11-19',
   travelArrangements: [],
@@ -38,7 +40,7 @@ describe('delete TRF', () => {
   it('only removes the request after the database confirms deletion', async () => {
     request.mockResolvedValue({ id: draft.id });
     expect(await useTRFStore.getState().deleteTRF(draft.id)).toBe(true);
-    expect(request).toHaveBeenCalledWith('/trfs/' + draft.id, { method: 'DELETE' });
+    expect(request).toHaveBeenCalledWith('/trfs/' + draft.id, { method: 'DELETE', version: 1 });
     expect(useTRFStore.getState().trfs.map((trf) => trf.id)).toEqual(['draft-2']);
   });
 
@@ -66,20 +68,20 @@ describe('workflow API adapters', () => {
   it('sends verification NO with optional remarks to the verify endpoint', async () => {
     request.mockResolvedValue({ ...draft, status: 'NEEDS_REVISION' });
     expect(await useTRFStore.getState().handleVerify(draft.id, reviewer, 'REVISE')).toBe(true);
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/verify', { method: 'POST', body: { decision: 'NO', remarks: undefined } });
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/verify', { method: 'POST', version: 1, body: { decision: 'NO', remarks: undefined } });
   });
   it('sends HR approval and lumpsum together without trusting the caller identity', async () => {
     request.mockResolvedValue({ ...draft, status: 'HR_APPROVED', lumpsumAmount: 75_000 });
     expect(await useTRFStore.getState().handleApproval(draft.id, reviewer, 'APPROVE', 'Approved', { amount: 75_000, note: 'Travel' })).toBe(true);
     expect(request).toHaveBeenCalledOnce();
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', body: { remarks: 'Approved', lumpsum: { amount: 75_000, note: 'Travel' } } });
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', version: 1, body: { remarks: 'Approved', lumpsum: { amount: 75_000, note: 'Travel' } } });
     expect(useTRFStore.getState().trfs[0]?.status).toBe('HR_APPROVED');
   });
   it('sends HR edit and approval as one request', async () => {
     request.mockResolvedValue({ ...draft, status: 'HR_APPROVED' });
     const updates = { purposeRemarks: 'Edited' }, lumpsum = { amount: 150_000, note: '' };
     expect(await useTRFStore.getState().editAndApproveTRF(draft.id, reviewer, updates, 'Note', lumpsum)).toBe(true);
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/edit-approve', { method: 'POST', body: { updates, note: 'Note', lumpsum } });
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/edit-approve', { method: 'POST', version: 1, body: { updates, note: 'Note', lumpsum } });
   });
   it('retains cached data when approval fails', async () => {
     request.mockRejectedValue(new Error('HTTP 409'));
@@ -98,14 +100,14 @@ describe('workflow API adapters', () => {
   });
   it('processes through the API with empty document metadata until WP5', async () => {
     request.mockResolvedValue({ ...draft, status: 'GA_PROCESSED' });
-    expect(await gaProcessTRF(draft.id, 'spoofed', 'spoofed', { transportation: 'Car' }, 'Done')).toBe(true);
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/process', { method: 'POST', body: {
+    expect(await gaProcessTRF(draft.id, 'spoofed', 'spoofed', { transportation: 'Car' }, 'Done',1)).toBe(true);
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/process', { method: 'POST', version: 1, body: {
       voucherDetails: { transportation: 'Car' }, remarks: 'Done', ga_documents: {},
     } });
   });
   it('keeps the old lumpsum helper as an atomic HR approval adapter', async () => {
     request.mockResolvedValue({ ...draft, status: 'HR_APPROVED' });
-    await saveHRLumpsum(draft.id, 75_000, 'Travel', 'spoofed');
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', body: { remarks: '', lumpsum: { amount: 75_000, note: 'Travel' } } });
+    await saveHRLumpsum(draft.id, 75_000, 'Travel', 'spoofed','',1);
+    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', version: 1, body: { remarks: '', lumpsum: { amount: 75_000, note: 'Travel' } } });
   });
 });

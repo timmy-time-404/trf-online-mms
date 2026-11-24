@@ -1,3 +1,5 @@
+import TRFNotice from '@/features/trf/components/TRFNotice';
+import { useAuthStore } from '@/store';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -25,13 +27,14 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
   showActions = true
 }) => {
   const navigate = useNavigate();
+  const currentUser = useAuthStore((state)=>state.currentUser);
 
   const canEdit = (trf: TRF) => {
-    return trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION';
+    return currentUser?.employeeId===trf.employeeId && (trf.status === 'DRAFT' || trf.status === 'NEEDS_REVISION');
   };
 
   const canDelete = (trf: TRF) => {
-    return trf.status === 'DRAFT';
+    return currentUser?.employeeId===trf.employeeId && trf.status === 'DRAFT';
   };
 
   const formatDate = (dateString?: string) => {
@@ -112,7 +115,7 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={trf.status} size="sm" />
+                  <StatusBadge status={trf.status} size="sm" /><TRFNotice trf={trf} />
                 </TableCell>
                 <TableCell>
                   <span className="text-sm text-gray-600">

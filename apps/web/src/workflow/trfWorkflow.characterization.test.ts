@@ -8,9 +8,10 @@ import { getNextStatus, type WorkflowAction } from './trfWorkflow';
 
 const ROLES: UserRole[] = ['EMPLOYEE', 'ADMIN_DEPT', 'HOD', 'HR', 'PM', 'GA', 'SUPER_ADMIN'];
 const ACTIONS: WorkflowAction[] = ['VERIFY', 'APPROVE', 'REJECT', 'REVISE'];
+// D9: CANCELLED is terminal for approval actions; existing transition assertions stay.
 const STATUSES: TRFStatus[] = [
   'DRAFT', 'SUBMITTED', 'ADMIN_DEPT_VERIFIED', 'PENDING_APPROVAL', 'HOD_APPROVED', 'HR_APPROVED',
-  'PM_APPROVED', 'GA_PROCESSED', 'REJECTED', 'NEEDS_REVISION', 'REVISED',
+  'PM_APPROVED', 'CANCELLED', 'GA_PROCESSED', 'REJECTED', 'NEEDS_REVISION', 'REVISED',
 ];
 
 const allowedTransitions = () => {
