@@ -26,6 +26,7 @@ export const TRF_STATUSES = [
   'PM_APPROVED',
   'GA_PROCESSED',
   'REJECTED',
+  'CANCELLED',
   'NEEDS_REVISION',
   'REVISED',
 ] as const;

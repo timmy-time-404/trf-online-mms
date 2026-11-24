@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createTRFSchema } from './trf';
 
-const input = { employeeId: '00000000-0000-4000-8000-000000000001', travelPurpose: 'TRAINING',
+// D8: near-date fixtures require an explicit late submission reason.
+const input = { lateSubmissionReason: 'Test fixture', employeeId: '00000000-0000-4000-8000-000000000001', travelPurpose: 'TRAINING',
   startDate: '2026-12-01', endDate: '2026-12-02', purposeRemarks: 'Training', travelArrangements: [] };
 describe('TRF input', () => {
   it('accepts legacy fields and rejects status injection', () => {
