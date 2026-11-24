@@ -455,7 +455,7 @@ export const gaProcessTRF = async (
   voucherDetails: GAProcess['voucherDetails'], remarks: string, version?: number,
 ): Promise<boolean> => {
   await apiRequest<TRF>('/trfs/' + encodeURIComponent(id) + '/process', {
-    method: 'POST', version: version ?? 0, body: { voucherDetails, remarks, ga_documents: {} },
+    method: 'POST', version: version ?? 0, body: { voucherDetails, remarks },
   });
   return true;
 };

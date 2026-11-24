@@ -10,8 +10,10 @@ export const apiRequest = async <T>(path: string, options: { method?: string; bo
   if (!/^\/[a-zA-Z0-9][a-zA-Z0-9/_-]*$/.test(base) || !/^\/[a-zA-Z0-9]/.test(path)) throw new ApiError(500, 'Konfigurasi API tidak valid.');
   const response = await fetch(`${base}${path}`, {
     method: options.method ?? 'GET', credentials: 'include',
-    headers: { Accept: 'application/json', ...(options.version===undefined ? {} : { 'If-Match': `"${options.version}"` }), ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers: { Accept: 'application/json', ...(options.version===undefined ? {} : { 'If-Match': `"${options.version}"` }),
+      // FormData sets its own multipart boundary header.
+      ...(options.body === undefined || options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }) },
+    body: options.body === undefined ? undefined : options.body instanceof FormData ? options.body : JSON.stringify(options.body),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {

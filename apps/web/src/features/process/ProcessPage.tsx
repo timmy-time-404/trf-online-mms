@@ -33,7 +33,7 @@ import {
   Edit
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { apiRequest } from '@/api/client';
 
 const ProcessPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,7 +46,6 @@ const ProcessPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   
   // State dengan tipe data yang sangat spesifik
-  const standalone = !!import.meta.env.VITE_API_BASE_URL;
   const [documents, setDocuments] = useState<Record<string, {name: string, url: string, path?: string}>>({});
   const [groundInfo, setGroundInfo] = useState('');
   const [remarksToEmployee, setRemarksToEmployee] = useState('');
@@ -93,39 +92,33 @@ const ProcessPage: React.FC = () => {
     setProcessDialogOpen(true);
   };
 
+  // Uploaded files live on the server; the response is the TRF with its new version.
+  const applyDocuments = (trf: TRF) => {
+    const parsed: Record<string, { name: string; url: string; path?: string }> = {};
+    for (const [key, value] of Object.entries((trf.gaDocuments ?? {}) as Record<string, unknown>)) {
+      if (value && typeof value === 'object' && 'url' in value) {
+        const doc = value as Record<string, unknown>;
+        parsed[key] = { name: String(doc.name || 'Document'), url: String(doc.url), path: typeof doc.path === 'string' ? doc.path : undefined };
+      }
+    }
+    setDocuments(parsed);
+  };
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (!file || !selectedTRF) return;
-
     setIsUploading(true);
-    toast.info(`Uploading ${type}...`);
-
     try {
-      const path = `${selectedTRF.id}/${type}-${Date.now()}-${file.name}`;
-
-      const { error } = await supabase.storage
-        .from("trf-documents")
-        .upload(path, file);
-
-      if (error) throw error;
-
-      const { data } = supabase.storage
-        .from("trf-documents")
-        .getPublicUrl(path);
-
-      setDocuments(prev => ({
-        ...prev,
-        [type]: {
-          name: file.name,
-          url: data.publicUrl,
-          path,
-        }
-      }));
-      
-      toast.success(`${type} uploaded successfully!`);
+      const form = new FormData();
+      form.append('file', file);
+      const updated = await apiRequest<TRF>(`/trf-documents/${selectedTRF.id}/${type}`, {
+        method: 'POST', body: form, version: selectedTRF.version ?? 0,
+      });
+      setSelectedTRF(updated);
+      applyDocuments(updated);
+      toast.success(`${type} berhasil diunggah.`);
     } catch (err) {
-      console.error(err);
-      toast.error(`Failed to upload ${type}`);
+      toast.error(err instanceof Error ? err.message : `Gagal mengunggah ${type}.`);
     } finally {
       setIsUploading(false);
       e.target.value = '';
@@ -138,7 +131,7 @@ const ProcessPage: React.FC = () => {
     const hasAtLeastOneDocument = Object.entries(documents).some(
       ([key, doc]) => key !== 'groundInfo' && doc?.url,
     );
-    if (!standalone && !hasAtLeastOneDocument) {
+    if (!hasAtLeastOneDocument) {
       toast.error('Upload minimal 1 dokumen (voucher/tiket) sebelum memproses TRF ini.');
       return;
     }
@@ -150,7 +143,8 @@ const ProcessPage: React.FC = () => {
         currentUser.id,
         currentUser.username,
         { transportation: groundInfo },
-        remarksToEmployee
+        remarksToEmployee,
+        selectedTRF.version ?? 0,
       );
 
       await forceRefreshTRFs();
@@ -159,8 +153,7 @@ const ProcessPage: React.FC = () => {
       setProcessDialogOpen(false);
       setSelectedTRF(null);
     } catch (error) {
-      console.error(error);
-      toast.error('Failed to process TRF');
+      toast.error(error instanceof Error ? error.message : 'Gagal memproses TRF.');
     }
   };
 
@@ -277,7 +270,7 @@ const ProcessPage: React.FC = () => {
               Process TRF {selectedTRF?.trfNumber}
             </DialogTitle>
             <DialogDescription>
-              {standalone ? 'Unggah dokumen belum tersedia. Proses TRF dapat diuji tanpa dokumen.' : 'Upload documents and vouchers for this travel request'}
+              Upload minimal 1 dokumen (PDF/PNG/JPG, maks. 10 MB) sebelum memproses TRF ini.
             </DialogDescription>
           </DialogHeader>
 
@@ -291,9 +284,9 @@ const ProcessPage: React.FC = () => {
               </label>
               <input
                 type="file"
-                accept=".pdf,image/*"
+                accept=".pdf,.png,.jpg,.jpeg"
                 onChange={(e) => handleUpload(e, "hotelVoucher")}
-                disabled={isUploading || standalone}
+                disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer border rounded-md p-1"
               />
             </div>
@@ -306,9 +299,9 @@ const ProcessPage: React.FC = () => {
               </label>
               <input
                 type="file"
-                accept=".pdf,image/*"
+                accept=".pdf,.png,.jpg,.jpeg"
                 onChange={(e) => handleUpload(e, "flightTicket")}
-                disabled={isUploading || standalone}
+                disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer border rounded-md p-1"
               />
             </div>
@@ -321,9 +314,9 @@ const ProcessPage: React.FC = () => {
               </label>
               <input
                 type="file"
-                accept=".pdf,image/*"
+                accept=".pdf,.png,.jpg,.jpeg"
                 onChange={(e) => handleUpload(e, "shipTicket")}
-                disabled={isUploading || standalone}
+                disabled={isUploading}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 cursor-pointer border rounded-md p-1"
               />
             </div>

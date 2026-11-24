@@ -98,11 +98,11 @@ describe('workflow API adapters', () => {
     expect(await pending).toBe(false);
     expect(useTRFStore.getState().trfs).toEqual([]);
   });
-  it('processes through the API with empty document metadata until WP5', async () => {
+  it('processes through the API; documents are uploaded separately (WP5)', async () => {
     request.mockResolvedValue({ ...draft, status: 'GA_PROCESSED' });
     expect(await gaProcessTRF(draft.id, 'spoofed', 'spoofed', { transportation: 'Car' }, 'Done',1)).toBe(true);
     expect(request).toHaveBeenCalledWith('/trfs/draft-1/process', { method: 'POST', version: 1, body: {
-      voucherDetails: { transportation: 'Car' }, remarks: 'Done', ga_documents: {},
+      voucherDetails: { transportation: 'Car' }, remarks: 'Done',
     } });
   });
   it('keeps the old lumpsum helper as an atomic HR approval adapter', async () => {
