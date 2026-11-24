@@ -138,7 +138,7 @@ for (const role of ['HOD', 'HR', 'PM', 'SUPER_ADMIN']) check(`Manpower dashboard
 // ── Master data & dashboard ──────────────────────────────────────────────
 section = 'Master data & Dashboard';
 const users = (await api('SUPER_ADMIN', 'GET', '/users')).json ?? [];
-check('SUPER_ADMIN kelola user (7 akun, tanpa hash)', users.length === 7 && !JSON.stringify(users).includes('password_hash'));
+check('SUPER_ADMIN kelola user (semua peran ada, tanpa hash)', new Set(users.map((u) => u.role)).size === 7 && !JSON.stringify(users).includes('password_hash'));
 check('HR tidak bisa kelola user', (await api('HR', 'GET', '/users')).status === 403);
 check('HR employee management', (await api('HR', 'POST', '/employee-management', { body: { action: 'list' } })).status === 200);
 check('EMPLOYEE hanya lihat data dirinya (D12)', ((await api('EMPLOYEE', 'GET', '/employees')).json ?? []).length === 1);

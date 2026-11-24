@@ -230,3 +230,19 @@ docker run --rm -u 0 -v $PWD/deploy/smoke/domain-smoke.mjs:/s.mjs:ro -v $PWD/dep
 ```
 
 Exit code 0 berarti semua pemeriksaan lulus.
+
+## CI/CD (deploy otomatis)
+
+Rilis normal: merge ke `main` → workflow **Deploy** → approve di environment `production` → `deploy/release.sh` dijalankan di VPS. Manual tetap bisa:
+
+```sh
+cd /opt/trf-dev/foundation
+sh deploy/release.sh release <tag> /path/release.tar.gz   # dari git archive
+sh deploy/release.sh rollback <tag-sebelumnya>
+```
+
+### Setup sekali (pemilik repo)
+
+1. Di VPS, `~/.ssh/authorized_keys` root berisi kunci `trf-github-deploy` dengan `restrict,command="sh /opt/trf-dev/foundation/deploy/ci-entry.sh"` — kunci ini hanya bisa `release`/`rollback`.
+2. GitHub Secrets repo: `DEPLOY_SSH_KEY` (private key tersebut), `DEPLOY_KNOWN_HOSTS` (host key VPS), `DEPLOY_HOST` (`root@<ip>`).
+3. GitHub Environment `production`: required reviewer = PM, branch `main` saja.

@@ -22,10 +22,11 @@ Prasyarat: Node.js 24+ (lihat `.nvmrc`) dan pnpm 10.
 ```bash
 npm install -g pnpm@10
 pnpm install
-cp apps/web/.env.example apps/web/.env   # API di path /api
-pnpm dev:web                              # http://localhost:5173
-pnpm dev:api                              # http://localhost:3000/health
+pnpm dev:setup && pnpm dev:db && pnpm db:init
+pnpm dev        # web http://localhost:5173, API http://localhost:3000
 ```
+
+Panduan lengkap: [docs/development.md](docs/development.md).
 
 Sebelum membuka PR, jalankan pemeriksaan yang sama dengan CI:
 
@@ -37,6 +38,7 @@ pnpm check   # lint + typecheck + test + build untuk semua paket
 
 | Dokumen | Isi |
 |---|---|
+| [docs/development.md](docs/development.md) | **Mulai di sini:** setup lokal, alur kerja berdua, CI/CD |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Alur branch, commit, PR, dan review |
 | [docs/spec/](docs/spec/README.md) | Spesifikasi bisnis yang diekstrak dari sistem lama |
 | [docs/adr/](docs/adr/README.md) | Keputusan arsitektur dan alasannya |
