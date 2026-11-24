@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Create temporary database secret
-        run: sh deploy/init-secrets.sh
+        # Root-owned like on the VPS: db-tools runs as root without CAP_DAC_OVERRIDE.
+        run: sudo sh deploy/init-secrets.sh
       - name: Validate configuration
         run: |
           docker compose config --quiet
