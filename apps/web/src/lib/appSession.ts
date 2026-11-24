@@ -1,58 +1,26 @@
 import { apiRequest } from '@/api/client';
-import type {
-  User,
-  UserRole,
-} from '@/types';
+import type { User, UserRole } from '@/types';
 
-const SESSION_STORAGE_KEY =
-  'trf-app-session-token';
+/**
+ * Login session against the TRF API. The session lives in an HttpOnly cookie
+ * (ADR-0006); JavaScript never sees or stores the token.
+ */
 
-export const APP_SESSION_INVALID_EVENT =
-  'trf-app-session-invalid';
+/** Token key used by the old Supabase build; only removed, never written. */
+const LEGACY_SESSION_STORAGE_KEY = 'trf-app-session-token';
+
+export const APP_SESSION_INVALID_EVENT = 'trf-app-session-invalid';
 
 let invalidSessionEventQueued = false;
 
-/**
- * Mengirim satu event global ketika application session
- * ditolak oleh backend.
- *
- * App.tsx menggunakan event ini untuk membersihkan Zustand
- * auth state dan mengarahkan pengguna ke halaman login.
- */
-const dispatchInvalidAppSessionEvent =
-  (): void => {
-    if (
-      typeof window === 'undefined' ||
-      invalidSessionEventQueued
-    ) {
-      return;
-    }
-
-    invalidSessionEventQueued = true;
-
-    window.dispatchEvent(
-      new Event(
-        APP_SESSION_INVALID_EVENT,
-      ),
-    );
-
-    /*
-     * Lock hanya berlaku pada event loop saat ini agar beberapa
-     * request paralel yang sama-sama menerima 401 tidak memicu
-     * logout dan redirect berulang kali.
-     */
-    window.setTimeout(() => {
-      invalidSessionEventQueued = false;
-    }, 0);
-  };
-
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL;
-
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const standaloneApi = import.meta.env.VITE_API_BASE_URL;
+/** One global event when the API rejects the session; App.tsx then returns to login. */
+const dispatchInvalidAppSessionEvent = (): void => {
+  if (typeof window === 'undefined' || invalidSessionEventQueued) return;
+  invalidSessionEventQueued = true;
+  window.dispatchEvent(new Event(APP_SESSION_INVALID_EVENT));
+  // Parallel requests that all receive 401 trigger a single logout.
+  window.setTimeout(() => { invalidSessionEventQueued = false; }, 0);
+};
 
 interface AppSessionApiUser {
   id: string;
@@ -65,76 +33,19 @@ interface AppSessionApiUser {
   mustChangePassword: boolean;
 }
 
-interface AppSessionEnvelope {
-  id?: string;
-  token?: string;
-  expiresAt?: string;
-}
-
-interface LoginResponse {
-  success?: boolean;
-
-  /*
-   * Kontrak backend production terbaru:
-   * response.session.token
-   * response.session.expiresAt
-   */
-  session?: AppSessionEnvelope;
-
-  /*
-   * Backward compatibility untuk kontrak lama.
-   */
-  sessionToken?: string;
-  expiresAt?: string;
-
-  user: AppSessionApiUser;
-}
-
-interface SessionResponse {
-  success?: boolean;
-  session?: AppSessionEnvelope;
-  expiresAt?: string;
-  user: AppSessionApiUser;
-}
-
-interface ChangePasswordResponse {
-  success: boolean;
-  user: AppSessionApiUser;
-}
+interface SessionResponse { user: AppSessionApiUser; expiresAt?: string }
+interface ChangePasswordResponse { success: boolean; user: AppSessionApiUser }
 
 export class AppSessionApiError extends Error {
   readonly status: number;
-
-  constructor(
-    message: string,
-    status: number,
-  ) {
+  constructor(message: string, status: number) {
     super(message);
     this.name = 'AppSessionApiError';
     this.status = status;
   }
 }
 
-const assertEnvironment = (): void => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new AppSessionApiError(
-      'Supabase environment variables are missing.',
-      500,
-    );
-  }
-};
-
-const getFunctionUrl = (
-  functionName: string,
-): string => {
-  assertEnvironment();
-
-  return `${supabaseUrl}/functions/v1/${functionName}`;
-};
-
-const toUser = (
-  apiUser: AppSessionApiUser,
-): User => ({
+const toUser = (apiUser: AppSessionApiUser): User => ({
   id: apiUser.id,
   username: apiUser.username,
   email: apiUser.email,
@@ -142,366 +53,57 @@ const toUser = (
   employeeId: apiUser.employeeId,
   department: apiUser.department,
   is_active: apiUser.isActive,
-  mustChangePassword:
-    apiUser.mustChangePassword,
+  mustChangePassword: apiUser.mustChangePassword,
 });
 
-const getApiErrorMessage = (
-  payload: unknown,
-): string => {
-  if (
-    !payload ||
-    typeof payload !== 'object'
-  ) {
-    return 'Request gagal.';
-  }
+const apiBase = () => import.meta.env.VITE_API_BASE_URL || '/api';
 
-  if (
-    'message' in payload &&
-    typeof payload.message === 'string'
-  ) {
-    return payload.message;
-  }
-
-  if (
-    'error' in payload &&
-    typeof payload.error === 'string'
-  ) {
-    return payload.error;
-  }
-
-  return 'Request gagal.';
-};
-
-const parseResponse = async <T>(
-  response: Response,
-): Promise<T> => {
-  let payload: unknown;
-
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    throw new AppSessionApiError(
-      getApiErrorMessage(payload),
-      response.status,
-    );
-  }
-
-  return payload as T;
-};
-
-const requestStandalone = async <T>(path: string, body?: unknown): Promise<T> => {
-  if (!/^\/[a-zA-Z0-9][a-zA-Z0-9/_-]*$/.test(standaloneApi ?? '')) {
+async function requestAuth<T>(path: string, body?: unknown): Promise<T> {
+  const base = apiBase();
+  // Same-origin path only, so the session cookie is never sent to another host.
+  if (!/^\/[a-zA-Z0-9][a-zA-Z0-9/_-]*$/.test(base)) {
     throw new AppSessionApiError('API harus menggunakan path pada domain aplikasi.', 500);
   }
-  const response = await fetch(`${standaloneApi}/auth/${path}`, {
+  const response = await fetch(`${base}/auth/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
     headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (response.status === 401 && path !== 'login') {
-    clearAppSessionToken();
-    dispatchInvalidAppSessionEvent();
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    if (response.status === 401 && path !== 'login') dispatchInvalidAppSessionEvent();
+    const message = payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string'
+      ? payload.message : 'Request gagal.';
+    throw new AppSessionApiError(message, response.status);
   }
-  return parseResponse<T>(response);
+  return payload as T;
+}
+
+const toSession = (response: SessionResponse) => {
+  if (!response.expiresAt) throw new AppSessionApiError('Expiry sesi tidak tersedia.', 500);
+  return { user: toUser(response.user), expiresAt: response.expiresAt };
 };
 
-export const getStoredAppSessionToken =
-  (): string | null => {
-    if (standaloneApi) return null;
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    const value =
-      window.localStorage.getItem(
-        SESSION_STORAGE_KEY,
-      );
-
-    if (
-      !value ||
-      value === 'undefined' ||
-      value === 'null' ||
-      value === '[object Object]'
-    ) {
-      return null;
-    }
-
-    return value;
-  };
-
-export const storeAppSessionToken = (
-  token: string,
-): void => {
-  if (
-    typeof window === 'undefined'
-  ) {
-    return;
-  }
-
-  if (
-    !token ||
-    typeof token !== 'string'
-  ) {
-    throw new AppSessionApiError(
-      'Token sesi dari server tidak valid.',
-      500,
-    );
-  }
-
-  window.localStorage.setItem(
-    SESSION_STORAGE_KEY,
-    token,
-  );
+/** Removes the token an older build may have left in localStorage. */
+export const clearAppSessionToken = (): void => {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
 };
 
-export const clearAppSessionToken =
-  (): void => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.removeItem(
-      SESSION_STORAGE_KEY,
-    );
-  };
-
-const requestFunction = async <T>(
-  functionName: string,
-  options: {
-    method?: 'GET' | 'POST';
-    body?: unknown;
-    requireSession?: boolean;
-  } = {},
-): Promise<T> => {
-  if (standaloneApi) {
-    throw new AppSessionApiError('Modul ini belum dimigrasikan ke backend baru.', 501);
-  }
-  assertEnvironment();
-
-  const sessionToken =
-    getStoredAppSessionToken();
-
-  if (
-    options.requireSession &&
-    !sessionToken
-  ) {
-    throw new AppSessionApiError(
-      'Sesi tidak tersedia.',
-      401,
-    );
-  }
-
-  /*
-   * Jangan kirim stale X-App-Session ke app-login.
-   * Header hanya dikirim untuk endpoint yang benar-benar
-   * membutuhkan application session.
-   */
-  const shouldAttachSession =
-    options.requireSession === true &&
-    Boolean(sessionToken);
-
-  const response = await fetch(
-    getFunctionUrl(functionName),
-    {
-      method: options.method ?? 'POST',
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization:
-          `Bearer ${supabaseAnonKey}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...(shouldAttachSession &&
-        sessionToken
-          ? {
-              'X-App-Session':
-                sessionToken,
-            }
-          : {}),
-      },
-      body:
-        options.body === undefined
-          ? undefined
-          : JSON.stringify(options.body),
-    },
-  );
-
-  if (
-    response.status === 401 &&
-    shouldAttachSession
-  ) {
-    clearAppSessionToken();
-    dispatchInvalidAppSessionEvent();
-  }
-
-  return parseResponse<T>(response);
-};
-
-export const loginWithAppSession = async (
-  username: string,
-  password: string,
-): Promise<{
-  user: User;
-  expiresAt: string;
-}> => {
-  /*
-   * Token lama tidak boleh ikut terbawa saat login baru.
-   */
+export const loginWithAppSession = async (username: string, password: string) => {
   clearAppSessionToken();
-
-  if (standaloneApi) {
-    const response = await requestStandalone<SessionResponse>('login', { username, password });
-    if (!response.expiresAt) throw new AppSessionApiError('Expiry sesi tidak tersedia.', 500);
-    return { user: toUser(response.user), expiresAt: response.expiresAt };
-  }
-
-  const response =
-    await requestFunction<LoginResponse>(
-      'app-login',
-      {
-        body: {
-          username,
-          password,
-        },
-      },
-    );
-
-  const sessionToken =
-    response.session?.token ??
-    response.sessionToken;
-
-  const expiresAt =
-    response.session?.expiresAt ??
-    response.expiresAt;
-
-  if (
-    !sessionToken ||
-    typeof sessionToken !== 'string'
-  ) {
-    throw new AppSessionApiError(
-      'Respons login tidak memiliki session token yang valid.',
-      500,
-    );
-  }
-
-  if (
-    !expiresAt ||
-    typeof expiresAt !== 'string'
-  ) {
-    throw new AppSessionApiError(
-      'Respons login tidak memiliki session expiry yang valid.',
-      500,
-    );
-  }
-
-  storeAppSessionToken(
-    sessionToken,
-  );
-
-  return {
-    user: toUser(response.user),
-    expiresAt,
-  };
+  return toSession(await requestAuth<SessionResponse>('login', { username, password }));
 };
 
-export const getCurrentAppSession =
-  async (): Promise<{
-    user: User;
-    expiresAt: string;
-  }> => {
-    try {
-      if (standaloneApi) {
-        const response = await requestStandalone<SessionResponse>('me');
-        if (!response.expiresAt) throw new AppSessionApiError('Expiry sesi tidak tersedia.', 500);
-        return { user: toUser(response.user), expiresAt: response.expiresAt };
-      }
-      const response =
-        await requestFunction<SessionResponse>(
-          'app-session',
-          {
-            requireSession: true,
-          },
-        );
+export const getCurrentAppSession = async () => toSession(await requestAuth<SessionResponse>('me'));
 
-      const expiresAt =
-        response.session?.expiresAt ??
-        response.expiresAt;
-
-      if (
-        !expiresAt ||
-        typeof expiresAt !== 'string'
-      ) {
-        throw new AppSessionApiError(
-          'Respons validasi sesi tidak memiliki expiry yang valid.',
-          500,
-        );
-      }
-
-      return {
-        user: toUser(response.user),
-        expiresAt,
-      };
-    } catch (error) {
-      if (
-        error instanceof AppSessionApiError &&
-        error.status === 401
-      ) {
-        clearAppSessionToken();
-      }
-
-      throw error;
-    }
-  };
-
-export const logoutAppSession =
-  async (): Promise<void> => {
-    if (standaloneApi) {
-      try { await requestStandalone('logout', {}); }
-      finally { clearAppSessionToken(); }
-      return;
-    }
-    const token =
-      getStoredAppSessionToken();
-
-    if (!token) {
-      clearAppSessionToken();
-      return;
-    }
-
-    try {
-      await requestFunction<{
-        success: boolean;
-      }>('app-logout', {
-        requireSession: true,
-      });
-    } finally {
-      clearAppSessionToken();
-    }
-  };
+export const logoutAppSession = async (): Promise<void> => {
+  try { await requestAuth('logout', {}); } finally { clearAppSessionToken(); }
+};
 
 export const changeAppPassword = async (currentPassword: string, newPassword: string): Promise<User> => {
-  const response = await apiRequest<ChangePasswordResponse>('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+  const response = await apiRequest<ChangePasswordResponse>('/auth/change-password', {
+    method: 'POST', body: { currentPassword, newPassword },
+  });
   return toUser(response.user);
 };
-
-/**
- * Generic helper untuk Edge Function yang menggunakan
- * custom application session melalui X-App-Session.
- */
-export const invokeAuthenticatedAppFunction =
-  async <TResponse>(
-    functionName: string,
-    body: unknown,
-  ): Promise<TResponse> =>
-    requestFunction<TResponse>(
-      functionName,
-      {
-        requireSession: true,
-        body,
-      },
-    );

@@ -11,7 +11,6 @@ describe('standalone cookie session adapter', () => {
     vi.stubGlobal('fetch', fetchMock);
     const session = await import('./appSession');
     expect((await session.loginWithAppSession('superadmin', 'test-password')).user.role).toBe('SUPER_ADMIN');
-    expect(session.getStoredAppSessionToken()).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({ credentials: 'same-origin', method: 'POST' }));
     const options = fetchMock.mock.calls[0]?.[1];
     expect(options.headers).not.toHaveProperty('Authorization');

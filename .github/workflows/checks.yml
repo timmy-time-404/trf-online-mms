@@ -30,7 +30,3 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-        env:
-          # Placeholders: the legacy web build only embeds these, it never calls them in CI.
-          VITE_SUPABASE_URL: https://example.supabase.co
-          VITE_SUPABASE_ANON_KEY: ci-placeholder

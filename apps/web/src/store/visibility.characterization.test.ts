@@ -2,10 +2,8 @@
  * Characterization tests for legacy store rules (docs/spec/roles.md, docs/spec/trf-workflow.md).
  * They describe what the system does today, including behavior the owner has not yet decided to change.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn() }, isSupabaseEnabled: () => false }));
-vi.mock('@/lib/notifyStatusChangeWA', () => ({ notifyEmployeeStatusChangeWA: vi.fn() }));
 
 import { useTRFStore } from './index';
 import type { Employee, TRF, TRFStatus, User, UserRole } from '@/types';

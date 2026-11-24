@@ -2,7 +2,6 @@ import { normalizeDepartment, businessWeekStart } from '@trf/shared';
 import { create } from 'zustand';
 import { apiRequest } from '@/api/client';
 import { persist } from 'zustand/middleware';
-import { supabase, isSupabaseEnabled } from '@/lib/supabase';
 import {
   clearAppSessionToken,
   getCurrentAppSession,
@@ -235,9 +234,6 @@ interface TRFState {
     changedByName: string,
   ) => Promise<boolean>;
   getStatusHistory: (trfId: string) => StatusHistory[];
-  addStatusHistory: (
-    entry: Omit<StatusHistory, 'id' | 'changedAt'>,
-  ) => Promise<void>;
   getEmployeeById: (id: string) => Employee | undefined;
   getEmployeesByType: (type: 'EMPLOYEE' | 'VISITOR') => Employee[];
   getUserById: (id: string) => User | undefined;
@@ -636,31 +632,6 @@ export const useTRFStore = create<TRFState>()(
               new Date(b.changedAt || '').getTime() -
               new Date(a.changedAt || '').getTime(),
           );
-      },
-
-      addStatusHistory: async (entry) => {
-        if (!isSupabaseEnabled()) return;
-
-        const { error } = await supabase
-          .from('status_history')
-          .insert([
-            {
-              trf_id: entry.trfId,
-              changed_by: entry.changedBy,
-              changed_by_name: entry.changedByName,
-              old_status: entry.oldStatus,
-              new_status: entry.newStatus,
-              remarks: entry.remarks,
-            },
-          ]);
-
-        if (error) {
-          console.error(
-            'Add status history error:',
-            error,
-          );
-        }
-
       },
 
       getEmployeeById: (id) => get().employees.find((e) => e.id === id),

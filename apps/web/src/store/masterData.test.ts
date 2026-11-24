@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('@/api/client', () => ({ apiRequest: request }));
-vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn() }, isSupabaseEnabled: () => false }));
 import { useAuthStore, useTRFStore, useDashboardStore } from './index';
 import { useNotificationStore } from './notificationStore';
 import type { Notification } from '@/types';

@@ -2,15 +2,16 @@
 
 Sistem internal **Travel Request Form (TRF)** untuk PT Merdeka Mining Servis: pengajuan perjalanan dinas, approval berjenjang (Admin Dept → HOD → HR → PM), pemrosesan tiket/hotel oleh GA, Early Recall, serta roster & saldo OS.
 
-> **Status:** pengembangan. Belum dipakai pengguna nyata dan belum di-deploy. Backend lama (Supabase) sedang diganti dengan API Node.js + PostgreSQL. Lihat [ADR](docs/adr/README.md).
+> **Status:** pengembangan dengan data dummy di https://meong-mms.org. Backend sendiri (Node.js + Hono + PostgreSQL 17) sudah menggantikan Supabase; versi lama tersimpan di tag `legacy-v0`. Lihat [ADR](docs/adr/README.md).
 
 ## Struktur repo
 
 ```
-apps/web/          Frontend React + Vite (versi lama, masih memanggil Supabase)
-apps/api/          Backend baru: Hono di Node.js (kerangka, baru /health)
+apps/web/          Frontend React + Vite
+apps/api/          Backend: Hono di Node.js (auth, TRF, workflow, master data, roster, early recall, dokumen, WhatsApp)
 packages/shared/   Kosakata domain bersama (peran, status) dalam Zod
-supabase/          Edge Functions lama — referensi sampai diganti apps/api
+db/                Migrasi SQL PostgreSQL
+deploy/            Docker Compose, Caddy, panduan rilis
 docs/              Spesifikasi bisnis, ADR, panduan
 ```
 
@@ -21,7 +22,7 @@ Prasyarat: Node.js 24+ (lihat `.nvmrc`) dan pnpm 10.
 ```bash
 npm install -g pnpm@10
 pnpm install
-cp apps/web/.env.example apps/web/.env   # isi dengan project Supabase dev
+cp apps/web/.env.example apps/web/.env   # API di path /api
 pnpm dev:web                              # http://localhost:5173
 pnpm dev:api                              # http://localhost:3000/health
 ```

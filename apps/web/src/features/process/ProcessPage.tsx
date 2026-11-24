@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useTRFStore, useAuthStore } from '@/store';
-import { gaProcessTRF } from '@/store/supabaseStore';
+import { gaProcessTRF } from '@/store/gaProcess';
 import type { TRF } from '@/types';
 import {
   Plane,

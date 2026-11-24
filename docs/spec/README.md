@@ -1,6 +1,6 @@
 # Spesifikasi bisnis (diekstrak dari sistem lama)
 
-Dokumen ini menjelaskan **perilaku sistem lama apa adanya** (tag `legacy-v0`), bukan perilaku yang ideal. Dokumen ini menjadi acuan untuk rewrite backend: kalau backend baru berperilaku berbeda, perbedaan itu harus disengaja dan tercatat sebagai keputusan.
+Dokumen ini menjelaskan **perilaku sistem lama apa adanya** (tag `legacy-v0`; path `supabase/functions` dan `apps/web/src/store/supabaseStore.ts` yang disebut di bawah hanya ada di tag itu), bukan perilaku yang ideal. Dokumen ini menjadi acuan untuk rewrite backend: kalau backend baru berperilaku berbeda, perbedaan itu harus disengaja dan tercatat sebagai keputusan.
 
 Setiap aturan diberi label sumber:
 

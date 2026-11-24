@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('@/api/client', () => ({ apiRequest: request }));
-vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn() }, isSupabaseEnabled: () => false }));
-vi.mock('@/lib/notifyStatusChangeWA', () => ({ notifyEmployeeStatusChangeWA: vi.fn() }));
 
 import { useAuthStore, useTRFStore } from './index';
 import type { TRF } from '@/types';
-import { gaProcessTRF, saveHRLumpsum } from './supabaseStore';
+import { gaProcessTRF } from './gaProcess';
 
 // D13: adapter fixtures carry the version displayed to the user.
 const draft: TRF = {
@@ -104,10 +102,5 @@ describe('workflow API adapters', () => {
     expect(request).toHaveBeenCalledWith('/trfs/draft-1/process', { method: 'POST', version: 1, body: {
       voucherDetails: { transportation: 'Car' }, remarks: 'Done',
     } });
-  });
-  it('keeps the old lumpsum helper as an atomic HR approval adapter', async () => {
-    request.mockResolvedValue({ ...draft, status: 'HR_APPROVED' });
-    await saveHRLumpsum(draft.id, 75_000, 'Travel', 'spoofed','',1);
-    expect(request).toHaveBeenCalledWith('/trfs/draft-1/approve', { method: 'POST', version: 1, body: { remarks: '', lumpsum: { amount: 75_000, note: 'Travel' } } });
   });
 });
