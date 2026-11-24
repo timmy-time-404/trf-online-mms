@@ -1,6 +1,6 @@
 # Panduan kontribusi
 
-Repo ini dikelola dua developer: **@timmy-time-404** (Project Manager, pemegang rilis) dan **@rivall02**.
+Repo ini dikelola dua developer: **@tmthyjw23** (Project Manager, pemegang rilis) dan **@rivall02**.
 
 ## Alur branch
 
