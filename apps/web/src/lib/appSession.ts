@@ -1,3 +1,4 @@
+import { apiRequest } from '@/api/client';
 import type {
   User,
   UserRole,
@@ -483,20 +484,8 @@ export const logoutAppSession =
     }
   };
 
-export const changeAppPassword = async (
-  newPassword: string,
-): Promise<User> => {
-  const response =
-    await requestFunction<ChangePasswordResponse>(
-      'app-change-password',
-      {
-        requireSession: true,
-        body: {
-          newPassword,
-        },
-      },
-    );
-
+export const changeAppPassword = async (currentPassword: string, newPassword: string): Promise<User> => {
+  const response = await apiRequest<ChangePasswordResponse>('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
   return toUser(response.user);
 };
 

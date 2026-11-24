@@ -1,6 +1,4 @@
-import {
-  invokeAuthenticatedAppFunction,
-} from '@/lib/appSession';
+import { apiRequest } from '@/api/client';
 
 export type EarlyRecallStatus =
   | 'DRAFT'
@@ -190,10 +188,7 @@ const invokeWorkflow = <
     unknown
   >,
 ): Promise<TResponse> =>
-  invokeAuthenticatedAppFunction<TResponse>(
-    'early-recall-workflow',
-    body,
-  );
+  apiRequest<TResponse>('/early-recall-workflow', { method: 'POST', body });
 
 export const listEarlyRecalls = (
   filters: {

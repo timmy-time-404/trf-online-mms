@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { ApiError } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -34,6 +35,8 @@ const ChangePasswordPage: React.FC = () => {
     (state) => state.login,
   );
 
+  const [currentPassword, setCurrentPassword] = useState('');
+
   const [
     newPassword,
     setNewPassword,
@@ -51,6 +54,7 @@ const ChangePasswordPage: React.FC = () => {
 
   const updatePassword = async () => {
     if (
+      !currentPassword ||
       !newPassword ||
       !confirmPassword
     ) {
@@ -71,7 +75,7 @@ const ChangePasswordPage: React.FC = () => {
     }
 
     if (
-      newPassword.length < 8 ||
+      newPassword.length < 8 || newPassword.length > 128 ||
       !/[A-Za-z]/.test(
         newPassword,
       ) ||
@@ -100,7 +104,7 @@ const ChangePasswordPage: React.FC = () => {
     try {
       const updatedUser =
         await changeAppPassword(
-          newPassword,
+          currentPassword, newPassword,
         );
 
       login(updatedUser);
@@ -120,7 +124,7 @@ const ChangePasswordPage: React.FC = () => {
 
       if (
         error instanceof
-        AppSessionApiError
+        AppSessionApiError || error instanceof ApiError
       ) {
         toast.error(error.message);
 
@@ -160,11 +164,18 @@ const ChangePasswordPage: React.FC = () => {
 
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="current-password" className="text-sm font-medium text-gray-700">Password Saat Ini</label>
+            <input id="current-password" type="password" autoComplete="current-password" value={currentPassword}
+              disabled={isSubmitting} onChange={(event) => setCurrentPassword(event.target.value)}
+              className="w-full rounded-md border p-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black" />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="new-password" className="text-sm font-medium text-gray-700">
               Password Baru
             </label>
 
             <input
+              id="new-password"
               type="password"
               value={newPassword}
               autoComplete="new-password"
@@ -180,11 +191,12 @@ const ChangePasswordPage: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
+            <label htmlFor="confirm-password" className="text-sm font-medium text-gray-700">
               Konfirmasi Password Baru
             </label>
 
             <input
+              id="confirm-password"
               type="password"
               value={confirmPassword}
               autoComplete="new-password"

@@ -1,6 +1,4 @@
-import {
-  invokeAuthenticatedAppFunction,
-} from '@/lib/appSession';
+import { apiRequest } from '@/api/client';
 
 export const ROSTER_OPERATIONS_UPDATED_EVENT =
   'roster-operations-updated';
@@ -331,10 +329,7 @@ const invokeRosterOperations = <
 >(
   body: Record<string, unknown>,
 ): Promise<TResponse> =>
-  invokeAuthenticatedAppFunction<TResponse>(
-    'roster-operations',
-    body,
-  );
+  apiRequest<TResponse>('/roster-operations', { method: 'POST', body });
 
 export const getLocalDateInputValue = (
   date = new Date(),

@@ -315,6 +315,8 @@ const getNotificationSummary = (
         first.error ??
         'Workflow berhasil, tetapi sebagian notifikasi WhatsApp gagal.',
     );
+  } else if (notifications.every((item) => !item.attempted)) {
+    toast.info('Notifikasi masuk antrean pengiriman.');
   } else {
     toast.success(
       'Notifikasi WhatsApp berhasil dikirim.',

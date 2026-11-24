@@ -1,6 +1,4 @@
-import {
-  invokeAuthenticatedAppFunction,
-} from '@/lib/appSession';
+import { apiRequest } from '@/api/client';
 
 export type ManpowerStatus =
   | 'ONSITE'
@@ -114,10 +112,7 @@ export interface ManpowerDashboardResponse {
 export const getManpowerDashboardSnapshot = (
   asOfDate: string,
 ): Promise<ManpowerDashboardResponse> =>
-  invokeAuthenticatedAppFunction<ManpowerDashboardResponse>(
-    'manpower-dashboard',
-    {
+  apiRequest<ManpowerDashboardResponse>('/manpower-dashboard', { method: 'POST', body: {
       action: 'snapshot',
       asOfDate,
-    },
-  );
+    } });

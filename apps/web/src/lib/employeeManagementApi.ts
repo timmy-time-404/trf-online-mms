@@ -1,6 +1,4 @@
-import {
-  invokeAuthenticatedAppFunction,
-} from '@/lib/appSession';
+import { apiRequest } from '@/api/client';
 
 export const EMPLOYEE_MANAGEMENT_UPDATED_EVENT =
   'employee-management-updated';
@@ -159,10 +157,7 @@ const invokeEmployeeManagement = <
 >(
   body: Record<string, unknown>,
 ): Promise<TResponse> =>
-  invokeAuthenticatedAppFunction<TResponse>(
-    'employee-management',
-    body,
-  );
+  apiRequest<TResponse>('/employee-management', { method: 'POST', body });
 
 export const createEmployeeOperationKey = (
   action: string,
