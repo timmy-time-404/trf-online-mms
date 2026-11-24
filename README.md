@@ -40,5 +40,7 @@ pnpm check   # lint + typecheck + test + build untuk semua paket
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Alur branch, commit, PR, dan review |
 | [docs/spec/](docs/spec/README.md) | Spesifikasi bisnis yang diekstrak dari sistem lama |
 | [docs/adr/](docs/adr/README.md) | Keputusan arsitektur dan alasannya |
+| [docs/backend-conventions.md](docs/backend-conventions.md) | Pola wajib untuk kode backend |
+| [docs/deployment.md](docs/deployment.md) | Rilis ke VPS, backup, dan audit setelah rilis |
 | [docs/github-setup.md](docs/github-setup.md) | Proteksi branch dan pengaturan repo |
 | [docs/deployment.md](docs/deployment.md) | Fondasi deployment privat dan batas kesiapan migrasi |

@@ -219,3 +219,14 @@ Referensi: [Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets
 ## Catatan rilis
 
 Hapus folder source lama sebelum mengekstrak arsip rilis (`rm -rf apps packages db`), supaya file yang sudah dihapus di Git tidak ikut ter-build. Jangan hapus `deploy/.env` dan `deploy/secrets`. Ambil `pg_dump -Fc` ke `/opt/trf-dev/backups` sebelum menjalankan migrasi.
+
+## Audit setelah rilis
+
+Jalankan audit end-to-end per role lewat domain (membuat data dummy):
+
+```sh
+cd /opt/trf-dev/foundation
+docker run --rm -u 0 -v $PWD/deploy/smoke/domain-smoke.mjs:/s.mjs:ro -v $PWD/deploy/secrets/dummy-accounts.json:/a.json:ro --entrypoint node trf-api:$RELEASE_TAG /s.mjs https://meong-mms.org
+```
+
+Exit code 0 berarti semua pemeriksaan lulus.
