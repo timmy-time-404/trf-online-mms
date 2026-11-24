@@ -66,6 +66,7 @@ const RoomAvailabilityChart: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent>
+        {roomAvailability.length === 0 ? <p className="py-12 text-center text-sm text-gray-500">Data ketersediaan kamar belum tersedia.</p> : <>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -110,6 +111,7 @@ const RoomAvailabilityChart: React.FC = () => {
             <p className="text-xs text-gray-500">Occupied</p>
           </div>
         </div>
+        </>}
       </CardContent>
     </Card>
   );

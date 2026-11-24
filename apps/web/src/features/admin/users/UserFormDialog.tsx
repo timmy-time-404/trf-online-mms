@@ -26,6 +26,8 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
 
   const isEdit = !!user;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const closeDialog = (nextOpen: boolean) => { if (!nextOpen) setTemporaryPassword(null); onOpenChange(nextOpen); };
 
   // ✅ 3. TIPE STATE FORM TEGAS AGAR USEEFFECT TIDAK ERROR
   const [form, setForm] = useState<{
@@ -66,10 +68,12 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
         await updateUser(user.id, form);
         toast.success("User updated successfully!");
       } else {
-        await createUser(form);
+        const password = await createUser(form);
+        setTemporaryPassword(password);
         toast.success("User created successfully!");
+        return;
       }
-      onOpenChange(false);
+      closeDialog(false);
     } catch (error) { 
       // ✅ 4. HILANGKAN ANY DI CATCH BLOCK!
       console.error(error);
@@ -82,13 +86,17 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={closeDialog}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit User" : "Add New User"}</DialogTitle>
+          <DialogTitle>{temporaryPassword ? 'Akun berhasil dibuat' : isEdit ? "Edit User" : "Add New User"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        {temporaryPassword ? <div className="space-y-4 py-4">
+          <p>Password sementara untuk <strong>{form.username}</strong>. Salin sekarang; password hanya ditampilkan sekali dan wajib diganti saat login pertama.</p>
+          <Input aria-label="Password sementara" readOnly value={temporaryPassword} autoComplete="off" />
+          <Button type="button" onClick={() => closeDialog(false)}>Selesai</Button>
+        </div> : <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Username</label>
             <Input
@@ -141,7 +149,7 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => closeDialog(false)}
               disabled={isSubmitting}
             >
               Cancel
@@ -150,8 +158,8 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
               {isSubmitting ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
-        </form>
+        </form>}
       </DialogContent>
     </Dialog>
   );
-} 
+}

@@ -7,18 +7,16 @@ import {
   getCurrentAppSession,
   logoutAppSession,
 } from '@/lib/appSession';
-import bcrypt from 'bcryptjs';
+import { useNotificationStore } from './notificationStore';
 import type {
   User,
   UserRole,
   TRF,
   TRFStatus,
   Employee,
-  EmployeeType,
   StatusHistory,
   CreateTRFInput,
   UpdateTRFInput,
-  TravelArrangement,
 } from '@/types';
 
 import { findNextActiveStatus, type WorkflowAction, type LumpsumInput } from '@trf/shared';
@@ -26,32 +24,6 @@ import { findNextActiveStatus, type WorkflowAction, type LumpsumInput } from '@t
 // ============================================
 // DATABASE ROW & PAYLOAD INTERFACES
 // ============================================
-
-interface DBUserRow {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-  employee_id?: string;
-  department?: string;
-  is_active?: boolean;
-}
-
-interface DBEmployeeRow {
-  id: string;
-  user_id?: string;
-  employee_code: string;
-  employee_type?: string; // kolom ini TIDAK ada di skema DB asli, selalu undefined
-  employee_name: string;
-  job_title: string;
-  department: string;
-  section: string;
-  email?: string; // kolom ini TIDAK ada di skema DB asli, selalu undefined
-  phone: string;
-  join_date?: string; // nama kolom asli di DB (bukan date_of_hire)
-  point_of_hire: string;
-  employee_level?: string;
-}
 
 export interface LocationRow {
   id: string;
@@ -80,35 +52,6 @@ interface UserPayload {
 }
 
 // ============================================
-// TRANSFORMERS
-// ============================================
-const transformUserFromDB = (dbUser: DBUserRow): User => ({
-  id: dbUser.id,
-  username: dbUser.username,
-  email: dbUser.email,
-  role: dbUser.role as UserRole,
-  employeeId: dbUser.employee_id,
-  department: dbUser.department,
-  is_active: dbUser.is_active,
-});
-
-const transformEmployeeFromDB = (dbEmp: DBEmployeeRow): Employee => ({
-  id: dbEmp.id,
-  userId: dbEmp.user_id || undefined,
-  employeeCode: dbEmp.employee_code,
-  employeeType: (dbEmp.employee_type as EmployeeType) || 'EMPLOYEE',
-  employeeName: dbEmp.employee_name,
-  jobTitle: dbEmp.job_title,
-  department: dbEmp.department,
-  section: dbEmp.section,
-  email: dbEmp.email ?? '',
-  phone: dbEmp.phone,
-  dateOfHire: dbEmp.join_date,
-  pointOfHire: dbEmp.point_of_hire,
-  employeeLevel: dbEmp.employee_level,
-});
-
-// ============================================
 // AUTH STORE
 // ============================================
 
@@ -125,13 +68,13 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentUser: null,
       isAuthenticated: false,
       isLoading: true,
 
       login: (user) => {
-        useTRFStore.setState({ trfs: [], employees: [], users: [], statusHistory: [] });
+        clearBusinessData();
         set({
           currentUser: user,
           isAuthenticated: true,
@@ -149,7 +92,7 @@ export const useAuthStore = create<AuthState>()(
           );
         } finally {
           clearAppSessionToken();
-          useTRFStore.setState({ trfs: [], employees: [], users: [], statusHistory: [] });
+          clearBusinessData();
 
           set({
             currentUser: null,
@@ -167,7 +110,7 @@ export const useAuthStore = create<AuthState>()(
        */
       invalidateSession: () => {
         clearAppSessionToken();
-        useTRFStore.setState({ trfs: [], employees: [], users: [], statusHistory: [] });
+        clearBusinessData();
 
         set({
           currentUser: null,
@@ -194,6 +137,8 @@ export const useAuthStore = create<AuthState>()(
           const session =
             await getCurrentAppSession();
 
+          if (get().currentUser?.id !== session.user.id) clearBusinessData();
+
           set({
             currentUser: session.user,
             isAuthenticated: true,
@@ -201,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
           });
         } catch {
           clearAppSessionToken();
+          clearBusinessData();
 
           set({
             currentUser: null,
@@ -313,7 +259,7 @@ interface TRFState {
   ) => TRFStatus;
 
   fetchUsers: () => Promise<void>;
-  createUser: (payload: UserPayload) => Promise<void>;
+  createUser: (payload: UserPayload) => Promise<string>;
   updateUser: (id: string, payload: Partial<UserPayload>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   enableUser: (id: string) => Promise<void>;
@@ -337,81 +283,19 @@ export const useTRFStore = create<TRFState>()(
       },
 
       fetchReferenceMaster: async () => {
-        if (!isSupabaseEnabled()) return;
-
-        const { data, error } = await supabase
-          .from('reference_master')
-          .select('*')
-          .eq('is_active', true);
-
-        if (error) {
-          console.error('Reference load error:', error);
-          return;
-        }
-
-        const grouped = {
-          departments: [] as string[],
-          purposes: [] as string[],
-          transports: [] as string[],
-          accommodations: [] as string[],
-        };
-
-        data?.forEach((item) => {
-          switch (item.category) {
-            case 'DEPARTMENT':
-              grouped.departments.push(item.name);
-              break;
-            case 'TRAVEL_PURPOSE':
-              grouped.purposes.push(item.name);
-              break;
-            case 'TRANSPORT':
-              grouped.transports.push(item.name);
-              break;
-            case 'ACCOMMODATION':
-              grouped.accommodations.push(item.name);
-              break;
-          }
-        });
-
-        set({ referenceMaster: grouped });
+        const userId = useAuthStore.getState().currentUser?.id;
+        const referenceMaster = await apiRequest<TRFState['referenceMaster']>('/reference');
+        if (useAuthStore.getState().currentUser?.id === userId) set({ referenceMaster });
       },
-
-      searchLocations: async (keyword: string, type: string) => {
-        if (!isSupabaseEnabled()) return [];
-
-        const { data, error } = await supabase
-          .from('locations')
-          .select('*')
-          .ilike('name', `%${keyword}%`)
-          .eq('type', type)
-          .limit(10);
-
-        if (error) {
-          console.error('Search locations error:', error);
-          return [];
-        }
-
-        return (data as LocationRow[]) || [];
-      },
-
+      searchLocations: (keyword, type) => apiRequest<LocationRow[]>('/locations?' + new URLSearchParams({ keyword, type })),
       fetchAllData: async () => {
-        if (import.meta.env.VITE_API_BASE_URL) {
-          set({ isLoading: true });
-          try { await get().fetchTRFs(); } finally { set({ isLoading: false }); }
-          return;
-        }
-        if (!isSupabaseEnabled()) return;
         set({ isLoading: true });
         try {
-          await get().fetchReferenceMaster();
+          await Promise.all([get().fetchReferenceMaster(), get().fetchTRFs()]);
           await get().fetchEmployees();
-          await get().fetchTRFs();
-          await get().fetchUsers();
-        } catch (error) {
-          console.error('Fetch all data error:', error);
-        } finally {
-          set({ isLoading: false });
-        }
+          if (useAuthStore.getState().currentUser?.role === 'SUPER_ADMIN') await get().fetchUsers();
+        } catch (error) { console.error('Fetch all data failed:', error); }
+        finally { set({ isLoading: false }); }
       },
 
       forceRefreshTRFs: async () => {
@@ -424,70 +308,26 @@ export const useTRFStore = create<TRFState>()(
       // ============================================
 
       fetchEmployees: async () => {
-        if (!isSupabaseEnabled()) return;
-        const { data, error } = await supabase
-          .from('employees')
-          .select('*')
-          .eq('is_active', true)
-          .order('employee_name');
-
-        if (error) {
-          console.error('Error fetching employees:', error);
-          return;
-        }
-
-        if (data) {
-          const rows = data as DBEmployeeRow[];
-          set({ employees: rows.map(transformEmployeeFromDB) });
-        }
+        const userId = useAuthStore.getState().currentUser?.id;
+        const employees = await apiRequest<Employee[]>('/employees');
+        if (useAuthStore.getState().currentUser?.id === userId) set({ employees });
       },
-
       createEmployee: async (payload) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase.from('employees').insert({
-          employee_name: payload.employeeName,
-          employee_code: payload.employeeCode,
-          department: payload.department,
-          section: payload.section,
-          job_title: payload.jobTitle,
-          phone: payload.phone,
-        });
-
-        if (error) throw error;
+        await apiRequest('/employees', { method: 'POST', body: { employee_name: payload.employeeName,
+          employee_code: payload.employeeCode, department: payload.department, section: payload.section,
+          job_title: payload.jobTitle, phone: payload.phone } });
         await get().fetchEmployees();
       },
-
       updateEmployee: async (id, payload) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('employees')
-          .update({
-            employee_name: payload.employeeName,
-            department: payload.department,
-            section: payload.section,
-            job_title: payload.jobTitle,
-            phone: payload.phone,
-          })
-          .eq('id', id);
-
-        if (error) throw error;
+        await apiRequest('/employees/' + encodeURIComponent(id), { method: 'PUT', body: {
+          employee_name: payload.employeeName, department: payload.department, section: payload.section,
+          job_title: payload.jobTitle, phone: payload.phone } });
         await get().fetchEmployees();
       },
-
       deleteEmployee: async (id) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('employees')
-          .update({ is_active: false })
-          .eq('id', id);
-
-        if (error) throw error;
+        await apiRequest('/employees/' + encodeURIComponent(id), { method: 'DELETE' });
         await get().fetchEmployees();
       },
-
-      // ============================================
-      // TRF MANAGEMENT
-      // ============================================
 
       fetchTRFs: async () => {
         const userId = useAuthStore.getState().currentUser?.id;
@@ -773,88 +613,35 @@ export const useTRFStore = create<TRFState>()(
       // ============================================
 
       fetchUsers: async () => {
-        if (!isSupabaseEnabled()) return;
-        const { data, error = null } = await supabase
-          .from('users')
-          .select('*')
-          // .eq('is_active', true)
-          .order('created_at', { ascending: false });
-
-        if (!error && data) {
-          const rows = data as DBUserRow[];
-          const formattedUsers = rows.map(transformUserFromDB);
-          set({ users: formattedUsers });
-        }
+        const userId = useAuthStore.getState().currentUser?.id;
+        const users = await apiRequest<User[]>('/users');
+        if (useAuthStore.getState().currentUser?.id === userId) set({ users });
       },
-
       createUser: async (payload) => {
-        if (!isSupabaseEnabled()) return;
-
-        const { data: existing } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', payload.email)
-          .maybeSingle();
-
-        if (existing) {
-          throw new Error('Email sudah memiliki akun');
-        }
-
-        const templatePassword = 'mmspanicsmp123!';
-        const password_hash = await bcrypt.hash(templatePassword, 10);
-
-        const { error } = await supabase.from('users').insert({
-          username: payload.username,
-          email: payload.email,
-          role: payload.role,
-          department: payload.department ?? null,
-          employee_id: payload.employee_id ?? null,
-          password_hash,
-          must_change_password: true,
-          is_active: true,
-        });
-
-        if (error) throw error;
-        await get().fetchUsers();
+        const userId = useAuthStore.getState().currentUser?.id;
+        const result = await apiRequest<{ user: User; temporaryPassword: string }>('/users', { method: 'POST', body: {
+          username: payload.username, email: payload.email, role: payload.role,
+          department: payload.department, employee_id: payload.employee_id } });
+        if (useAuthStore.getState().currentUser?.id !== userId) throw new Error('Sesi telah berubah.');
+        set((state) => ({ users: [result.user, ...state.users] }));
+        return result.temporaryPassword;
       },
-
       updateUser: async (id, payload) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('users')
-          .update({
-            username: payload.username,
-            email: payload.email,
-            role: payload.role,
-            department: payload.department,
-            employee_id: payload.employee_id,
-          })
-          .eq('id', id);
-
-        if (error) throw error;
-        await get().fetchUsers();
+        const userId = useAuthStore.getState().currentUser?.id;
+        const user = await apiRequest<User>('/users/' + encodeURIComponent(id), { method: 'PUT', body: {
+          username: payload.username, email: payload.email, role: payload.role,
+          department: payload.department, employee_id: payload.employee_id } });
+        if (useAuthStore.getState().currentUser?.id === userId) set((state) => ({ users: state.users.map((item) => item.id === id ? user : item) }));
       },
-
       deleteUser: async (id) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('users')
-          .update({ is_active: false })
-          .eq('id', id);
-
-        if (error) throw error;
-        await get().fetchUsers();
+        const userId = useAuthStore.getState().currentUser?.id;
+        const user = await apiRequest<User>('/users/' + encodeURIComponent(id), { method: 'DELETE' });
+        if (useAuthStore.getState().currentUser?.id === userId) set((state) => ({ users: state.users.map((item) => item.id === id ? user : item) }));
       },
-
       enableUser: async (id) => {
-        if (!isSupabaseEnabled()) return;
-        const { error } = await supabase
-          .from('users')
-          .update({ is_active: true }) // 🔑 Mengubah kembali menjadi TRUE
-          .eq('id', id);
-
-        if (error) throw error;
-        await get().fetchUsers();
+        const userId = useAuthStore.getState().currentUser?.id;
+        const user = await apiRequest<User>('/users/' + encodeURIComponent(id) + '/enable', { method: 'POST' });
+        if (useAuthStore.getState().currentUser?.id === userId) set((state) => ({ users: state.users.map((item) => item.id === id ? user : item) }));
       },
 
       getPendingApprovals: () => [],
@@ -907,16 +694,6 @@ export const useTRFStore = create<TRFState>()(
 // ============================================
 // DASHBOARD STORE
 // ============================================
-
-interface DashboardTRFRow {
-  id: string;
-  employee_id: string;
-  department?: string | null;
-  status?: string;
-  travel_arrangements?: TravelArrangement[] | null;
-  start_date?: string | null;
-  end_date?: string | null;
-}
 
 interface DashboardState {
   stats: {
@@ -975,461 +752,47 @@ export const useDashboardStore =
 
     isLoadingStats: false,
 
-    roomAvailability: [
-      {
-        hotelName: 'Grand Mining Hotel',
-        total: 120,
-        occupied: 98,
-        available: 22,
-      },
-      {
-        hotelName: 'Camp Residence',
-        total: 80,
-        occupied: 45,
-        available: 35,
-      },
-      {
-        hotelName: 'Site C Camp',
-        total: 60,
-        occupied: 52,
-        available: 8,
-      },
-      {
-        hotelName: 'City Center Hotel',
-        total: 40,
-        occupied: 28,
-        available: 12,
-      },
-    ],
+    roomAvailability: [],
 
     weeklyTravel: createEmptyWeeklyTravel(),
 
-    // ============================================
-    // STAT CARDS
-    // ============================================
-
-    fetchDashboardStats: async (user) => {
-      if (!isSupabaseEnabled()) {
-        return;
-      }
-
+    fetchDashboardStats: async (_user) => {
+      const userId = useAuthStore.getState().currentUser?.id;
       set({ isLoadingStats: true });
-
       try {
-        /*
-         * Query starts with GA_PROCESSED because these
-         * cards represent completed/processed travel.
-         */
-        let query = supabase
-          .from('trfs')
-          .select(
-            `
-              id,
-              employee_id,
-              department,
-              status,
-              travel_arrangements,
-              start_date,
-              end_date
-            `,
-          )
-          .eq('status', 'GA_PROCESSED');
-
-        /*
-         * EMPLOYEE:
-         * only own employee_id.
-         */
-        if (user.role === 'EMPLOYEE') {
-          if (!user.employeeId) {
-            set({
-              stats: EMPTY_DASHBOARD_STATS,
-              isLoadingStats: false,
-            });
-
-            return;
-          }
-
-          query = query.eq(
-            'employee_id',
-            user.employeeId,
-          );
-        }
-
-        /*
-         * ADMIN_DEPT & HOD:
-         * only their department.
-         */
-        if (
-          user.role === 'ADMIN_DEPT' ||
-          user.role === 'HOD'
-        ) {
-          if (!user.department) {
-            set({
-              stats: EMPTY_DASHBOARD_STATS,
-              isLoadingStats: false,
-            });
-
-            return;
-          }
-
-          query = query.eq(
-            'department',
-            user.department,
-          );
-        }
-
-        /*
-         * HR, PM, GA, SUPER_ADMIN:
-         * no additional filter = all departments.
-         */
-        const { data, error } = await query;
-
-        if (error) {
-          console.error(
-            'Error fetching dashboard stats:',
-            error,
-          );
-
-          set({
-            stats: EMPTY_DASHBOARD_STATS,
-            isLoadingStats: false,
-          });
-
-          return;
-        }
-
-        const rows =
-          (data ?? []) as DashboardTRFRow[];
-
-        const today =
-          new Date().toISOString().split('T')[0];
-
-        let totalTravelIn = 0;
-        let totalTravelOut = 0;
-        let onSiteActive = 0;
-        let daysInSite = 0;
-
-        rows.forEach((trf) => {
-          const arrangements =
-            trf.travel_arrangements ?? [];
-
-          const hasTravelIn =
-            arrangements.some(
-              (arrangement) =>
-                arrangement.travelType ===
-                'TRAVEL_IN',
-            );
-
-          const hasTravelOut =
-            arrangements.some(
-              (arrangement) =>
-                arrangement.travelType ===
-                'TRAVEL_OUT',
-            );
-
-          if (hasTravelIn) {
-            totalTravelIn += 1;
-          }
-
-          if (hasTravelOut) {
-            totalTravelOut += 1;
-          }
-
-          const startDate = trf.start_date;
-          const endDate = trf.end_date;
-
-          if (
-            startDate &&
-            endDate &&
-            startDate <= today &&
-            endDate >= today
-          ) {
-            onSiteActive += 1;
-
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-
-            const diffTime = Math.max(
-              0,
-              end.getTime() - start.getTime(),
-            );
-
-            daysInSite += Math.ceil(
-              diffTime /
-                (1000 * 60 * 60 * 24),
-            );
-          }
-        });
-
-        set({
-          stats: {
-            totalTravelIn,
-            totalTravelOut,
-            siteEntry: 0,
-            onSiteActive,
-            daysInSite,
-          },
-          isLoadingStats: false,
-        });
+        const [stats, roomAvailability] = await Promise.all([
+          apiRequest<DashboardState['stats']>('/dashboard/stats'),
+          apiRequest<DashboardState['roomAvailability']>('/dashboard/rooms'),
+        ]);
+        if (useAuthStore.getState().currentUser?.id === userId) set({ stats, roomAvailability });
       } catch (error) {
-        console.error(
-          'fetchDashboardStats error:',
-          error,
-        );
-
-        set({
-          stats: EMPTY_DASHBOARD_STATS,
-          isLoadingStats: false,
-        });
+        console.error('Dashboard failed:', error);
+        if (useAuthStore.getState().currentUser?.id === userId) set({ stats: EMPTY_DASHBOARD_STATS, roomAvailability: [] });
       }
+      finally { if (useAuthStore.getState().currentUser?.id === userId) set({ isLoadingStats: false }); }
     },
-
-    // ============================================
-    // WEEKLY TRAVEL CHART
-    // ============================================
-
-    fetchWeeklyTravel: async (user) => {
-      if (!isSupabaseEnabled()) {
-        return;
-      }
-
+    fetchWeeklyTravel: async (_user) => {
+      const userId = useAuthStore.getState().currentUser?.id;
+      const now = new Date(), monday = new Date(now);
+      monday.setDate(now.getDate() + (now.getDay() === 0 ? -6 : 1 - now.getDay()));
+      monday.setHours(0, 0, 0, 0);
+      const weekStart = monday.toISOString().slice(0, 10);
       try {
-        const now = new Date();
-
-        /*
-         * getDay():
-         * 0 = Sunday
-         * 1 = Monday
-         * ...
-         * 6 = Saturday
-         */
-        const dayOfWeek = now.getDay();
-
-        const diffToMonday =
-          dayOfWeek === 0
-            ? -6
-            : 1 - dayOfWeek;
-
-        const monday = new Date(now);
-
-        monday.setDate(
-          now.getDate() + diffToMonday,
-        );
-
-        monday.setHours(0, 0, 0, 0);
-
-        const sunday = new Date(monday);
-
-        sunday.setDate(
-          monday.getDate() + 6,
-        );
-
-        sunday.setHours(
-          23,
-          59,
-          59,
-          999,
-        );
-
-        const mondayStr =
-          monday.toISOString().split('T')[0];
-
-        const sundayStr =
-          sunday.toISOString().split('T')[0];
-
-        let query = supabase
-          .from('trfs')
-          .select(
-            `
-              id,
-              employee_id,
-              department,
-              travel_arrangements
-            `,
-          );
-
-        /*
-         * EMPLOYEE:
-         * only own employee_id.
-         */
-        if (user.role === 'EMPLOYEE') {
-          if (!user.employeeId) {
-            set({
-              weeklyTravel:
-                createEmptyWeeklyTravel(),
-            });
-
-            return;
-          }
-
-          query = query.eq(
-            'employee_id',
-            user.employeeId,
-          );
-        }
-
-        /*
-         * ADMIN_DEPT & HOD:
-         * only their department.
-         */
-        if (
-          user.role === 'ADMIN_DEPT' ||
-          user.role === 'HOD'
-        ) {
-          if (!user.department) {
-            set({
-              weeklyTravel:
-                createEmptyWeeklyTravel(),
-            });
-
-            return;
-          }
-
-          query = query.eq(
-            'department',
-            user.department,
-          );
-        }
-
-        /*
-         * HR, PM, GA, SUPER_ADMIN:
-         * no additional filter.
-         */
-        const { data, error } = await query;
-
-        if (error) {
-          console.error(
-            'Error fetching weekly travel:',
-            error,
-          );
-
-          set({
-            weeklyTravel:
-              createEmptyWeeklyTravel(),
-          });
-
-          return;
-        }
-
-        const rows =
-          (data ?? []) as DashboardTRFRow[];
-
-        const dailyMap: Record<
-          string,
-          {
-            travelInTRFs: Set<string>;
-            travelOutTRFs: Set<string>;
-          }
-        > = {};
-
-        for (let index = 0; index < 7; index++) {
-          const date = new Date(monday);
-
-          date.setDate(
-            monday.getDate() + index,
-          );
-
-          const key =
-            date.toISOString().split('T')[0];
-
-          dailyMap[key] = {
-            travelInTRFs: new Set<string>(),
-            travelOutTRFs: new Set<string>(),
-          };
-        }
-
-        rows.forEach((trf) => {
-          const arrangements =
-            trf.travel_arrangements ?? [];
-
-          arrangements.forEach(
-            (arrangement) => {
-              const travelDate =
-                arrangement.travelDate;
-
-              if (
-                !travelDate ||
-                travelDate < mondayStr ||
-                travelDate > sundayStr
-              ) {
-                return;
-              }
-
-              const dayEntry =
-                dailyMap[travelDate];
-
-              if (!dayEntry) {
-                return;
-              }
-
-              if (
-                arrangement.travelType ===
-                'TRAVEL_IN'
-              ) {
-                dayEntry.travelInTRFs.add(
-                  trf.id,
-                );
-              }
-
-              if (
-                arrangement.travelType ===
-                'TRAVEL_OUT'
-              ) {
-                dayEntry.travelOutTRFs.add(
-                  trf.id,
-                );
-              }
-            },
-          );
-        });
-
-        const dayLabels = [
-          'Mon',
-          'Tue',
-          'Wed',
-          'Thu',
-          'Fri',
-          'Sat',
-          'Sun',
-        ];
-
-        const weeklyTravel = dayLabels.map(
-          (day, index) => {
-            const date = new Date(monday);
-
-            date.setDate(
-              monday.getDate() + index,
-            );
-
-            const key =
-              date.toISOString().split('T')[0];
-
-            const entry = dailyMap[key];
-
-            return {
-              day,
-              travelIn:
-                entry?.travelInTRFs.size ?? 0,
-              travelOut:
-                entry?.travelOutTRFs.size ?? 0,
-            };
-          },
-        );
-
-        set({ weeklyTravel });
+        const weeklyTravel = await apiRequest<DashboardState['weeklyTravel']>('/dashboard/weekly?' + new URLSearchParams({ weekStart }));
+        if (useAuthStore.getState().currentUser?.id === userId) set({ weeklyTravel });
       } catch (error) {
-        console.error(
-          'fetchWeeklyTravel error:',
-          error,
-        );
-
-        set({
-          weeklyTravel:
-            createEmptyWeeklyTravel(),
-        });
+        console.error('Weekly travel failed:', error);
+        if (useAuthStore.getState().currentUser?.id === userId) set({ weeklyTravel: createEmptyWeeklyTravel() });
       }
     },
   }));
+
+function clearBusinessData() {
+  useTRFStore.setState({ trfs: [], employees: [], users: [], statusHistory: [],
+    referenceMaster: { departments: [], purposes: [], transports: [], accommodations: [] } });
+  useDashboardStore.setState({ stats: EMPTY_DASHBOARD_STATS, weeklyTravel: createEmptyWeeklyTravel(), roomAvailability: [], isLoadingStats: false });
+  useNotificationStore.getState().reset();
+}
 
 async function applyWorkflow(id: string, endpoint: string, body: unknown): Promise<boolean> {
   const userId = useAuthStore.getState().currentUser?.id;
