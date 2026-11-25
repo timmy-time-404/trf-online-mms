@@ -8,8 +8,9 @@
     header {
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
-        # Internal app: never framed, never indexed.
-        Content-Security-Policy "frame-ancestors 'none'"
+        # Internal app: never framed, never indexed. Scripts only from this origin, so an
+        # injected tag cannot run. Inline styles stay allowed for Radix/sonner and the PDF export.
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         X-Frame-Options DENY
         X-Robots-Tag "noindex, nofollow"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"

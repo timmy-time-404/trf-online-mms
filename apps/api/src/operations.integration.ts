@@ -314,6 +314,11 @@ try {
   await admin`delete from public.app_login_attempts where identifier_hash=${attemptKey}`;
   for(let attempt=0;attempt<10;attempt++) await invoke('EMPLOYEE','/auth/change-password',{currentPassword:'incorrect',newPassword:'Attempted123!'},400);
   await invoke('EMPLOYEE','/auth/change-password',{currentPassword:'Changed123!',newPassword:'Attempted123!'},429);
+  // Login is also limited per client IP, so spraying many usernames from one address stops at 30 failures.
+  const ipLogin = (username: string, ip: string) => app.request('/auth/login',{ method:'POST',headers:{ Origin:origin,'Content-Type':'application/json','CF-Connecting-IP':ip },body:JSON.stringify({username,password:'wrong-password'}) });
+  for(let attempt=0;attempt<30;attempt++) await check(ipLogin(`spray${attempt}`,'203.0.113.7'),401);
+  await check(ipLogin('spray-extra','203.0.113.7'),429);
+  await check(ipLogin('spray-extra','203.0.113.8'),401);
   console.log(`WP4 native PostgreSQL integration passed: ${checks} HTTP assertions; action/role matrices, Recall/OS/FIFO, atomic outbox, random credentials, session revocation, dev-only seed.`);
 } finally {
   if (fixtureDatabase) {

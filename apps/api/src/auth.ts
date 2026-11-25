@@ -43,22 +43,39 @@ export const createAuthRoutes = (db: Database, origin: string) => {
     try {
       const { username, password } = parsed.data;
       const identifier = digest(username.toLowerCase());
-      const result = await db.begin(async (tx) => {
+      // Cloudflare sets this header; without it the per-IP limit is skipped (see deploy notes).
+      const clientIp = c.req.header('CF-Connecting-IP')?.trim();
+      const ipHash = clientIp ? digest(clientIp) : null;
+      // Short transaction: check limits and reserve the attempt as failed, so concurrent
+      // requests cannot exceed the limit. Argon2 runs outside it, holding no lock or connection.
+      const reserved = await db.begin(async (tx) => {
         await tx`select pg_advisory_xact_lock(${parseInt(identifier.slice(0, 8), 16) | 0})`;
-        const [attempts] = await tx`select count(*) as total from public.app_login_attempts
-          where identifier_hash=${identifier} and not succeeded and attempted_at > now() - interval '15 minutes'`;
-        if (Number(attempts?.total) >= 10) return { limited: true } as const;
-        const [user] = await tx<Account[]>`select * from public.users where username=${username} for update`;
-        const valid = await verify(user?.password_hash ?? await dummyHash, password).catch(() => false);
-        const success = valid && user?.is_active === true;
-        await tx`insert into public.app_login_attempts(identifier_hash, user_id, succeeded, failure_reason)
-          values (${identifier}, ${user?.id ?? null}, ${success}, ${success ? null : 'INVALID_CREDENTIALS'})`;
-        if (!success || !user) return { denied: true } as const;
-        const token = randomBytes(32).toString('base64url');
-        const [session] = await tx`insert into public.app_sessions(user_id, token_hash, expires_at)
-          values (${user.id}, ${digest(token)}, now() + interval '30 minutes') returning expires_at`;
-        return { user: publicUser(user), token, expiresAt: session?.expires_at };
+        const [attempts] = await tx`select
+            count(*) filter (where identifier_hash=${identifier}) as by_user,
+            count(*) filter (where ${ipHash}::text is not null and ip_hash=${ipHash}) as by_ip
+          from public.app_login_attempts
+          where not succeeded and attempted_at > now() - interval '15 minutes'
+            and (identifier_hash=${identifier} or (${ipHash}::text is not null and ip_hash=${ipHash}))`;
+        if (Number(attempts?.by_user) >= 10 || Number(attempts?.by_ip) >= 30) return null;
+        const [row] = await tx<{ id: string }[]>`insert into public.app_login_attempts(identifier_hash, ip_hash, succeeded, failure_reason)
+          values (${identifier}, ${ipHash}, false, 'INVALID_CREDENTIALS') returning id`;
+        return row!.id;
       });
+      const [user] = reserved ? await db<Account[]>`select * from public.users where username=${username}` : [];
+      const valid = reserved ? await verify(user?.password_hash ?? await dummyHash, password).catch(() => false) : false;
+      const result = !reserved ? { limited: true } as const
+        : !(valid && user?.is_active === true) || !user ? { denied: true } as const
+        : await db.begin(async (tx) => {
+          await tx`update public.app_login_attempts set succeeded=true, failure_reason=null, user_id=${user.id}
+            where id=${reserved}`;
+          const token = randomBytes(32).toString('base64url');
+          const [session] = await tx`insert into public.app_sessions(user_id, token_hash, expires_at)
+            values (${user.id}, ${digest(token)}, now() + interval '30 minutes') returning expires_at`;
+          return { user: publicUser(user), token, expiresAt: session?.expires_at };
+        });
+      if (reserved && 'denied' in result && user) {
+        await db`update public.app_login_attempts set user_id=${user.id} where id=${reserved}`;
+      }
       if ('limited' in result) return c.json({ message: 'Terlalu banyak percobaan. Coba lagi setelah 15 menit.' }, 429);
       if ('denied' in result) return c.json({ message: 'Username atau password salah.' }, 401);
       // Rotate any previous session without returning the session secret to JavaScript.
