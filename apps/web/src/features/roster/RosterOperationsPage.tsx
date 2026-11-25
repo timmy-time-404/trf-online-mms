@@ -58,6 +58,7 @@ import {
 } from '@/lib/rosterOperationsApi';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store';
+import { businessDate } from '@trf/shared';
 
 interface EmployeeOSSummary {
   employeeId: string;
@@ -1822,6 +1823,7 @@ const RosterOperationsPage: React.FC = () => {
                   <Input
                     id="movement-date"
                     type="date"
+                    max={businessDate()}
                     value={movementDialog.date}
                     onChange={(event) =>
                       setMovementDialog((current) =>
