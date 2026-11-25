@@ -44,4 +44,4 @@ Sejak migrasi `0008_actual_dates_not_future`, `confirm_return` menolak Actual Re
 
 Sejak migrasi `0009_early_recall_os_overlap`, `create` dan `update` menolak periode approved leave yang tumpang tindih dengan Early Recall karyawan yang sama yang sudah `OS_GENERATED` ("Periode cuti ini sudah pernah dikonversi menjadi OS (ER-...)"). Recall `REJECTED` dan `CANCELLED` tidak menghalangi. Sistem lama hanya melarang dua recall aktif bersamaan, sehingga cuti yang sama bisa menghasilkan OS dua kali.
 
-> Status: menunggu konfirmasi pemilik proses (lihat issue #13) sebelum dirilis ke `main`.
+Aturan ini disetujui pemilik proses sebagai D16 di [decisions-2026-11-25.md](decisions-2026-11-25.md): sisa cuti satu periode hanya ada sekali, jadi hanya boleh dikonversi menjadi OS satu kali.
