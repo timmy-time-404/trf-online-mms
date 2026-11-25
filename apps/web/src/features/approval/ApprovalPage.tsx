@@ -114,7 +114,9 @@ const ApprovalPage: React.FC = () => {
       userRole === 'HR' && action === 'APPROVE' && lumpsum !== '' ? { amount: lumpsum, note: lumpsumNote } : undefined, selectedTRF.version);
 
     if (success) {
-       toast.success(`TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
+       toast.success(action === 'APPROVE'
+         ? `TRF ${selectedTRF.trfNumber} berhasil disetujui.`
+         : `TRF ${selectedTRF.trfNumber} berhasil di-${action.toLowerCase()}.`);
     } else {
        toast.error(`Gagal memproses TRF ${selectedTRF.trfNumber}.`);
     }
@@ -197,21 +199,8 @@ const ApprovalPage: React.FC = () => {
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={async () => {
-                    if (!currentUser) return;
-
-                    // ✅ Jika role HR, buka Modal Lumpsum. Jika bukan, langsung approve.
-                    if (userRole === 'HR') {
-                      openDialog(trf, 'APPROVE');
-                    } else {
-                      const success = await handleApproval(trf.id, currentUser, 'APPROVE',undefined,undefined,trf.version);
-                      if (success) {
-                          toast.success(`TRF ${trf.trfNumber} berhasil disetujui.`);
-                      } else {
-                          toast.error('Gagal melakukan Approve.');
-                      }
-                    }
-                  }}
+                  // Every approval is confirmed in the dialog first: HR picks the lumpsum, HOD/PM confirm (#15).
+                  onClick={() => openDialog(trf, 'APPROVE')}
                 >
                   <CheckCircle className="w-4 h-4 mr-1"/>
                   Approve
@@ -245,7 +234,7 @@ const ApprovalPage: React.FC = () => {
         );
       })}
 
-      {/* ================= DIALOG MULTI-FUNGSI (REVISE & APPROVE HR) ================= */}
+      {/* ================= DIALOG MULTI-FUNGSI (APPROVE, REVISE, REJECT) ================= */}
 
       <Dialog
         open={!!selectedTRF}
@@ -254,11 +243,33 @@ const ApprovalPage: React.FC = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {action === 'REJECT' ? 'Konfirmasi penolakan TRF' : action === 'REVISE' ? 'Revise Request' : 'HR Approval & Lumpsum'}
+              {action === 'REJECT' ? 'Konfirmasi penolakan TRF' : action === 'REVISE' ? 'Revise Request'
+                : userRole === 'HR' ? 'HR Approval & Lumpsum' : 'Konfirmasi approval TRF'}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">
+
+            {selectedTRF && (
+              <div className="rounded-md bg-gray-50 px-3 py-2 text-sm">
+                <p className="font-medium text-gray-900">{selectedTRF.trfNumber}</p>
+                <p className="text-gray-600">{selectedTRF.employee?.employeeName ?? '-'}</p>
+              </div>
+            )}
+
+            {/* APPROVE oleh HOD/PM: catatan opsional */}
+            {action === 'APPROVE' && userRole !== 'HR' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="approval-remarks">Catatan (opsional)</label>
+                <Textarea
+                  id="approval-remarks"
+                  placeholder="Catatan untuk riwayat approval..."
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            )}
 
             {/* JIKA ACTION === REVISE */}
             {action !== 'APPROVE' && (
@@ -274,7 +285,7 @@ const ApprovalPage: React.FC = () => {
             )}
 
             {/* JIKA ACTION === APPROVE (HANYA HR YANG BISA MELIHAT INI) */}
-            {action === 'APPROVE' && (
+            {action === 'APPROVE' && userRole === 'HR' && (
               <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium flex items-center gap-2">
@@ -343,7 +354,8 @@ const ApprovalPage: React.FC = () => {
               onClick={executeAction}
               className={action === 'APPROVE' ? "bg-green-600 hover:bg-green-700" : ""}
             >
-              {action === 'REJECT' ? 'Konfirmasi penolakan' : action === 'REVISE' ? 'Confirm Revise' : 'Approve & Save Lumpsum'}
+              {action === 'REJECT' ? 'Konfirmasi penolakan' : action === 'REVISE' ? 'Confirm Revise'
+                : userRole === 'HR' ? 'Approve & Save Lumpsum' : 'Approve'}
             </Button>
           </DialogFooter>
         </DialogContent>
