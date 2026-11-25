@@ -34,7 +34,7 @@ Daftar dan detail Early Recall sudah **difilter per peran di server** (Edge Func
 
 ## Perhitungan
 
-Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculateInclusiveDays` di `EarlyRecallFormPage.tsx`. [kode] OS yang terbentuk (`os_generated_days`) = sisa cuti = `approved_leave_end − actual_return_date + 1` (inklusif), dihitung di database. OS adalah tambahan hari cuti untuk cuti berikutnya dan kedaluwarsa setelah 3 cycle (D16). Apakah tanggal kembali ikut dihitung masih pertanyaan terbuka, lihat [decisions-2026-11-25.md](decisions-2026-11-25.md). Menyelesaikan Early Recall tidak mengubah roster (D15).
+Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculateInclusiveDays` di `EarlyRecallFormPage.tsx`. [kode] OS yang terbentuk (`os_generated_days`) = sisa cuti = `approved_leave_end − actual_return_date + 1` (inklusif), dihitung di database. OS adalah tambahan hari cuti untuk cuti berikutnya dan kedaluwarsa setelah 3 cycle (D16). Tanggal kembali ikut dihitung (cuti selesai tgl 30, kembali tgl 28 → 3 hari), dikonfirmasi di [decisions-2026-11-25.md](decisions-2026-11-25.md). Menyelesaikan Early Recall tidak mengubah roster (D15).
 
 ## Tanggal kembali aktual (#12)
 
