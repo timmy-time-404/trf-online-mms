@@ -126,6 +126,11 @@ try {
   assert.equal(verified.status,'PENDING_APPROVAL');
   let queue=await (await expectStatus(raw('SUPER_ADMIN','/trfs/queue'),200)).json() as {id:string;blockedBy:string}[];
   assert.equal(queue.find(i=>i.id===held.id)?.blockedBy,'HOD');
+  // #16: the detail endpoint carries the same hint for SUPER_ADMIN only.
+  const heldDetail=await (await expectStatus(raw('SUPER_ADMIN','/trfs/'+held.id),200)).json() as {blockedBy?:string|null};
+  assert.equal(heldDetail.blockedBy,'HOD');
+  const ownerDetail=await (await expectStatus(raw('EMPLOYEE','/trfs/'+held.id),200)).json() as Record<string,unknown>;
+  assert.ok(!('blockedBy' in ownerDetail),'blockedBy must stay SUPER_ADMIN-only');
   await admin`update public.users set is_active=true,department='Survey' where role='HOD'`;
   await mutate(verified,'/approve',{},'HOD',403);
   queue=await (await expectStatus(raw('SUPER_ADMIN','/trfs/queue'),200)).json() as typeof queue;
@@ -135,6 +140,8 @@ try {
   assert.ok(!queue.some(i=>i.id===held.id));
   const approved=await mutate(verified,'/approve',{},'HOD');
   assert.equal(approved.status,'HOD_APPROVED');
+  const freeDetail=await (await expectStatus(raw('SUPER_ADMIN','/trfs/'+held.id),200)).json() as {blockedBy?:string|null};
+  assert.equal(freeDetail.blockedBy ?? null,null,'Not held once an active approver exists');
   // D3/D10/D13: no SUPER_ADMIN impersonation; rejection has mandatory reason and owner notification.
   for(const action of ['/approve','/verify','/process']) await mutate(approved,action,{decision:'YES'},'SUPER_ADMIN',403);
   await mutate(approved,'/reject',{},'HR',400);
