@@ -5,6 +5,10 @@ import { getPurposeLabel } from '@/constants/travelPurposeOptions';
 // ─────────────────────────────────────────────────────────────
 // 1. HELPERS
 // ─────────────────────────────────────────────────────────────
+// Every value from the TRF is user data: escape it before it goes into innerHTML.
+const esc = (value: unknown): string =>
+  String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]!));
+
 const fmtDate = (d?: string): string => {
   if (!d) return '-';
   const date = new Date(d);
@@ -42,7 +46,7 @@ const parsePurposes = (raw: string | string[] | undefined): string[] => {
 // ─────────────────────────────────────────────────────────────
 // 2. HTML TEMPLATE
 // ─────────────────────────────────────────────────────────────
-const buildHTML = (trf: TRF): string => {
+export const buildHTML = (trf: TRF): string => {
   const MIN_PURPOSE_ROWS = 1;
   const MIN_ACCOM_ROWS   = 1;
   const MIN_ARR_ROWS     = 2;
@@ -163,7 +167,7 @@ const buildSubmittedStamp = (date?: string) => `
           <h2 style="margin:0;font-size:18px;font-weight:bold;">TRAVEL REQUEST FORM</h2>
           <p style="margin:0;font-style:italic;color:#555;">Formulir Permohonan Perjalanan</p>
           <p style="margin:5px 0 0 0;font-weight:bold;font-size:12px;">
-            TRF No: ${trf.trfNumber ?? '-'}
+            TRF No: ${esc(trf.trfNumber ?? '-')}
           </p>
         </div>
         <div style="text-align:right;">
@@ -190,30 +194,30 @@ const buildSubmittedStamp = (date?: string) => `
             <b>Employee ID</b><span class="sub-label">ID Karyawan</span>
           </td>
           <td style="width:30%;font-weight:bold;">
-            ${trf.employee?.employeeCode ?? trf.employee?.id?.slice(0,7) ?? '-'}
+            ${esc(trf.employee?.employeeCode ?? trf.employee?.id?.slice(0,7) ?? '-')}
           </td>
           <td style="width:20%;background-color:#f9f9f9;">
             <b>Name</b><span class="sub-label">Nama</span>
           </td>
-          <td style="width:30%;font-weight:bold;">${trf.employee?.employeeName ?? '-'}</td>
+          <td style="width:30%;font-weight:bold;">${esc(trf.employee?.employeeName ?? '-')}</td>
         </tr>
         <tr>
           <td style="background-color:#f9f9f9;"><b>Department</b><span class="sub-label">Departemen</span></td>
-          <td>${trf.employee?.department ?? trf.department ?? '-'}</td>
+          <td>${esc(trf.employee?.department ?? trf.department ?? '-')}</td>
           <td style="background-color:#f9f9f9;"><b>Job Title</b><span class="sub-label">Jabatan</span></td>
-          <td>${trf.employee?.jobTitle ?? '-'}</td>
+          <td>${esc(trf.employee?.jobTitle ?? '-')}</td>
         </tr>
         <tr>
           <td style="background-color:#f9f9f9;"><b>Date of Hire</b><span class="sub-label">Tanggal Mulai Bekerja</span></td>
           <td>${fmtDate(trf.employee?.dateOfHire)}</td>
           <td style="background-color:#f9f9f9;"><b>Phone Number</b><span class="sub-label">No. Telepon</span></td>
-          <td>${trf.employee?.phone ?? '-'}</td>
+          <td>${esc(trf.employee?.phone ?? '-')}</td>
         </tr>
         <tr>
           <td style="background-color:#f9f9f9;"><b>Point Of Hire</b><span class="sub-label">Tempat Penerimaan</span></td>
-          <td>${trf.employee?.pointOfHire ?? '-'}</td>
+          <td>${esc(trf.employee?.pointOfHire ?? '-')}</td>
           <td style="background-color:#f9f9f9;"><b>Email Address</b><span class="sub-label">Alamat Email</span></td>
-          <td>${trf.employee?.email ?? '-'}</td>
+          <td>${esc(trf.employee?.email ?? '-')}</td>
         </tr>
       </table>
 
@@ -233,10 +237,10 @@ const buildSubmittedStamp = (date?: string) => `
           ${purposeRows.map((r, i) => `
           <tr>
             <td style="text-align:center;vertical-align:middle;">${r.start ? i + 1 : ''}</td>
-            <td style="text-align:center;">${r.start}</td>
-            <td style="text-align:center;">${r.end}</td>
-            <td style="text-align:center;">${r.days ? r.days + ' days' : ''}</td>
-            <td style="font-weight:${r.purpose ? '600' : '400'};">${r.purpose}</td>
+            <td style="text-align:center;">${esc(r.start)}</td>
+            <td style="text-align:center;">${esc(r.end)}</td>
+            <td style="text-align:center;">${esc(r.days ? r.days + ' days' : '')}</td>
+            <td style="font-weight:${esc(r.purpose ? '600' : '400')};">${esc(r.purpose)}</td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -257,10 +261,10 @@ const buildSubmittedStamp = (date?: string) => `
           ${accomRows.map((r, i) => `
           <tr>
             <td style="text-align:center;">${r.type ? i + 1 : ''}</td>
-            <td>${r.type}</td>
-            <td style="text-align:center;">${r.checkIn}</td>
-            <td style="text-align:center;">${r.checkOut}</td>
-            <td>${r.remarks}</td>
+            <td>${esc(r.type)}</td>
+            <td style="text-align:center;">${esc(r.checkIn)}</td>
+            <td style="text-align:center;">${esc(r.checkOut)}</td>
+            <td>${esc(r.remarks)}</td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -284,12 +288,12 @@ const buildSubmittedStamp = (date?: string) => `
           ${arrRows.map((r, i) => `
           <tr>
             <td style="text-align:center;">${r.date ? i + 1 : ''}</td>
-            <td style="text-align:center;">${r.date}</td>
-            <td style="font-weight:${r.type !== '-' && r.type ? '600' : '400'};">${r.type}</td>
-            <td>${r.from}</td>
-            <td>${r.to}</td>
-            <td>${r.transport}</td>
-            <td>${r.remarks}</td>
+            <td style="text-align:center;">${esc(r.date)}</td>
+            <td style="font-weight:${esc(r.type !== '-' && r.type ? '600' : '400')};">${esc(r.type)}</td>
+            <td>${esc(r.from)}</td>
+            <td>${esc(r.to)}</td>
+            <td>${esc(r.transport)}</td>
+            <td>${esc(r.remarks)}</td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -300,12 +304,12 @@ const buildSubmittedStamp = (date?: string) => `
         <tr>
           <td style="width:70%;"><b>Total Amount</b><span class="sub-label" style="display:inline;"> / Jumlah Lumpsum</span></td>
           <td style="width:30%;font-weight:bold;text-align:right;">
-            IDR ${trf.lumpsumAmount ? trf.lumpsumAmount.toLocaleString('id-ID') : '-'}
+            IDR ${esc(trf.lumpsumAmount ? trf.lumpsumAmount.toLocaleString('id-ID') : '-')}
           </td>
         </tr>
         <tr>
           <td colspan="2" style="color:#555;font-size:10px;">
-            <i>Note: ${trf.lumpsumNote ?? 'No special remarks'}</i>
+            <i>Note: ${esc(trf.lumpsumNote ?? 'No special remarks')}</i>
           </td>
         </tr>
       </table>
@@ -324,27 +328,27 @@ const buildSubmittedStamp = (date?: string) => `
           <tr>
             <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
               ${trf.submittedAt ? buildSubmittedStamp(trf.submittedAt) : ''}
-              <b>${trf.employee?.employeeName ?? '________________'}</b><br/>
+              <b>${esc(trf.employee?.employeeName ?? '________________')}</b><br/>
               <span style="font-size:9px;">${fmtDate(trf.submittedAt)}</span>
             </td>
             <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
   ${hodApproved ? buildApprovedStamp(trf.parallelApproval?.hod?.actionAt) : ''}
-  <b>${trf.parallelApproval?.hod?.actionByName ?? '________________'}</b><br/>
+  <b>${esc(trf.parallelApproval?.hod?.actionByName ?? '________________')}</b><br/>
   <span style="font-size:9px;">Status</span>
 </td>
 <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
   ${hrApproved ? buildApprovedStamp(trf.parallelApproval?.hr?.actionAt) : ''}
-  <b>${trf.parallelApproval?.hr?.actionByName ?? '________________'}</b><br/>
+  <b>${esc(trf.parallelApproval?.hr?.actionByName ?? '________________')}</b><br/>
   <span style="font-size:9px;">Status</span>
 </td>
 <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
   ${pmApproved ? buildApprovedStamp(trf.pmApproval?.approvedAt) : ''}
-  <b>${trf.pmApproval?.approverName ?? '________________'}</b><br/>
+  <b>${esc(trf.pmApproval?.approverName ?? '________________')}</b><br/>
   <span style="font-size:9px;">Status</span>
 </td>
 <td style="height:70px;vertical-align:bottom;position:relative;padding-top:30px;">
   ${gaProcessed ? buildProcessedStamp(trf.gaProcess?.processedAt) : ''}
-  <b>${trf.gaProcess?.processorName ?? '________________'}</b><br/>
+  <b>${esc(trf.gaProcess?.processorName ?? '________________')}</b><br/>
   <span style="font-size:9px;">Status</span>
 </td>
           </tr>
