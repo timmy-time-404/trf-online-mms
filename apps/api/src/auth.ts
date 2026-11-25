@@ -66,6 +66,10 @@ export const createAuthRoutes = (db: Database, origin: string) => {
       const result = !reserved ? { limited: true } as const
         : !(valid && user?.is_active === true) || !user ? { denied: true } as const
         : await db.begin(async (tx) => {
+          // Re-check under a row lock: deactivation or a password change that happened during the
+          // password check must win, or the new session would survive the session revocation.
+          const [current] = await tx<Account[]>`select * from public.users where id=${user.id} for update`;
+          if (current?.is_active !== true || current.password_hash !== user.password_hash) return { denied: true } as const;
           await tx`update public.app_login_attempts set succeeded=true, failure_reason=null, user_id=${user.id}
             where id=${reserved}`;
           const token = randomBytes(32).toString('base64url');
