@@ -141,7 +141,7 @@ try {
     const row = await assertMutation(id, role === 'HR' ? 'HR_APPROVED' : status, role);
     assert.equal(row.purpose_remarks, edits.purposeRemarks);
     assert.equal(row.parallel_approval.hod.actionByName, 'Prior HOD');
-    const [notification] = await admin`select * from public.notifications where trf_id=${id}`;
+    const [notification] = await admin`select * from public.notifications where trf_id=${id} and user_id=${users.get('EMPLOYEE')!}`;
     assert.equal(notification?.user_id, users.get('EMPLOYEE')); assert.equal(notification?.message, 'Please review');
     const [history] = await admin`select * from public.status_history where trf_id=${id}`;
     if (role === 'GA') assert.equal(history?.old_status, history?.new_status);
@@ -168,16 +168,36 @@ try {
     const [row] = await admin`select status,lumpsum_amount from public.trfs where id=${notificationRollback}`;
     assert.equal(row?.status, 'HOD_APPROVED'); assert.equal(row?.lumpsum_amount, null);
   } finally { await admin`grant insert on public.notifications to trf_auth_runtime`; }
+  // #14: each stage notifies the next role in-app (ADMIN_DEPT/HOD only for the TRF department) and the owner when done.
+  const otherHod = randomUUID();
+  await admin`insert into public.users(id,username,email,role,department,is_active,must_change_password)
+    values (${otherHod},${otherHod},${otherHod + '@example.invalid'},'HOD','Survey',true,false)`;
+  const inbox = (trf: string) => admin<{ user_id: string; title: string; message: string }[]>`
+    select user_id,title,message from public.notifications where trf_id=${trf} order by created_at`;
+  const latestFor = async (trf: string, userId: string) => (await inbox(trf)).filter((n) => n.user_id === userId).at(-1);
   const chain = await fixture('SUBMITTED');
   await expectStatus(request('ADMIN_DEPT', chain, 'verify', { decision: 'YES' }), 200);
+  assert.match((await latestFor(chain, users.get('HOD')!))?.title ?? '', /menunggu approval Anda/);
+  assert.equal((await inbox(chain)).length, 1, 'Only the HRMD HOD is notified, not the Survey HOD');
   await expectStatus(request('HOD', chain, 'approve'), 200);
+  assert.match((await latestFor(chain, users.get('HR')!))?.title ?? '', /menunggu approval Anda/);
   await expectStatus(request('HR', chain, 'approve', { lumpsum: { amount: 200_000 } }), 200);
+  assert.match((await latestFor(chain, users.get('PM')!))?.title ?? '', /menunggu approval Anda/);
   await expectStatus(request('PM', chain, 'approve'), 200);
+  assert.match((await latestFor(chain, users.get('GA')!))?.title ?? '', /menunggu proses tiket\/voucher/);
   await expectStatus(request('GA', await fixture('PM_APPROVED', ' HRMD ', false), 'process', { remarks: 'No document' }), 400);
   await withDocument(chain);
   const processed = await (await expectStatus(request('GA', chain, 'process', { voucherDetails: { transportation: 'Car' }, remarks: 'Ready', ga_documents: {} }), 200)).json() as {
     status: string; gaProcess: { voucherDetails: { transportation: string }; remarksToEmployee: string }; lumpsumAmount: number;
   };
+  const ready = await latestFor(chain, users.get('EMPLOYEE')!);
+  assert.match(ready?.title ?? '', /sudah siap/); assert.equal(ready?.message, 'Ready');
+  assert.ok(!(await inbox(chain)).some((n) => n.user_id === otherHod));
+  const revision = await fixture('SUBMITTED');
+  await expectStatus(request('ADMIN_DEPT', revision, 'verify', { decision: 'NO', remarks: 'Lengkapi tanggal pulang' }), 200);
+  const revise = await latestFor(revision, users.get('EMPLOYEE')!);
+  assert.match(revise?.title ?? '', /perlu direvisi/); assert.equal(revise?.message, 'Lengkapi tanggal pulang');
+  await admin`delete from public.users where id=${otherHod}`;
   assert.equal(processed.status, 'GA_PROCESSED'); assert.equal(processed.lumpsumAmount, 200_000);
   assert.equal(processed.gaProcess.voucherDetails.transportation, 'Car'); assert.equal(processed.gaProcess.remarksToEmployee, 'Ready');
   assert.deepEqual(await counts(chain), { history: 5, outbox: 5 });

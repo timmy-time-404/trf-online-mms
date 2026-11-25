@@ -94,6 +94,11 @@ try {
   await expectStatus(raw('EMPLOYEE','/trfs','POST',urgent,0),400);
   const near=await create({...urgent,lateSubmissionReason:'Operational urgency'});
   assert.equal(near.urgent,true);assert.equal(near.lateSubmissionReason,'Operational urgency');
+  // #14: a submitted TRF notifies the ADMIN_DEPT of its department in-app.
+  const adminInbox=(trf:string)=>admin`select user_id,title from public.notifications where trf_id=${trf}`;
+  const submittedNotes=await adminInbox(near.id);
+  assert.equal(submittedNotes.length,1);assert.equal(submittedNotes[0]?.user_id,roleUsers.get('ADMIN_DEPT'));
+  assert.match(String(submittedNotes[0]?.title),/menunggu verifikasi Anda/);
   const boundary=await create({...input,startDate:addDays(businessDate(),14)});
   assert.equal(boundary.urgent,false);
   const modern={id:'first',travelPurpose:'TRAINING',startDate:addDays(businessDate(),2),endDate:addDays(businessDate(),3),purposeRemarks:'Training'};
@@ -101,6 +106,7 @@ try {
   // D9: incomplete drafts persist and can be edited, but require full validation when sent.
   let draft=await create({employeeId:owner,draft:true});
   assert.equal(draft.status,'DRAFT');assert.equal(draft.version,1);
+  assert.equal((await adminInbox(draft.id)).length,0,'Drafts do not notify anyone');
   await mutate(draft,'/submit',{},'EMPLOYEE',400);
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'PUT',{purposeRemarks:'Saved'},draft.version),200);
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'PUT',{purposeRemarks:'Stale'},draft.version),409);
@@ -109,6 +115,7 @@ try {
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'DELETE',undefined,draft.version-1),409);
   const sent=await mutate(draft,'/submit',input);
   assert.equal(sent.status,'SUBMITTED');assert.equal(sent.version,draft.version+1);
+  assert.equal((await adminInbox(sent.id))[0]?.user_id,roleUsers.get('ADMIN_DEPT'),'Sending a draft notifies ADMIN_DEPT');
   await mutate(sent,'/cancel',{remarks:' '},'EMPLOYEE',400);
   const cancelled=await mutate(sent,'/cancel',{remarks:'Travel no longer needed'});
   assert.equal(cancelled.status,'CANCELLED');assert.equal(cancelled.version,sent.version+1);

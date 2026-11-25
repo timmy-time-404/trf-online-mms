@@ -132,6 +132,13 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     await workflow.enqueueNotification(tx, row, actor, target, remarks, editedOnly);
     if (kind === 'edit-approve') await workflow.notifyOwner(tx, row, actor, note);
     if (kind === 'reject') await workflow.notifyOwner(tx,row,actor,note,`TRF ${row.trf_number} ditolak`);
+    // #14: in-app notifications for the next stage and for the owner when they have to act or can travel.
+    if (target !== row.status) await workflow.notifyNextApprovers(tx, row, actor, target);
+    if (target === 'NEEDS_REVISION')
+      await workflow.notifyOwner(tx, row, actor, note.trim() || 'Silakan perbaiki TRF lalu kirim ulang.', `TRF ${row.trf_number} perlu direvisi`);
+    if (target === 'GA_PROCESSED')
+      await workflow.notifyOwner(tx, row, actor, note.trim() || 'Tiket/voucher dapat diunduh di halaman detail TRF.',
+        `Tiket/voucher TRF ${row.trf_number} sudah siap`);
     return repo.trfDTO((await repo.findRow(tx, id))!);
   }),
 });

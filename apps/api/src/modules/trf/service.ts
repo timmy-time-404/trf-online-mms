@@ -5,7 +5,7 @@ import type { Actor } from '../../middleware/auth.ts';
 import type { openDatabase } from '../../db/connection.ts';
 import { assertCanEdit, assertStatus, canSeeTRF } from './policy.ts';
 import * as repo from './repository.ts';
-import { enqueueNotification, notifyOwner, activeApprovers } from './workflowRepository.ts';
+import { enqueueNotification, notifyOwner, notifyNextApprovers, activeApprovers } from './workflowRepository.ts';
 import { assertVersion } from './concurrency.ts';
 
 function parse<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
@@ -38,7 +38,9 @@ export const createTRFService = (db: ReturnType<typeof openDatabase>) => ({
       if (!employee) throw new HTTPException(400, { message: 'Karyawan tidak ditemukan.' });
       const row = await repo.insertRow(tx, input, employee.department,!!draft);
       await repo.writeHistory(tx, actor, row.id, null, row.status, draft ? 'Draft created' : 'TRF created and submitted');
-      return repo.trfDTO((await repo.findRow(tx, row.id))!);
+      const created = (await repo.findRow(tx, row.id))!;
+      if (!draft) await notifyNextApprovers(tx, created, actor, created.status);
+      return repo.trfDTO(created);
     });
   },
   change: async (actor: Actor, id: string, body: unknown, resubmit: boolean, expected: number) => db.begin(async (tx) => {
@@ -61,7 +63,10 @@ export const createTRFService = (db: ReturnType<typeof openDatabase>) => ({
     if (!changed) throw new HTTPException(409, { message: 'TRF berubah selama penyimpanan.' });
     await repo.writeHistory(tx, actor, id, row.status, changed.status,
       resubmit ? 'TRF revised and resubmitted by employee' : 'TRF edited by owner');
-    if (resubmit) await enqueueNotification(tx, row, actor, changed.status, 'TRF revised and resubmitted by employee', false);
+    if (resubmit) {
+      await enqueueNotification(tx, row, actor, changed.status, 'TRF revised and resubmitted by employee', false);
+      await notifyNextApprovers(tx, row, actor, changed.status);
+    }
     return repo.trfDTO((await repo.findRow(tx, id))!);
   }),
   remove: async (actor: Actor, id: string, expected: number) => db.begin(async (tx) => {
