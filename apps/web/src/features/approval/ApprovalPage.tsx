@@ -206,7 +206,7 @@ const ApprovalPage: React.FC = () => {
                     } else {
                       const success = await handleApproval(trf.id, currentUser, 'APPROVE',undefined,undefined,trf.version);
                       if (success) {
-                          toast.success(`TRF ${trf.trfNumber} !`);
+                          toast.success(`TRF ${trf.trfNumber} berhasil disetujui.`);
                       } else {
                           toast.error('Gagal melakukan Approve.');
                       }
