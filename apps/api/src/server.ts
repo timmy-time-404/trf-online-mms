@@ -9,7 +9,9 @@ import { normalizeIndonesianPhone } from './notifications/render.ts';
 import { fonnteSender, startOutboxWorker } from './notifications/worker.ts';
 
 const config = loadConfig();
-const database = process.env.DB_HOST ? openDatabase() : undefined;
+const database = process.env.DB_HOST
+  ? openDatabase({ max: Number(process.env.DB_POOL_MAX ?? 5), requestTimeouts: true })
+  : undefined;
 const origin = process.env.APP_ORIGIN;
 if (database && (!origin || new URL(origin).origin !== origin)) {
   throw new Error('Configure APP_ORIGIN with the exact application origin.');
@@ -29,7 +31,7 @@ const server = serve({ fetch: createApp(database, origin, { storage, documentSig
 
 // WhatsApp delivery runs on its own connection so it never queues behind HTTP requests.
 const fonnteToken = readSecret(process.env.FONNTE_TOKEN_FILE);
-const workerDb = database && storage && fonnteToken ? openDatabase() : undefined;
+const workerDb = database && storage && fonnteToken ? openDatabase({ requestTimeouts: true }) : undefined;
 const stopWorker = workerDb ? startOutboxWorker(workerDb, {
   send: fonnteSender(fonnteToken),
   allowlist: new Set((process.env.WA_ALLOWLIST ?? '').split(',').map(normalizeIndonesianPhone).filter((n): n is string => !!n)),

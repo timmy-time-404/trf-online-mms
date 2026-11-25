@@ -169,6 +169,10 @@ try {
     const number=await create();assert.match(number.trfNumber,/^TRF-20261125-/);
   } finally {await admin.unsafe(dateFunction!.definition);}
   assert.equal((await read(boundary.id)).trfNumber,boundary.trfNumber);
+  // 0010: the suffix comes from a sequence, so TRFs on the same day never collide.
+  const sameDay=[await create(),await create(),await create()];
+  for(const trf of sameDay) assert.match(trf.trfNumber,/^TRF-\d{8}-\d{4,}$/);
+  assert.equal(new Set(sameDay.map((trf)=>trf.trfNumber)).size,3);
   console.log('WP4b PostgreSQL integration passed: '+checks+' HTTP assertions; D2/D3/D5/D6/D7/D8/D9/D10/D12/D13.');
 } finally {
   if (trfs.length) await admin`delete from public.trfs where id in ${admin(trfs)}`;

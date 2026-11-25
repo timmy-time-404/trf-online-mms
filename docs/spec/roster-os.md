@@ -36,7 +36,7 @@ Snapshot jumlah karyawan di site, sedang cuti, dan seterusnya, dari RPC `get_man
 
 Onboarding karyawan sekaligus akun, edit, aktif/nonaktif, dan reset password sementara, melalui RPC `create_employee_onboarding`, `update_employee_management`, `set_employee_management_active`, `reset_employee_temporary_password`, dan `list_employee_management_records`. [kode] `supabase/functions/employee-management/index.ts`
 
-Rumus pasti (berapa hari OS dari overstay, aturan FIFO, validasi tanggal) ada di fungsi SQL dan harus diambil dari schema. [DB?]
+Rumus OS overstay sudah dikonfirmasi sebagai aturan resmi (D14, [decisions-2026-11-25.md](decisions-2026-11-25.md)): `calculate_overstay_os_days` = hari lebih di site × (hari off ÷ hari kerja) per pola roster 4:2, 5:2, 6:2, 8:2, 10:2. OS kedaluwarsa setelah 3 cycle (D16). Early Recall yang selesai tidak mengubah roster; Confirm Return / D1 tetap dilakukan di sini (D15).
 
 ## Tanggal aktual tidak boleh di masa depan (#12)
 

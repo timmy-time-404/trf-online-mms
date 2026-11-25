@@ -11,7 +11,7 @@ BEGIN
     'Unexpected table count';
   ASSERT (SELECT count(*) FROM pg_views WHERE schemaname = 'public') = 1,
     'Unexpected view count';
-  ASSERT (SELECT count(*) FROM pg_sequences WHERE schemaname = 'public') = 2,
+  ASSERT (SELECT count(*) FROM pg_sequences WHERE schemaname = 'public') = 3, -- +1 trf_number_seq in 0010
     'Unexpected sequence count';
   ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 98,
     'Unexpected index count';

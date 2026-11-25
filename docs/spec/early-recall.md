@@ -34,8 +34,14 @@ Daftar dan detail Early Recall sudah **difilter per peran di server** (Edge Func
 
 ## Perhitungan
 
-Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculateInclusiveDays` di `EarlyRecallFormPage.tsx`. [kode] Rumus OS yang terbentuk (`os_generated_days`) dihitung di server. [DB?]
+Hari cuti dihitung inklusif (tanggal mulai dan selesai ikut dihitung). `calculateInclusiveDays` di `EarlyRecallFormPage.tsx`. [kode] OS yang terbentuk (`os_generated_days`) = sisa cuti = `approved_leave_end − actual_return_date + 1` (inklusif), dihitung di database. OS adalah tambahan hari cuti untuk cuti berikutnya dan kedaluwarsa setelah 3 cycle (D16). Tanggal kembali ikut dihitung (cuti selesai tgl 30, kembali tgl 28 → 3 hari), dikonfirmasi di [decisions-2026-11-25.md](decisions-2026-11-25.md). Menyelesaikan Early Recall tidak mengubah roster (D15).
 
 ## Tanggal kembali aktual (#12)
 
 Sejak migrasi `0008_actual_dates_not_future`, `confirm_return` menolak Actual Return Date yang lebih dari tanggal bisnis hari ini (WITA), di samping syarat lama (setelah awal cuti dan tidak melewati akhir cuti). OS baru terbentuk setelah karyawan benar-benar kembali. Sistem lama menerima tanggal masa depan.
+
+## Satu periode cuti hanya sekali menjadi OS (#13)
+
+Sejak migrasi `0009_early_recall_os_overlap`, `create` dan `update` menolak periode approved leave yang tumpang tindih dengan Early Recall karyawan yang sama yang sudah `OS_GENERATED` ("Periode cuti ini sudah pernah dikonversi menjadi OS (ER-...)"). Recall `REJECTED` dan `CANCELLED` tidak menghalangi. Sistem lama hanya melarang dua recall aktif bersamaan, sehingga cuti yang sama bisa menghasilkan OS dua kali.
+
+Aturan ini disetujui pemilik proses sebagai D16 di [decisions-2026-11-25.md](decisions-2026-11-25.md): sisa cuti satu periode hanya ada sekali, jadi hanya boleh dikonversi menjadi OS satu kali.
