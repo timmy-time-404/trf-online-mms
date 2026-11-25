@@ -13,9 +13,10 @@ export function applicationSqlError(error: unknown) {
   if (!['P0001','22023','22003','23514','55000'].includes(String(error.code))) return null;
   return new HTTPException(error.code==='55000' ? 409 : 400,{message:error.message});
 }
-export function protectedRoutes(db: Database, origin: string, roles?: UserRole[], maxBodyBytes = 64 * 1024) {
+export function protectedRoutes(db: Database, origin: string, roles?: UserRole[], maxBodyBytes = 64 * 1024,
+  allowTemporaryPassword = false) {
   const app = new Hono<AuthEnv>();
-  app.use('*', requireSession(db));
+  app.use('*', requireSession(db, { allowTemporaryPassword }));
   if (roles) app.use('*', requireRole(...roles));
   app.use('*', async (c, next) => {
     if (!['GET', 'HEAD'].includes(c.req.method) && c.req.header('Origin') !== origin)

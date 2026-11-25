@@ -246,3 +246,11 @@ sh deploy/release.sh rollback <tag-sebelumnya>
 1. Di VPS, `~/.ssh/authorized_keys` root berisi kunci `trf-github-deploy` dengan `restrict,command="sh /opt/trf-dev/foundation/deploy/ci-entry.sh"` — kunci ini hanya bisa `release`/`rollback`.
 2. GitHub Secrets repo: `DEPLOY_SSH_KEY` (private key tersebut), `DEPLOY_KNOWN_HOSTS` (host key VPS), `DEPLOY_HOST` (`root@<ip>`).
 3. GitHub Environment `production`: required reviewer = PM, branch `main` saja.
+
+## Pengamanan host
+
+File di `deploy/firewall/` dan `deploy/maintenance/` dipasang manual di VPS. Script dan cron masuk ke `/usr/local/sbin`, `/etc/systemd/system`, dan `/etc/cron.d`.
+
+- **Hanya trafik Cloudflare** (`trf-cloudflare-only`): port 80/443 hanya menerima rentang IP Cloudflare. Filter dipasang di chain `DOCKER-USER`, karena port yang dibuka Docker tidak melewati ufw. Unit systemd memasangnya ulang setiap boot. Akses langsung ke IP origin akan timeout. Perbarui daftar IP bila Cloudflare mengumumkan perubahan. Dengan filter ini header `CF-Connecting-IP` bisa dipercaya, dan batas login per IP benar-benar berlaku.
+- **Image untuk rollback** (`trf-image-prune`, cron 01:57 UTC): menyimpan 5 tag terakhir `trf-api` dan `trf-web`, lalu hanya membuang image dangling. Cron lama `docker image prune -af --filter until=24h` sudah dinonaktifkan, karena ikut menghapus image rilis sebelumnya.
+- **Log** (`journald-trf.conf` → `/etc/systemd/journald.conf.d/trf.conf`): kontainer menulis log ke journald (`LOG_DRIVER`, default `journald`), sehingga log tetap ada setelah rilis membuat ulang kontainer. Log disimpan 30 hari, maksimal 2 GB. Cara membaca: `sudo journalctl CONTAINER_NAME=trf-dev-api-1 --since today`.

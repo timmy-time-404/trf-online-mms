@@ -119,6 +119,9 @@ try {
   const loggedIn = await check(login('1234567',nextPassword),200);
   const loginCookie = loggedIn.headers.get('Set-Cookie')!.split(';')[0]!;
   await check(app.request('/roster-operations',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:loginCookie},body:JSON.stringify({action:'my_summary'})}),403);
+  // The temporary password is enforced by the session itself, not only by selected modules.
+  await check(app.request('/trfs',{headers:{Cookie:loginCookie}}),403);
+  await check(app.request('/auth/me',{headers:{Cookie:loginCookie}}),200);
   await invoke('HR','/employee-management',{...resetBody,operationKey:randomUUID()});
   await check(app.request('/auth/me',{headers:{Cookie:loginCookie}}),401);
   await invoke('HR','/employee-management',{action:'set_active',employeeId:result.employee.id,isActive:false,operationKey:randomUUID(),remarks:'Test deactivate'});

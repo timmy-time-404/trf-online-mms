@@ -9,7 +9,10 @@ export interface Actor {
   username: string; displayName: string;
 }
 export type AuthEnv = { Variables: { actor: Actor } };
-export const requireSession = (db: ReturnType<typeof openDatabase>) => createMiddleware<AuthEnv>(async (c, next) => {
+// A user who still has an HR-issued temporary password may only change it (the UI enforces the
+// same); otherwise anyone who knows the temporary password could act as that employee.
+export const requireSession = (db: ReturnType<typeof openDatabase>, { allowTemporaryPassword = false } = {}) =>
+  createMiddleware<AuthEnv>(async (c, next) => {
   c.header('Cache-Control', 'no-store');
   const token = getCookie(c, '__Host-trf-session');
   if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return c.json({ message: 'Sesi tidak tersedia.' }, 401);
@@ -21,11 +24,15 @@ export const requireSession = (db: ReturnType<typeof openDatabase>) => createMid
     where s.user_id=u.id and s.token_hash=${digest} and s.revoked_at is null
       and s.expires_at>now() and s.created_at>now()-interval '12 hours' and u.is_active=true
     returning u.id,u.role,u.department,coalesce(u.employee_id,linked.id) as employee_id,
-      u.username,coalesce(e.employee_name,linked.employee_name,u.username) as display_name,s.expires_at`;
+      u.username,coalesce(e.employee_name,linked.employee_name,u.username) as display_name,s.expires_at,
+      u.must_change_password`;
   const role = userRoleSchema.safeParse(row?.role);
   if (!row || !role.success) {
     deleteCookie(c, '__Host-trf-session', { path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
     return c.json({ message: 'Sesi berakhir.' }, 401);
+  }
+  if (row.must_change_password && !allowTemporaryPassword) {
+    return c.json({ message: 'Ubah temporary password sebelum melanjutkan.' }, 403);
   }
   c.set('actor', { id: row.id, role: role.data, department: row.department, employeeId: row.employee_id,
     username: row.username, displayName: row.display_name });

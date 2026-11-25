@@ -1,0 +1,12 @@
+[Unit]
+Description=Allow web traffic to Docker ports 80/443 only from Cloudflare
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/trf-cloudflare-only
+
+[Install]
+WantedBy=multi-user.target
