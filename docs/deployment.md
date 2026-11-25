@@ -14,7 +14,8 @@ Konfigurasi ini hanya untuk pengujian fitur yang telah dimigrasi; bukan bukti pa
 Supabase lama tetap tersedia dan tidak diubah oleh konfigurasi ini.
 
 Target saat ini adalah lingkungan uji bersama pada satu VPS. Backup offsite harian
-sudah aktif (lihat [Backup offsite](#backup-offsite)). Gunakan data dummy.
+sudah terpasang dan teruji, tetapi timer-nya **dimatikan** atas keputusan pemilik sampai
+aplikasi dipakai dengan data asli (lihat [Backup offsite](#backup-offsite)). Gunakan data dummy.
 
 ## Backup offsite
 
@@ -26,6 +27,9 @@ Skrip di `deploy/backup/` dipasang di VPS sebagai `/usr/local/sbin/trf-backup` d
   sehingga link dokumen lama tetap valid setelah restore.
 - **Tujuan:** restic ke penyimpanan S3-compatible (Backblaze B2). Data dienkripsi di VPS
   sebelum dikirim.
+- **Status:** `trf-backup.timer` dimatikan sampai go-live. Nyalakan setelah data asli mulai
+  dimasukkan: `sudo systemctl enable --now trf-backup.timer`. Saat itu juga rotasi secret
+  lingkungan dev, dan bila perlu hapus snapshot dummy (`restic forget <id> --prune`).
 - **Jadwal:** setiap hari pukul 18:00 UTC (02:00 WITA). Retensi 7 harian, 4 mingguan,
   6 bulanan. Setiap Minggu, `restic check` membaca ulang 5% data.
 - **Konfigurasi:** `/etc/trf-backup/env` dan `/etc/trf-backup/restic-password`, milik root
