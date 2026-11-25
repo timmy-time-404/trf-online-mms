@@ -41,9 +41,13 @@ case "$action" in
     previous=$(grep '^RELEASE_TAG=' deploy/.env | cut -d= -f2)
     mkdir -p "$BACKUPS" && chmod 700 "$BACKUPS"
     $BASE exec -T db pg_dump -U trf_owner -d trf -Fc > "$BACKUPS/pre-$tag-$(date +%Y%m%d%H%M).dump"
+    # The public gateway bind-mounts this file and runs with "admin off", so a new version
+    # is only picked up by restarting the container (see below).
+    caddy_before=$(sha256sum deploy/Caddyfile.domain 2>/dev/null || true)
     # Remove old source first so files deleted in git do not survive (secrets and .env stay).
     rm -rf apps packages db
     tar -xzf "$archive"
+    caddy_after=$(sha256sum deploy/Caddyfile.domain 2>/dev/null || true)
     sh deploy/init-secrets.sh >/dev/null
     set_tag "$tag"
     $FULL build
@@ -54,6 +58,12 @@ case "$action" in
       set_tag "$previous"
       $FULL up -d --wait --wait-timeout 180 || true
       exit 1
+    fi
+    # "up -d" keeps the gateway running when only the mounted Caddyfile changed.
+    if [ "$caddy_before" != "$caddy_after" ]; then
+      echo "Caddyfile.domain changed; restarting the public gateway."
+      $FULL restart public-gateway
+      health
     fi
     # Keep the last five dumps.
     ls -1t "$BACKUPS"/pre-*.dump 2>/dev/null | tail -n +6 | xargs -r rm -f
