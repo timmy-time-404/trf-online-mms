@@ -131,6 +131,10 @@ try {
     await admin`update public.early_recall_requests set status='CANCELLED',cancelled_by_user_id=${userIds.get('SUPER_ADMIN')!},
       cancelled_at=now(),cancellation_reason='Fixture complete' where employee_id=${employeeId}
       and status not in ('OS_GENERATED','REJECTED','CANCELLED','RETURNED_TO_SITE')`;
+    // A converted leave period cannot be recalled again (#13); move earlier fixtures out of the shared period.
+    await admin`update public.early_recall_requests set approved_leave_start=approved_leave_start-1000,
+      approved_leave_end=approved_leave_end-1000,proposed_return_date=proposed_return_date-1000,
+      actual_return_date=actual_return_date-1000 where employee_id=${employeeId} and status='OS_GENERATED'`;
     const response = await invoke(role,'/early-recall-workflow',{action:'create',...recallInput,employeeId});
     return response.item as { id: string; status: string; linked_trf: { id: string } | null; os_generated_days: number };
   };
@@ -211,6 +215,18 @@ try {
   assert.deepEqual(await admin`select (select count(*) from public.early_recall_status_history where early_recall_id=${done.id})::int as history,
     (select count(*) from public.notification_outbox where early_recall_id=${done.id})::int as outbox`,countsBefore);
   assert.equal(countsBefore[0]?.outbox,4);
+  // #13: a leave period already converted into OS (done: 1–14 Nov) cannot be recalled again.
+  await admin`update public.early_recall_requests set status='CANCELLED',cancelled_by_user_id=${userIds.get('SUPER_ADMIN')!},
+    cancelled_at=now(),cancellation_reason='Fixture complete' where employee_id=${owner!.id}
+    and status not in ('OS_GENERATED','REJECTED','CANCELLED','RETURNED_TO_SITE')`;
+  const overlapInput = { ...recallInput, approvedLeaveStart:'2026-11-10', approvedLeaveEnd:'2026-11-20', proposedReturnDate:'2026-11-12' };
+  const overlap = await check(request('HOD','/early-recall-workflow',{action:'create',...overlapInput}),400);
+  assert.match((await overlap.json() as {message:string}).message,/sudah pernah dikonversi menjadi OS/);
+  const separateInput = { ...recallInput, approvedLeaveStart:'2026-10-01', approvedLeaveEnd:'2026-10-14', proposedReturnDate:'2026-10-07' };
+  const separate = (await invoke('HOD','/early-recall-workflow',{action:'create',...separateInput})).item as {id:string;status:string};
+  assert.equal(separate.status,'DRAFT');
+  const moved = await check(request('HOD','/early-recall-workflow',{action:'update',earlyRecallId:separate.id,remarks:'Move into converted period',...overlapInput}),400);
+  assert.match((await moved.json() as {message:string}).message,/sudah pernah dikonversi menjadi OS/);
   const collisionRecall = await prepareRecall('PENDING_PM_APPROVAL');
   const [generator] = await admin`select pg_get_functiondef('public.generate_trf_number()'::regprocedure) as definition`;
   const [existingTrf] = await admin`select id from public.trfs limit 1`;
