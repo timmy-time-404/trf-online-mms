@@ -94,6 +94,11 @@ try {
   await expectStatus(raw('EMPLOYEE','/trfs','POST',urgent,0),400);
   const near=await create({...urgent,lateSubmissionReason:'Operational urgency'});
   assert.equal(near.urgent,true);assert.equal(near.lateSubmissionReason,'Operational urgency');
+  // #14: a submitted TRF notifies the ADMIN_DEPT of its department in-app.
+  const adminInbox=(trf:string)=>admin`select user_id,title from public.notifications where trf_id=${trf}`;
+  const submittedNotes=await adminInbox(near.id);
+  assert.equal(submittedNotes.length,1);assert.equal(submittedNotes[0]?.user_id,roleUsers.get('ADMIN_DEPT'));
+  assert.match(String(submittedNotes[0]?.title),/menunggu verifikasi Anda/);
   const boundary=await create({...input,startDate:addDays(businessDate(),14)});
   assert.equal(boundary.urgent,false);
   const modern={id:'first',travelPurpose:'TRAINING',startDate:addDays(businessDate(),2),endDate:addDays(businessDate(),3),purposeRemarks:'Training'};
@@ -101,6 +106,7 @@ try {
   // D9: incomplete drafts persist and can be edited, but require full validation when sent.
   let draft=await create({employeeId:owner,draft:true});
   assert.equal(draft.status,'DRAFT');assert.equal(draft.version,1);
+  assert.equal((await adminInbox(draft.id)).length,0,'Drafts do not notify anyone');
   await mutate(draft,'/submit',{},'EMPLOYEE',400);
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'PUT',{purposeRemarks:'Saved'},draft.version),200);
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'PUT',{purposeRemarks:'Stale'},draft.version),409);
@@ -109,6 +115,7 @@ try {
   await expectStatus(raw('EMPLOYEE','/trfs/'+draft.id,'DELETE',undefined,draft.version-1),409);
   const sent=await mutate(draft,'/submit',input);
   assert.equal(sent.status,'SUBMITTED');assert.equal(sent.version,draft.version+1);
+  assert.equal((await adminInbox(sent.id))[0]?.user_id,roleUsers.get('ADMIN_DEPT'),'Sending a draft notifies ADMIN_DEPT');
   await mutate(sent,'/cancel',{remarks:' '},'EMPLOYEE',400);
   const cancelled=await mutate(sent,'/cancel',{remarks:'Travel no longer needed'});
   assert.equal(cancelled.status,'CANCELLED');assert.equal(cancelled.version,sent.version+1);
@@ -126,6 +133,11 @@ try {
   assert.equal(verified.status,'PENDING_APPROVAL');
   let queue=await (await expectStatus(raw('SUPER_ADMIN','/trfs/queue'),200)).json() as {id:string;blockedBy:string}[];
   assert.equal(queue.find(i=>i.id===held.id)?.blockedBy,'HOD');
+  // #16: the detail endpoint carries the same hint for SUPER_ADMIN only.
+  const heldDetail=await (await expectStatus(raw('SUPER_ADMIN','/trfs/'+held.id),200)).json() as {blockedBy?:string|null};
+  assert.equal(heldDetail.blockedBy,'HOD');
+  const ownerDetail=await (await expectStatus(raw('EMPLOYEE','/trfs/'+held.id),200)).json() as Record<string,unknown>;
+  assert.ok(!('blockedBy' in ownerDetail),'blockedBy must stay SUPER_ADMIN-only');
   await admin`update public.users set is_active=true,department='Survey' where role='HOD'`;
   await mutate(verified,'/approve',{},'HOD',403);
   queue=await (await expectStatus(raw('SUPER_ADMIN','/trfs/queue'),200)).json() as typeof queue;
@@ -135,6 +147,8 @@ try {
   assert.ok(!queue.some(i=>i.id===held.id));
   const approved=await mutate(verified,'/approve',{},'HOD');
   assert.equal(approved.status,'HOD_APPROVED');
+  const freeDetail=await (await expectStatus(raw('SUPER_ADMIN','/trfs/'+held.id),200)).json() as {blockedBy?:string|null};
+  assert.equal(freeDetail.blockedBy ?? null,null,'Not held once an active approver exists');
   // D3/D10/D13: no SUPER_ADMIN impersonation; rejection has mandatory reason and owner notification.
   for(const action of ['/approve','/verify','/process']) await mutate(approved,action,{decision:'YES'},'SUPER_ADMIN',403);
   await mutate(approved,'/reject',{},'HR',400);

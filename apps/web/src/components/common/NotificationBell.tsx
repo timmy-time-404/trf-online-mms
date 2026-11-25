@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Popover,
   PopoverContent,
@@ -83,7 +82,8 @@ const NotificationBell: React.FC = () => {
           )}
         </div>
 
-        <ScrollArea className="max-h-80">
+        {/* Plain overflow container: Radix ScrollArea does not cap its viewport with max-h, so items spilled out. */}
+        <div className="max-h-80 overflow-y-auto">
           {notifications.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-gray-400">
               Belum ada notifikasi
@@ -128,7 +128,7 @@ const NotificationBell: React.FC = () => {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

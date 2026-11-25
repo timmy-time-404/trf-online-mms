@@ -183,13 +183,14 @@ const TRFNewPage: React.FC = () => {
         <Button variant="outline" onClick={() => navigate('/trf')}>
           Cancel
         </Button>
+        <Button variant="outline" disabled={isSubmitting || !employeeId} onClick={()=>void handleSubmit(true)}>
+          Simpan draft
+        </Button>
         <Button onClick={() => setSubmitDialogOpen(true)} disabled={isSubmitting}>
           <Send className="w-4 h-4 mr-2" />
           Submit TRF
         </Button>
       </div>
-
-      <Button variant="outline" disabled={isSubmitting || !employeeId} onClick={()=>void handleSubmit(true)}>Simpan draft</Button>
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}

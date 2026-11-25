@@ -5,7 +5,7 @@ import { hash, verify } from '@node-rs/argon2';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { USER_ROLES, type UserRole } from '@trf/shared';
+import { USER_ROLES, addDays, businessDate, type UserRole } from '@trf/shared';
 import { openDatabase } from './db/connection.ts';
 import { seedDevelopmentFeatures } from './db/seed-features.ts';
 import { createApp } from './app.ts';
@@ -196,6 +196,14 @@ try {
   const raced = await Promise.all([request('HR','/early-recall-workflow',{action:'hr_validate',earlyRecallId:race.id}),request('HR','/early-recall-workflow',{action:'hr_validate',earlyRecallId:race.id})]);
   assert.deepEqual(raced.map(r=>r.status).sort(),[200,409]);checks+=2;
   const done = await prepareRecall('TRAVEL_BOOKED');
+  // #12: an actual return after today is rejected and no OS is generated.
+  await admin`update public.early_recall_requests set approved_leave_end=${addDays(businessDate(),10)} where id=${done.id}`;
+  const futureReturn = await check(request('GA','/early-recall-workflow',{action:'confirm_return',earlyRecallId:done.id,
+    remarks:'Future return',actualReturnDate:addDays(businessDate(),1)}),400);
+  assert.match((await futureReturn.json() as {message:string}).message,/tidak boleh melebihi hari ini/);
+  assert.equal((await admin`select count(*)::int as n from public.employee_os_ledger where early_recall_id=${done.id}`)[0]?.n,0);
+  assert.equal((await admin`select status from public.early_recall_requests where id=${done.id}`)[0]?.status,'TRAVEL_BOOKED');
+  await admin`update public.early_recall_requests set approved_leave_end=${recallInput.approvedLeaveEnd} where id=${done.id}`;
   await recallAction(done.id,'confirm_return','GA',{actualReturnDate:'2026-11-07'});
   const countsBefore = await admin`select (select count(*) from public.early_recall_status_history where early_recall_id=${done.id})::int as history,
     (select count(*) from public.notification_outbox where early_recall_id=${done.id})::int as outbox`;
@@ -238,18 +246,26 @@ try {
   assert.equal((await admin`select status from public.early_recall_requests where id=${rollback.id}`)[0]?.status,'PENDING_PM_APPROVAL');
   const [cycle] = await admin`select id from public.employee_site_cycles where employee_id=${owner!.id} limit 1`;
   // Native roster routines preserve movement sequencing and successor creation.
+  // Dates are relative to today because actual movements cannot be in the future (#12).
+  const day = (offset: number) => addDays(businessDate(), offset);
   for(const role of ['GA','HR','SUPER_ADMIN'] as const) {
     const [movementEmployee] = await admin`insert into public.employees(employee_code,employee_name,department)
       values (${randomUUID()},'Movement fixture','HRMD') returning id`;
     const pattern = (await admin`select id from public.roster_patterns where code='8:2'`)[0]!;
     const assignment = (await admin`insert into public.employee_roster_assignments(employee_id,roster_pattern_id,effective_from,source_type)
-      values (${movementEmployee!.id},${pattern.id},'2026-10-01','INITIAL_IMPORT') returning id`)[0]!;
+      values (${movementEmployee!.id},${pattern.id},${day(-70)},'INITIAL_IMPORT') returning id`)[0]!;
     const [c] = await admin`insert into public.employee_site_cycles(employee_id,roster_assignment_id,site_location_id,cycle_number,
       planned_site_in,planned_site_out,planned_leave_start,planned_leave_end,actual_site_in,status,source_type,source_reference)
-      values (${movementEmployee!.id},${assignment.id},${site.id},1,'2026-10-01','2026-11-26','2026-11-26','2026-12-09','2026-10-01','ON_SITE','BASELINE_MANIFEST',${randomUUID()}) returning id`;
-    await invoke(role,'/roster-operations',{action:'confirm_site_out',siteCycleId:c!.id,actualSiteOut:'2026-11-26',remarks:'Site out test'});
-    await invoke(role,'/roster-operations',{action:'confirm_leave_start',siteCycleId:c!.id,actualLeaveStart:'2026-11-26',remarks:'Leave test'});
-    const returned = await invoke(role,'/roster-operations',{action:'confirm_return',siteCycleId:c!.id,returnToSiteDate:'2026-12-10',remarks:'Return test'});
+      values (${movementEmployee!.id},${assignment.id},${site.id},1,${day(-70)},${day(-14)},${day(-14)},${day(-1)},${day(-70)},'ON_SITE','BASELINE_MANIFEST',${randomUUID()}) returning id`;
+    const future = await check(request(role,'/roster-operations',{action:'confirm_site_out',siteCycleId:c!.id,actualSiteOut:day(1),remarks:'Future site out'}),400);
+    assert.match((await future.json() as {message:string}).message,/tidak boleh melebihi hari ini/);
+    assert.equal((await admin`select status from public.employee_site_cycles where id=${c!.id}`)[0]?.status,'ON_SITE');
+    assert.equal((await admin`select count(*)::int as n from public.employee_os_ledger where employee_id=${movementEmployee!.id}`)[0]?.n,0);
+    await invoke(role,'/roster-operations',{action:'confirm_site_out',siteCycleId:c!.id,actualSiteOut:day(-14),remarks:'Site out test'});
+    await invoke(role,'/roster-operations',{action:'confirm_leave_start',siteCycleId:c!.id,actualLeaveStart:day(1),remarks:'Future leave'},400);
+    await invoke(role,'/roster-operations',{action:'confirm_leave_start',siteCycleId:c!.id,actualLeaveStart:day(-14),remarks:'Leave test'});
+    await invoke(role,'/roster-operations',{action:'confirm_return',siteCycleId:c!.id,returnToSiteDate:day(1),remarks:'Future return'},400);
+    const returned = await invoke(role,'/roster-operations',{action:'confirm_return',siteCycleId:c!.id,returnToSiteDate:day(0),remarks:'Return test'});
     assert.equal((returned.result as {successor_cycle_status:string}).successor_cycle_status,'ON_SITE');
   }
   assert.ok(cycle);

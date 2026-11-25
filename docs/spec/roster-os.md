@@ -37,3 +37,7 @@ Snapshot jumlah karyawan di site, sedang cuti, dan seterusnya, dari RPC `get_man
 Onboarding karyawan sekaligus akun, edit, aktif/nonaktif, dan reset password sementara, melalui RPC `create_employee_onboarding`, `update_employee_management`, `set_employee_management_active`, `reset_employee_temporary_password`, dan `list_employee_management_records`. [kode] `supabase/functions/employee-management/index.ts`
 
 Rumus pasti (berapa hari OS dari overstay, aturan FIFO, validasi tanggal) ada di fungsi SQL dan harus diambil dari schema. [DB?]
+
+## Tanggal aktual tidak boleh di masa depan (#12)
+
+Sejak migrasi `0008_actual_dates_not_future`, Actual Site In, Actual Site Out, Actual Leave Start, dan Actual Leave End tidak boleh lebih dari tanggal bisnis hari ini (WITA). Pengecekan ada di trigger `validate_employee_site_cycle`, sehingga berlaku untuk semua konfirmasi movement dan OS overstay tidak terbentuk untuk hari yang belum terjadi. Sistem lama menerima tanggal masa depan.

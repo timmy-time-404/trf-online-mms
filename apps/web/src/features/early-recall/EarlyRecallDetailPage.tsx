@@ -64,6 +64,7 @@ import type {
   UserRole,
 } from '@/types';
 
+import { businessDate } from '@trf/shared';
 import EarlyRecallStatusBadge from './components/EarlyRecallStatusBadge';
 import { getEarlyRecallStatusDescription } from './components/earlyRecallStatus';
 
@@ -1908,7 +1909,11 @@ const EarlyRecallDetailPage: React.FC =
                       record.approved_leave_start
                     }
                     max={
-                      record.approved_leave_end
+                      // The return cannot be later than the leave end or today (#12).
+                      record.approved_leave_end &&
+                      record.approved_leave_end < businessDate()
+                        ? record.approved_leave_end
+                        : businessDate()
                     }
                     disabled={
                       isProcessing
