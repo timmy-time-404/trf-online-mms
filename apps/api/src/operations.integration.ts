@@ -330,6 +330,20 @@ try {
   await admin`delete from public.app_login_attempts where identifier_hash=${attemptKey}`;
   for(let attempt=0;attempt<10;attempt++) await invoke('EMPLOYEE','/auth/change-password',{currentPassword:'incorrect',newPassword:'Attempted123!'},400);
   await invoke('EMPLOYEE','/auth/change-password',{currentPassword:'Changed123!',newPassword:'Attempted123!'},429);
+  // #18 / D14: the legacy overstay formula is the official rule (extra site days x off/on, per roster pattern).
+  // Rounding differs per pattern on purpose: 4:2 and 5:2 round down; 6:2, 8:2 and 10:2 round up when the remainder is over half.
+  const overstayCases: [string, number, number][] = [
+    ['4:2',0,0],['4:2',1,0],['4:2',3,1],['4:2',4,2],
+    ['5:2',2,0],['5:2',3,1],['5:2',4,1],['5:2',5,2],
+    ['6:2',1,0],['6:2',2,1],['6:2',3,1],['6:2',4,1],['6:2',5,2],
+    ['8:2',2,0],['8:2',3,1],['8:2',4,1],['8:2',6,1],['8:2',7,2],
+    ['10:2',2,0],['10:2',3,1],['10:2',5,1],['10:2',8,2],
+  ];
+  for (const [roster, extraDays, osDays] of overstayCases) {
+    const [row] = await admin<{ days: number }[]>`select public.calculate_overstay_os_days(${roster}, ${extraDays}) as days`;
+    assert.equal(row?.days, osDays, `Overstay OS for roster ${roster} with ${extraDays} extra site days`);
+  }
+  await assert.rejects(admin`select public.calculate_overstay_os_days('7:7', 3)`, /belum didukung/);
   console.log(`WP4 native PostgreSQL integration passed: ${checks} HTTP assertions; action/role matrices, Recall/OS/FIFO, atomic outbox, random credentials, session revocation, dev-only seed.`);
 } finally {
   if (fixtureDatabase) {

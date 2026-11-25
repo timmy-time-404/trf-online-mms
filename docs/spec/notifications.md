@@ -17,7 +17,21 @@ Tidak ada notifikasi ke **approver berikutnya**. Approver mengetahui ada pekerja
 
 ## In-app
 
-Tabel `notifications` (penerima `user_id`, judul, pesan, status dibaca). Saat ini hanya dibuat untuk HR Edit & Approve dan GA Edit. `apps/web/src/store/notificationStore.ts`, `components/common/NotificationBell.tsx`
+Tabel `notifications` (penerima `user_id`, judul, pesan, status dibaca). `apps/web/src/store/notificationStore.ts`, `components/common/NotificationBell.tsx`. Klik notifikasi membuka detail TRF.
+
+Sistem lama hanya membuat notifikasi in-app untuk HR Edit & Approve dan GA Edit. Sejak #14, notifikasi ditulis di transaksi yang sama dengan perubahan status (`apps/api/src/modules/trf/workflowRepository.ts`):
+
+| Pemicu | Penerima | Judul |
+|---|---|---|
+| TRF menjadi `SUBMITTED` (kirim baru, kirim draft, kirim ulang revisi) | ADMIN_DEPT aktif, department sama | `TRF … menunggu verifikasi Anda` |
+| `PENDING_APPROVAL` | HOD aktif, department sama | `TRF … menunggu approval Anda` |
+| `HOD_APPROVED` / `HR_APPROVED` | HR / PM aktif | `TRF … menunggu approval Anda` |
+| `PM_APPROVED` | GA aktif | `TRF … menunggu proses tiket/voucher` |
+| `NEEDS_REVISION` | Pemilik TRF | `TRF … perlu direvisi` (pesan = alasan revisi) |
+| `GA_PROCESSED` | Pemilik TRF | `Tiket/voucher TRF … sudah siap` (pesan = pesan GA) |
+| Reject, pembatalan, HR Edit & Approve, GA Edit | Pemilik TRF | seperti sebelumnya |
+
+Pelaku perubahan tidak menerima notifikasinya sendiri. Draft tidak memberi notifikasi. Notifikasi WhatsApp lewat `notification_outbox` tidak berubah.
 
 ## Badge menu
 

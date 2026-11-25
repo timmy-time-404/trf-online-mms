@@ -85,7 +85,7 @@ export const EARLY_RECALL_STATUS_CONFIG: Record<
   OS_GENERATED: {
     label: 'OS Generated',
     description:
-      'Sisa cuti telah dikonversi menjadi OS Cycle 0.',
+      'Sisa cuti telah dikonversi menjadi OS Cycle 0. Roster tidak berubah otomatis: HR/GA perlu Confirm Return / D1 di halaman Roster & OS.',
     className:
       'border-green-200 bg-green-50 text-green-700',
   },
