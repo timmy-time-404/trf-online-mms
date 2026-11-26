@@ -1,0 +1,2 @@
+# Keep the last 5 release images for rollback; see deploy/maintenance/trf-image-prune.sh.
+57 1 * * * root /usr/local/sbin/trf-image-prune

@@ -13,8 +13,41 @@ masih menunggu paket berikutnya.
 Konfigurasi ini hanya untuk pengujian fitur yang telah dimigrasi; bukan bukti paritas seluruh sistem.
 Supabase lama tetap tersedia dan tidak diubah oleh konfigurasi ini.
 
-Target saat ini adalah lingkungan uji bersama pada satu VPS. Backup terjadwal
-ditunda atas keputusan pemilik; volume persisten bukan backup. Gunakan data dummy.
+Target saat ini adalah lingkungan uji bersama pada satu VPS. Backup offsite harian
+sudah terpasang dan teruji, tetapi timer-nya **dimatikan** atas keputusan pemilik sampai
+aplikasi dipakai dengan data asli (lihat [Backup offsite](#backup-offsite)). Gunakan data dummy.
+
+## Backup offsite
+
+Skrip di `deploy/backup/` dipasang di VPS sebagai `/usr/local/sbin/trf-backup` dan
+`/usr/local/sbin/trf-restore-test`, dengan unit `trf-backup.service` dan `trf-backup.timer`.
+
+- **Isi backup:** dump `pg_dump -Fc` (dicek dengan `pg_restore -l` sebelum dipakai), volume
+  `trf-dev_documents`, `deploy/.env`, dan `deploy/secrets`. Signing key ikut dicadangkan,
+  sehingga link dokumen lama tetap valid setelah restore.
+- **Tujuan:** restic ke penyimpanan S3-compatible (Backblaze B2). Data dienkripsi di VPS
+  sebelum dikirim.
+- **Status:** `trf-backup.timer` dimatikan sampai go-live. Nyalakan setelah data asli mulai
+  dimasukkan: `sudo systemctl enable --now trf-backup.timer`. Saat itu juga rotasi secret
+  lingkungan dev, dan bila perlu hapus snapshot dummy (`restic forget <id> --prune`).
+- **Jadwal:** setiap hari pukul 18:00 UTC (02:00 WITA). Retensi 7 harian, 4 mingguan,
+  6 bulanan. Setiap Minggu, `restic check` membaca ulang 5% data.
+- **Konfigurasi:** `/etc/trf-backup/env` dan `/etc/trf-backup/restic-password`, milik root
+  dengan mode 600. Format env ada di kepala `trf-backup.sh`. **Salinan password restic wajib
+  disimpan di password manager pemilik, di luar VPS.** Tanpa password itu, backup tidak bisa dibuka.
+- **Uji restore:** `sudo /usr/local/sbin/trf-restore-test` memulihkan snapshot terbaru ke
+  kontainer PostgreSQL sementara (tanpa jaringan), lalu membandingkan jumlah baris dengan
+  database live. Jalankan sebulan sekali dan catat hasilnya.
+
+| Tanggal | Snapshot | Hasil | Waktu restore |
+|---|---|---|---|
+| 2026-11-25 | 57b97cb7 | trfs/employees/users/migrations sama (27/8/12/11) | 10 detik |
+
+Memulihkan database production setelah insiden:
+1. Hentikan `api` dan `gateway`.
+2. `restic restore latest --target /var/tmp/r --include /var/backups/trf/trf.dump`.
+3. `pg_restore --clean --if-exists -U trf_owner -d trf` dari dump itu, di dalam kontainer `db`.
+4. Nyalakan kembali, lalu jalankan health check.
 
 ## Persiapan host
 
@@ -246,3 +279,11 @@ sh deploy/release.sh rollback <tag-sebelumnya>
 1. Di VPS, `~/.ssh/authorized_keys` root berisi kunci `trf-github-deploy` dengan `restrict,command="sh /opt/trf-dev/foundation/deploy/ci-entry.sh"` — kunci ini hanya bisa `release`/`rollback`.
 2. GitHub Secrets repo: `DEPLOY_SSH_KEY` (private key tersebut), `DEPLOY_KNOWN_HOSTS` (host key VPS), `DEPLOY_HOST` (`root@<ip>`).
 3. GitHub Environment `production`: required reviewer = PM, branch `main` saja.
+
+## Pengamanan host
+
+File di `deploy/firewall/` dan `deploy/maintenance/` dipasang manual di VPS. Script dan cron masuk ke `/usr/local/sbin`, `/etc/systemd/system`, dan `/etc/cron.d`.
+
+- **Hanya trafik Cloudflare** (`trf-cloudflare-only`): port 80/443 hanya menerima rentang IP Cloudflare. Filter dipasang di chain `DOCKER-USER`, karena port yang dibuka Docker tidak melewati ufw. Unit systemd memasangnya ulang setiap boot. Akses langsung ke IP origin akan timeout. Perbarui daftar IP bila Cloudflare mengumumkan perubahan. Dengan filter ini header `CF-Connecting-IP` bisa dipercaya, dan batas login per IP benar-benar berlaku.
+- **Image untuk rollback** (`trf-image-prune`, cron 01:57 UTC): menyimpan 5 tag terakhir `trf-api` dan `trf-web`, lalu hanya membuang image dangling. Cron lama `docker image prune -af --filter until=24h` sudah dinonaktifkan, karena ikut menghapus image rilis sebelumnya.
+- **Log** (`journald-trf.conf` → `/etc/systemd/journald.conf.d/trf.conf`): kontainer menulis log ke journald (`LOG_DRIVER`, default `journald`), sehingga log tetap ada setelah rilis membuat ulang kontainer. Log disimpan 30 hari, maksimal 2 GB. Cara membaca: `sudo journalctl CONTAINER_NAME=trf-dev-api-1 --since today`.

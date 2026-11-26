@@ -1,0 +1,12 @@
+[Unit]
+Description=TRF Online offsite backup (restic, S3-compatible storage)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=RESTIC_CACHE_DIR=/var/cache/restic
+CacheDirectory=restic
+ExecStart=/usr/local/sbin/trf-backup
+Nice=10
+IOSchedulingClass=idle

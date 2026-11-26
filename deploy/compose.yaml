@@ -1,10 +1,10 @@
 name: trf-dev
 
+# journald keeps container logs after a release recreates the containers (json-file logs are
+# deleted with the container). Retention is set on the host in journald.conf.d (30 days, 2 GB).
+# Read them with: journalctl CONTAINER_NAME=trf-dev-api-1 --since today
 x-logging: &logging
-  driver: json-file
-  options:
-    max-size: 10m
-    max-file: "3"
+  driver: ${LOG_DRIVER:-journald}
 
 services:
   db:

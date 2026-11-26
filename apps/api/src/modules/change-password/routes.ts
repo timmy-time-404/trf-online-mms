@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { jsonBody, protectedRoutes, type Database } from '../../http.ts';
 
 export function createChangePasswordRoutes(db: Database, origin: string) {
-  const app = protectedRoutes(db, origin);
+  const app = protectedRoutes(db, origin, undefined, undefined, true);
   app.post('/', async (c) => {
     const body = await jsonBody(z.object({ currentPassword: z.string().min(1).max(256), newPassword: z.string().min(8).max(128)
       .regex(/[A-Za-z]/).regex(/\d/) }).strict(), c.req);

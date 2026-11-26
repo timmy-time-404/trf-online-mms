@@ -164,7 +164,8 @@ try {
   const login = () => app.request('/auth/login', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ username: body.username, password: managed.temporaryPassword }) });
   const loginResponse = await expectStatus(login(), 200);
   const cookie = loginResponse.headers.get('Set-Cookie')?.split(';')[0]; assert.ok(cookie);
-  await expectStatus(app.request('/notifications', { headers: { Cookie: cookie } }), 200);
+  // A temporary password only allows changing it; every other endpoint refuses the session.
+  await expectStatus(app.request('/notifications', { headers: { Cookie: cookie } }), 403);
   await expectStatus(request('SUPER_ADMIN', '/users/' + managed.user.id + '/deactivate', 'POST'), 200);
   await expectStatus(app.request('/notifications', { headers: { Cookie: cookie } }), 401);
   await expectStatus(login(), 401);
