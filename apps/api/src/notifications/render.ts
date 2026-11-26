@@ -65,7 +65,7 @@ function earlyRecallParams(event: string, recall: Json, remarks: string): EarlyR
  * into a signed, expiring URL that Fonnte can fetch.
  */
 export function renderOutbox(row: OutboxRow, gaDocuments: Json | null,
-  documentLink: (trfId: string, key: string) => string): OutgoingMessage[] {
+  documentLink: (trfId: string, key: string, path: string) => string): OutgoingMessage[] {
   const p = row.payload;
   if (row.template_key === 'TRF_STATUS_CHANGED' || row.template_key === 'TRF_EDITED') {
     const messages: OutgoingMessage[] = [{ text: buildTrfStatusWaMessage({
@@ -79,7 +79,7 @@ export function renderOutbox(row: OutboxRow, gaDocuments: Json | null,
         const label = DOCUMENT_LABELS[key] ?? key;
         messages.push({
           text: `Halo ${text(p.employeeName) || 'Karyawan'},\n\nBerikut *${label}* untuk TRF *${text(p.trfNumber)}* kamu.\n\n_Pesan otomatis dari TRF Online MMS._`,
-          fileUrl: documentLink(row.trf_id, key), fileName: text((doc as Json).name) || `${label}.pdf`,
+          fileUrl: documentLink(row.trf_id, key, text((doc as Json).path)), fileName: text((doc as Json).name) || `${label}.pdf`,
         });
       }
     }

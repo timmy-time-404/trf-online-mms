@@ -121,7 +121,7 @@ export function createPublicDocumentRoutes(db: Database, storage: FileStorage, s
     if (!grant) return c.json({ message: 'Tautan tidak valid atau kedaluwarsa.' }, 404);
     const row = await repo.findRow(db, grant.trfId);
     const doc = row ? docsOf(row)[grant.key] : undefined;
-    if (!doc || typeof doc === 'string' || !doc.path) return c.json({ message: 'Dokumen tidak ditemukan.' }, 404);
+    if (!doc || typeof doc === 'string' || !doc.path || doc.path !== grant.path) return c.json({ message: 'Dokumen tidak ditemukan.' }, 404);
     return sendFile(storage, doc);
   });
   return app;

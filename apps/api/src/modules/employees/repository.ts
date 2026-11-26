@@ -4,6 +4,9 @@ import type { Connection } from '../trf/repository.ts';
 export const list = (sql: Connection, actor: Actor) => sql`select id,user_id,employee_code,employee_name,employee_type,
   department,section,job_title,email,phone,point_of_hire,join_date::text,employee_level
   from public.employees where is_active=true and ${employeeScope(sql,actor)} order by employee_name,id`;
+export const find = async (sql: Connection, id: string) => {
+  const [row] = await sql`select * from public.employees where id=${id} for update`; return row;
+};
 export const create = async (sql: Connection, fields: Record<string, string>) => {
   const [row] = await sql`insert into public.employees ${sql(fields)} returning *`; return row;
 };

@@ -4,7 +4,7 @@ import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { openDatabase } from './db/connection.ts';
 import { createDiskStorage } from './modules/documents/storage.ts';
-import { signGrant } from './modules/documents/signing.ts';
+import { DOCUMENT_LINK_TTL_MS, signGrant } from './modules/documents/signing.ts';
 import { normalizeIndonesianPhone } from './notifications/render.ts';
 import { fonnteSender, startOutboxWorker } from './notifications/worker.ts';
 
@@ -35,8 +35,8 @@ const workerDb = database && storage && fonnteToken ? openDatabase({ requestTime
 const stopWorker = workerDb ? startOutboxWorker(workerDb, {
   send: fonnteSender(fonnteToken),
   allowlist: new Set((process.env.WA_ALLOWLIST ?? '').split(',').map(normalizeIndonesianPhone).filter((n): n is string => !!n)),
-  documentLink: (trfId, key) => `${origin}/api/public/documents/${signGrant(documentSigningKey, {
-    trfId, key, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })}`,
+  documentLink: (trfId, key, path) => `${origin}/api/public/documents/${signGrant(documentSigningKey, {
+    trfId, key, path, exp: Date.now() + DOCUMENT_LINK_TTL_MS })}`,
 }) : undefined;
 if (database && !workerDb) console.log('WhatsApp delivery disabled: Fonnte token not configured; outbox stays pending.');
 

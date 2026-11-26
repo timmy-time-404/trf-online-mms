@@ -27,21 +27,39 @@ export const createTRFService = (db: ReturnType<typeof openDatabase>) => ({
     if (actor.role !== 'SUPER_ADMIN') return repo.trfDTO(row);
     return { ...repo.trfDTO(row), blockedBy: missingApprover(row.status, await activeApprovers(db), row.department) ?? null };
   },
-  create: async (actor: Actor, body: unknown, expected: number) => {
+  /**
+   * Creates a TRF. With an `Idempotency-Key`, a retried or double-clicked submit returns the
+   * TRF the first request created (`replayed: true`) instead of creating a duplicate.
+   */
+  create: async (actor: Actor, body: unknown, expected: number, idempotencyKey: string | null = null) => {
     assertVersion(0,expected);
     const { draft = false, ...data } = parse(z.record(z.string(),z.unknown()),body);
     parse(z.boolean(),draft);
     const input = draft ? parse(draftTRFSchema,data) : parse(createTRFSchema, data);
     if (actor.role !== 'SUPER_ADMIN' && actor.employeeId !== input.employeeId) throw new HTTPException(403, { message: 'Karyawan tidak sesuai akun.' });
-    return db.begin(async (tx) => {
-      const employee = await repo.findEmployee(tx, input.employeeId);
-      if (!employee) throw new HTTPException(400, { message: 'Karyawan tidak ditemukan.' });
-      const row = await repo.insertRow(tx, input, employee.department,!!draft);
-      await repo.writeHistory(tx, actor, row.id, null, row.status, draft ? 'Draft created' : 'TRF created and submitted');
-      const created = (await repo.findRow(tx, row.id))!;
-      if (!draft) await notifyNextApprovers(tx, created, actor, created.status);
-      return repo.trfDTO(created);
-    });
+    const replay = async () => {
+      const existing = idempotencyKey ? await repo.findByIdempotencyKey(db, input.employeeId, idempotencyKey) : undefined;
+      return existing ? { trf: repo.trfDTO((await repo.findRow(db, existing.id))!), replayed: true } : undefined;
+    };
+    const earlier = await replay();
+    if (earlier) return earlier;
+    try {
+      return await db.begin(async (tx) => {
+        const employee = await repo.findEmployee(tx, input.employeeId);
+        if (!employee) throw new HTTPException(400, { message: 'Karyawan tidak ditemukan.' });
+        const row = await repo.insertRow(tx, input, employee.department,!!draft, idempotencyKey);
+        await repo.writeHistory(tx, actor, row.id, null, row.status, draft ? 'Draft created' : 'TRF created and submitted');
+        const created = (await repo.findRow(tx, row.id))!;
+        if (!draft) await notifyNextApprovers(tx, created, actor, created.status);
+        return { trf: repo.trfDTO(created), replayed: false };
+      });
+    } catch (error) {
+      // Two requests with the same key raced; the loser returns the winner's TRF.
+      const raced = error && typeof error === 'object' && 'constraint_name' in error
+        && error.constraint_name === 'trfs_employee_idempotency_key_idx' ? await replay() : undefined;
+      if (raced) return raced;
+      throw error;
+    }
   },
   change: async (actor: Actor, id: string, body: unknown, resubmit: boolean, expected: number) => db.begin(async (tx) => {
     const row = await repo.findRow(tx, id, true);

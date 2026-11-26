@@ -98,10 +98,12 @@ try {
   await assert.rejects(storage.get(uploaded.gaDocuments.flightTicket!.path), 'old file removed after replace');
 
   // Signed public link: valid, tampered, expired.
-  const token = signGrant(secret, { trfId: t.id, key: 'flightTicket', exp: Date.now() + 60_000 });
+  const currentPath = replaced.gaDocuments.flightTicket!.path;
+  const token = signGrant(secret, { trfId: t.id, key: 'flightTicket', path: currentPath, exp: Date.now() + 60_000 });
   await expect(call(null, `/public/documents/${token}`), 200, 'signed link works without session');
   await expect(call(null, `/public/documents/${token.slice(0, -2)}xx`), 404, 'tampered link');
-  await expect(call(null, `/public/documents/${signGrant(secret, { trfId: t.id, key: 'flightTicket', exp: Date.now() - 1 })}`), 404, 'expired link');
+  await expect(call(null, `/public/documents/${signGrant(secret, { trfId: t.id, key: 'flightTicket', path: currentPath, exp: Date.now() - 1 })}`), 404, 'expired link');
+  await expect(call(null, `/public/documents/${signGrant(secret, { trfId: t.id, key: 'flightTicket', path: uploaded.gaDocuments.flightTicket!.path, exp: Date.now() + 60_000 })}`), 404, 'link to a replaced file is revoked');
 
   // D4: GA cannot process without a document.
   const empty = await newTRF('PM_APPROVED');
@@ -113,7 +115,7 @@ try {
   // Outbox delivery: allowlisted owner receives status text plus the document.
   const sent: { target: string; message: OutgoingMessage }[] = [];
   const ok: SendWhatsApp = async (target, message) => { sent.push({ target, message }); };
-  const link = (trfId: string, key: string) => `${origin}/api/public/documents/${signGrant(secret, { trfId, key, exp: Date.now() + 60_000 })}`;
+  const link = (trfId: string, key: string, path: string) => `${origin}/api/public/documents/${signGrant(secret, { trfId, key, path, exp: Date.now() + 60_000 })}`;
   await admin`update public.notification_outbox set status='SKIPPED' where trf_id<>${t.id} and status='PENDING'`;
   let result = await deliverDue(runtime, { send: ok, allowlist: new Set(['6282398454988']), documentLink: link });
   assert.deepEqual(result, { sent: 1, skipped: 0, retried: 0, failed: 0 });

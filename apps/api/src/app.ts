@@ -28,6 +28,20 @@ export const createApp = (database?: ReturnType<typeof openDatabase>, origin?: s
   const app = new Hono();
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
+  // Readiness: the API can reach PostgreSQL. `/health` stays a cheap liveness probe for the container.
+  if (database) app.get('/health/ready', async (c) => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([database`select 1`, new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), 2000);
+      })]);
+      return c.json({ status: 'ok' });
+    } catch {
+      return c.json({ status: 'unavailable' }, 503);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
   if (database && origin) app.route('/auth', createAuthRoutes(database, origin));
   if (database && origin) app.route('/trfs', createTRFRoutes(database, origin));
   if (database && origin) {

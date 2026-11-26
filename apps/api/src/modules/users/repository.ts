@@ -5,6 +5,10 @@ import type { userInput } from './service.ts';
 // Explicit projection shared by every user-management response; never SELECT *.
 export const publicColumns = ['id', 'username', 'email', 'role', 'department', 'employee_id', 'is_active', 'must_change_password', 'created_at'];
 export const list = (sql: Connection) => sql`select ${sql(publicColumns)} from public.users order by created_at desc,id`;
+export const find = async (sql: Connection, id: string, lock = false) => {
+  const [row] = await sql`select ${sql(publicColumns)} from public.users where id=${id} ${lock ? sql`for update` : sql``}`;
+  return row;
+};
 export const insert = async (sql: Connection, input: z.output<typeof userInput>, passwordHash: string) => {
   const [row] = await sql`insert into public.users ${sql({ username: input.username, email: input.email,
     role: input.role, department: input.department ?? null, employee_id: input.employee_id ?? null,

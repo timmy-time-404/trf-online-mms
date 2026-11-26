@@ -7,23 +7,30 @@ DO $$
 BEGIN
   ASSERT current_setting('server_version_num')::int BETWEEN 170000 AND 179999,
     'Expected PostgreSQL 17';
-  ASSERT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') = 22,
+  ASSERT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public') = 23, -- +1 admin_audit in 0011
     'Unexpected table count';
   ASSERT (SELECT count(*) FROM pg_views WHERE schemaname = 'public') = 1,
     'Unexpected view count';
   ASSERT (SELECT count(*) FROM pg_sequences WHERE schemaname = 'public') = 3, -- +1 trf_number_seq in 0010
     'Unexpected sequence count';
-  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 98,
+  ASSERT (SELECT count(*) FROM pg_indexes WHERE schemaname = 'public') = 107, -- +9 in 0011
     'Unexpected index count';
-  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 170, -- +3 in 0006/0007
+  ASSERT (SELECT count(*) FROM pg_constraint WHERE connamespace = 'public'::regnamespace) = 176, -- +3 in 0006/0007, +6 in 0011
     'Unexpected constraint count';
-  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 49, -- +3 in 0006
+  ASSERT (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace) = 50, -- +3 in 0006, +1 in 0011
     'Unexpected routine count';
   ASSERT (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-    WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) = 13, -- +1 in 0006
+    WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal) = 14, -- +1 in 0006, +1 in 0011
     'Unexpected trigger count';
   ASSERT (SELECT confrelid = 'public.users'::regclass FROM pg_constraint
     WHERE conname = 'approval_hierarchy_user_id_fkey'), 'Unexpected hierarchy FK';
+  -- 0011: a SECURITY DEFINER function owned by a superuser would hand that power to any
+  -- injection bug inside it. New definer functions need ALTER FUNCTION ... OWNER TO trf_definer.
+  ASSERT NOT EXISTS (SELECT FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
+    WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND (r.rolsuper OR r.rolbypassrls)),
+    'SECURITY DEFINER function owned by a superuser';
+  ASSERT NOT EXISTS (SELECT FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND NOT convalidated),
+    'Constraint left NOT VALID';
 END $$;
 
 -- Characterize a legacy business rule before changing its callers.

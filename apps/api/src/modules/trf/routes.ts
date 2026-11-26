@@ -35,7 +35,12 @@ export function createTRFRoutes(db: ReturnType<typeof openDatabase>, origin: str
   app.get('/context', async (c) => c.json(await service.context(c.get('actor'))));
   app.get('/queue', async (c) => c.json(await workflow.queue(c.get('actor'))));
   app.get('/:id', async (c) => { const item=await service.detail(c.get('actor'),c.req.param('id')); c.header('ETag',etag(item.version)); return c.json(item); });
-  app.post('/', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.create(c.get('actor'), await body(c.req), expectedVersion(c.req.header('If-Match'))), 201));
+  app.post('/', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => {
+    const key = c.req.header('Idempotency-Key') ?? null;
+    if (key !== null && !z.uuid().safeParse(key).success) return c.json({ message: 'Idempotency-Key harus berupa UUID.' }, 400);
+    const { trf, replayed } = await service.create(c.get('actor'), await body(c.req), expectedVersion(c.req.header('If-Match')), key);
+    return c.json(trf, replayed ? 200 : 201);
+  });
   app.put('/:id', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), false, expectedVersion(c.req.header('If-Match')))));
   app.post('/:id/resubmit', requireRole('EMPLOYEE', 'SUPER_ADMIN'), async (c) => c.json(await service.change(c.get('actor'), c.req.param('id'), await body(c.req), true, expectedVersion(c.req.header('If-Match')))));
   app.post('/:id/submit', async (c) => c.json(await service.change(c.get('actor'),c.req.param('id'),await body(c.req),true,expectedVersion(c.req.header('If-Match')))));
