@@ -1,5 +1,5 @@
 import LateSubmissionField from './components/LateSubmissionField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import SearchableEmployeeInfoSection from './components/SearchableEmployeeInfoSection';
@@ -19,6 +19,8 @@ const TRFNewPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { createTRF, fetchAllData, employees } = useTRFStore();
+  // One key per form: a double click or network retry creates the TRF only once.
+  const idempotencyKey = useRef(crypto.randomUUID());
 
   // ── State: multi-purpose entries ──────────────────────────
   const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>([
@@ -116,7 +118,7 @@ const TRFNewPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const input  = buildCreateInput();
-      const newTRF = await createTRF({...input,draft});
+      const newTRF = await createTRF({...input,draft}, idempotencyKey.current);
       if (!newTRF) throw new Error('Gagal membuat data');
 
       await fetchAllData();

@@ -22,7 +22,7 @@ export interface WorkerOptions {
   send: SendWhatsApp;
   /** Normalized numbers allowed to receive messages; empty set blocks everyone. */
   allowlist: Set<string>;
-  documentLink: (trfId: string, key: string) => string;
+  documentLink: (trfId: string, key: string, path: string) => string;
   batchSize?: number;
   maxAttempts?: number;
 }

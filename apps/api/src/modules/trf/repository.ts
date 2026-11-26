@@ -15,14 +15,18 @@ const visibility = (sql: Connection, actor: Actor) => {
   }
   return sql`true`;
 };
-export const listRows = (sql: Connection, actor: Actor) => sql<TrfRow[]>`
+export const listRows = (sql: Connection, actor: Actor, status?: string) => sql<TrfRow[]>`
   select t.*,t.start_date::text,t.end_date::text,to_jsonb(e) as employee
   from public.trfs t left join public.employees e on e.id=t.employee_id
-  where ${visibility(sql, actor)} order by t.created_at desc,t.id`;
+  where ${visibility(sql, actor)} ${status ? sql`and t.status=${status}` : sql``} order by t.created_at desc,t.id`;
 export const findRow = async (sql: Connection, id: string, lock = false) => {
   const [row] = await sql<TrfRow[]>`select t.*,t.start_date::text,t.end_date::text,to_jsonb(e) as employee
     from public.trfs t left join public.employees e on e.id=t.employee_id where t.id=${id}
     ${lock ? sql`for update of t` : sql``}`;
+  return row;
+};
+export const findByIdempotencyKey = async (sql: Connection, employeeId: string, key: string) => {
+  const [row] = await sql<{ id: string }[]>`select id from public.trfs where employee_id=${employeeId} and idempotency_key=${key}`;
   return row;
 };
 export const findEmployee = async (sql: Connection, id: string) => {
@@ -41,9 +45,10 @@ export const fields = (sql: Connection, input: Partial<CreateTRF>) => ({
   accommodation: input.accommodation ? sql.json(input.accommodation) : null,
   accommodations: sql.json(input.accommodations ?? []), travel_arrangements: sql.json(input.travelArrangements ?? []),
 });
-export const insertRow = async (sql: Connection, input: Partial<CreateTRF>, department: string, draft = false) => {
+export const insertRow = async (sql: Connection, input: Partial<CreateTRF>, department: string, draft = false,
+  idempotencyKey: string | null = null) => {
   const [row] = await sql<TrfRow[]>`insert into public.trfs ${sql({ ...fields(sql, input),
-    employee_id: input.employeeId!, department, status: draft ? 'DRAFT' : 'SUBMITTED', submitted_at: draft ? null : new Date() })} returning *`;
+    employee_id: input.employeeId!, department, idempotency_key: idempotencyKey, status: draft ? 'DRAFT' : 'SUBMITTED', submitted_at: draft ? null : new Date() })} returning *`;
   return row!;
 };
 export const changeRow = async (sql: Connection, row: TrfRow, input: Partial<CreateTRF>, resubmit: boolean) => {

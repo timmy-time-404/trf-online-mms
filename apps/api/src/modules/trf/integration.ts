@@ -104,6 +104,25 @@ try {
   const superCreated = await (await expectStatus(request('SUPER_ADMIN', '', 'POST', { ...input, employeeId: employeeC }), 201)).json() as { id: string };
   createdTRFs.push(superCreated.id);
   await expectStatus(request('EMPLOYEE', '', 'POST', { ...input, employeeId: employeeC }), 403);
+  // Database M5: the same Idempotency-Key creates one TRF, even for two concurrent submits.
+  const keyed = async (key: string) => app.request('/trfs', { method: 'POST', body: JSON.stringify(input),
+    headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: cookies.get('EMPLOYEE')!, 'If-Match': '"0"', 'Idempotency-Key': key } });
+  const key = randomUUID();
+  const pair = await Promise.all([keyed(key), keyed(key)]);
+  assert.deepEqual(pair.map((r) => r.status).sort(), [200, 201], 'one create, one replay');
+  const [one, two] = await Promise.all(pair.map((r) => r.json() as Promise<{ id: string }>));
+  assert.equal(one!.id, two!.id, 'replay returns the same TRF');
+  createdTRFs.push(one!.id);
+  const [keyedCount] = await admin`select count(*)::int as total from public.trfs where idempotency_key=${key}`;
+  assert.equal(keyedCount?.total, 1);
+  await expectStatus(keyed(key), 200);
+  await expectStatus(keyed('not-a-uuid'), 400);
+  checks += 2;
+  // Database M4: the runtime role cannot delete a submitted TRF, even bypassing the API.
+  await assert.rejects(runtime`delete from public.trfs where id=${created.id}`, /Hanya draft TRF/);
+  checks++;
+  // Backend M6: readiness reports that the API can reach PostgreSQL.
+  await expectStatus(Promise.resolve(app.request('/health/ready')), 200);
   for (const invalid of [
     { purposeRemarks: ' ' }, { startDate: '2026-02-30' }, { endDate: '2026-11-30' },
     { travelPurpose: '["UNKNOWN"]' }, { purposeEntries: [] }, { status: 'PM_APPROVED' },

@@ -44,7 +44,7 @@ export const createWorkflowService = (db: ReturnType<typeof openDatabase>) => ({
     const status = { ADMIN_DEPT: 'SUBMITTED', HOD: 'PENDING_APPROVAL', HR: 'HOD_APPROVED',
       PM: 'HR_APPROVED', GA: 'PM_APPROVED', SUPER_ADMIN: null, EMPLOYEE: null }[actor.role];
     if (!status) return [];
-    return (await repo.listRows(db, actor)).filter((row) => row.status === status).map(repo.trfDTO);
+    return (await repo.listRows(db, actor, status)).map(repo.trfDTO);
   },
   act: async (actor: Actor, id: string, kind: WorkflowKind, body: unknown, expected: number) => db.begin(async (tx) => {
     const row = await repo.findRow(tx, id, true);

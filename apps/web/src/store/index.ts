@@ -206,7 +206,8 @@ interface TRFState {
   getTRFsByEmployee: (employeeId: string) => TRF[];
   getTRFsByStatus: (status: TRFStatus) => TRF[];
   getTRFsByDepartment: (department: string) => TRF[];
-  createTRF: (input: CreateTRFInput) => Promise<TRF | null>;
+  /** `idempotencyKey` makes a retried or double-clicked submit return the same TRF. */
+  createTRF: (input: CreateTRFInput, idempotencyKey?: string) => Promise<TRF | null>;
   updateTRF: (id: string, input: UpdateTRFInput) => Promise<boolean>;
   resubmitTRF: (
   id: string,
@@ -395,12 +396,12 @@ export const useTRFStore = create<TRFState>()(
           }));
       },
 
-      createTRF: async (trfData) => {
+      createTRF: async (trfData, idempotencyKey) => {
         const userId = useAuthStore.getState().currentUser?.id;
         try {
-          const trf = await apiRequest<TRF>('/trfs', { method: 'POST', version: 0, body: trfData });
+          const trf = await apiRequest<TRF>('/trfs', { method: 'POST', version: 0, body: trfData, idempotencyKey });
           if (useAuthStore.getState().currentUser?.id !== userId) return null;
-          set((state) => ({ trfs: [trf, ...state.trfs] }));
+          set((state) => ({ trfs: [trf, ...state.trfs.filter((item) => item.id !== trf.id)] }));
           return trf;
         } catch (error) { console.error('Create TRF failed:', error); return null; }
       },

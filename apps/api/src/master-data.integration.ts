@@ -110,6 +110,12 @@ try {
   await expectStatus(request('GA', '/hotels', 'POST', { name: ' ', totalRooms: -1 }), 400);
   await expectStatus(request('HR', '/employees/' + owner, 'PUT', { user_id: managed.user.id }), 400);
   await expectStatus(request('SUPER_ADMIN', '/users/' + randomUUID(), 'DELETE'), 404);
+  // Backend M3: every user change is audited in the same transaction, without secrets.
+  const audit = await admin`select action,actor_user_id,before_data,after_data from public.admin_audit
+    where entity='USER' and entity_id=${second.user.id} order by created_at`;
+  assert.deepEqual([...new Set(audit.map((row) => row.action))].sort(), ['CREATE', 'DEACTIVATE', 'ENABLE', 'UPDATE']);
+  assert.ok(audit.every((row) => !JSON.stringify(row).includes('password_hash')), 'audit never stores the password hash');
+  assert.ok(audit.some((row) => row.action === 'UPDATE' && row.after_data?.department === 'Updated'));
   const [foreign] = await admin`insert into public.notifications(user_id,title,message) values (${roleUsers.get('GA')!},'Private','Other user') returning id`;
   await expectStatus(request('EMPLOYEE', '/notifications/' + foreign!.id + '/read', 'POST'), 404);
   await expectStatus(request('SUPER_ADMIN', '/notifications/' + foreign!.id + '/read', 'POST'), 404);
