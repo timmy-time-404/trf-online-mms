@@ -2,7 +2,7 @@
 
 Sumber: `supabase/functions/roster-operations/index.ts` (ada di repo), dengan logika inti di fungsi SQL (RPC) yang **tidak ada di repo**. [kode] + [DB?]
 
-> Arti resmi singkatan **OS** belum dikonfirmasi. Dari UI, OS adalah saldo hari yang terbentuk dari *Overstay*, *Early Recall*, atau *adjustment* HR, dan dipakai dengan urutan FIFO.
+> **OS** adalah tambahan hari cuti (D16). Saldo terbentuk dari *overstay*, *Early Recall*, atau *adjustment* HR, dipakai dengan urutan FIFO, dan kedaluwarsa setelah 3 cycle.
 
 ## Konsep
 

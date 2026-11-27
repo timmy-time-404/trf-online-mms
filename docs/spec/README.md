@@ -16,6 +16,7 @@ Setiap aturan diberi label sumber:
 | [early-recall.md](early-recall.md) | State machine Early Recall |
 | [roster-os.md](roster-os.md) | Roster site/cuti dan saldo OS |
 | [notifications.md](notifications.md) | Notifikasi WhatsApp dan in-app |
-| [decisions-2026-11-24.md](decisions-2026-11-24.md) | **Keputusan pemilik yang mengubah perilaku lama** (berlaku di atas dokumen lain) |
+| [decisions-2026-11-24.md](decisions-2026-11-24.md) | **Keputusan pemilik yang mengubah perilaku lama** D1–D13 (berlaku di atas dokumen lain) |
+| [decisions-2026-11-25.md](decisions-2026-11-25.md) | Keputusan pemilik proses D14–D16: rumus OS overstay, roster setelah Early Recall, arti OS |
 
 Tes yang mengunci perilaku ini ada di `apps/web/src/**/*.characterization.test.ts`.

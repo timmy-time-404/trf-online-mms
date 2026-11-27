@@ -6,7 +6,7 @@ Sumber utama: `apps/web/src/workflow/trfWorkflow.ts` (`getNextStatus`), `apps/we
 
 | Status | Arti | Dipakai oleh jalur aktif? |
 |---|---|---|
-| `DRAFT` | Disimpan, belum dikirim | Hanya untuk aturan hapus. Form **tidak pernah** membuat DRAFT |
+| `DRAFT` | Disimpan, belum dikirim | Sistem lama: form tidak pernah membuat DRAFT. **Sejak D9:** "Simpan draft" membuat DRAFT yang bisa diedit/dihapus pemilik |
 | `SUBMITTED` | Dikirim karyawan, menunggu Admin Dept | ✅ |
 | `PENDING_APPROVAL` | Sudah diverifikasi Admin Dept, menunggu HOD | ✅ |
 | `ADMIN_DEPT_VERIFIED` | Alternatif dari `PENDING_APPROVAL` di kode lama | ❌ Hanya dipakai `supabaseStore.ts` (jalur yang tidak dipanggil halaman) dan label UI |
@@ -17,6 +17,7 @@ Sumber utama: `apps/web/src/workflow/trfWorkflow.ts` (`getNextStatus`), `apps/we
 | `REJECTED` | Ditolak. **Selesai** | ✅ |
 | `NEEDS_REVISION` | Dikembalikan ke karyawan untuk diperbaiki | ✅ |
 | `REVISED` | Ada di tipe dan label, tidak pernah ditulis | ❌ |
+| `CANCELLED` | Dibatalkan pemilik dengan alasan (D9). **Selesai** | ✅ |
 | `APPROVED` | **Tidak ada di daftar status**, tetapi bisa ditulis oleh jalur skip approver | ⚠️ Lihat catatan skip approver di bawah |
 
 ## Diagram alur
@@ -54,12 +55,13 @@ stateDiagram-v2
 | `HR_APPROVED` | Approve | PM | `PM_APPROVED`* | — |
 | `PM_APPROVED` | Edit | GA | `PM_APPROVED` (tetap) | Hanya edit isi. Tercatat di history dengan status lama = status baru |
 | `PM_APPROVED` | Process | GA | `GA_PROCESSED` | Upload dokumen tiket/voucher ke Storage |
-| `PENDING_APPROVAL` / `HOD_APPROVED` / `HR_APPROVED` | Reject | HOD / HR / PM | `REJECTED` | **Tanpa konfirmasi dan tanpa alasan** di UI |
+| `PENDING_APPROVAL` / `HOD_APPROVED` / `HR_APPROVED` | Reject | HOD / HR / PM | `REJECTED` | Sistem lama: tanpa konfirmasi dan tanpa alasan. **Sejak D10:** alasan wajib, dialog konfirmasi, alasan dikirim ke karyawan |
 | sama seperti di atas | Revise | HOD / HR / PM | `NEEDS_REVISION` | Remarks wajib |
 | `NEEDS_REVISION` | Kirim ulang | EMPLOYEE | `SUBMITTED` | Isi form diganti seluruhnya. Kembali ke Admin Dept dari awal |
-| `DRAFT` | Hapus | (siapa pun yang membuka tombolnya) | — dihapus | Query delete dibatasi `status = 'DRAFT'`. Karena form tidak membuat DRAFT, praktis **TRF tidak pernah bisa dihapus** |
+| `DRAFT` | Hapus | Pemilik (D9) | — dihapus | Hanya DRAFT. Sejak migrasi `0011`, database juga menolak penghapusan TRF selain DRAFT |
+| Belum `GA_PROCESSED`/`REJECTED`/`CANCELLED` | Batalkan | Pemilik | `CANCELLED` | Alasan wajib, tercatat di riwayat (D9) |
 
-\* **Skip approver** (`findNextActiveStatus`): setelah VERIFY/APPROVE, kalau di daftar `users` yang sudah dimuat browser **tidak ada user aktif** dengan peran tahap berikutnya, tahap itu dilewati otomatis, maksimal sampai `APPROVED`. Pengecekan department hanya dilakukan untuk `ADMIN_DEPT`, padahal tahap yang dicek adalah HOD, HR, PM, dan GA. Jadi HOD dari department mana pun dihitung aktif. Kebijakan ini **sengaja belum diubah** (keputusan pemilik proyek).
+\* **Skip approver** (`findNextActiveStatus`): setelah VERIFY/APPROVE, kalau di daftar `users` yang sudah dimuat browser **tidak ada user aktif** dengan peran tahap berikutnya, tahap itu dilewati otomatis, maksimal sampai `APPROVED`. Pengecekan department hanya dilakukan untuk `ADMIN_DEPT`, padahal tahap yang dicek adalah HOD, HR, PM, dan GA. Jadi HOD dari department mana pun dihitung aktif. **Diganti oleh D2:** tidak ada lagi skip otomatis. TRF ditahan di tahapnya sampai ada approver aktif (HOD harus dari department yang sama), dan SUPER_ADMIN melihatnya lewat `blockedBy`.
 
 ## Aturan `getNextStatus`
 
@@ -78,10 +80,10 @@ Nama pelaku diambil dari data `employees` yang terhubung ke akun. Kalau tidak ad
 
 ## Nomor TRF
 
-`trf_number` dibaca dari database. Pembuatannya tidak ada di kode frontend, jadi kemungkinan besar dibuat oleh default atau trigger database. [DB?]
+`trf_number` dibuat trigger database `generate_trf_number`: `TRF-YYYYMMDD-NNNN`, dengan tanggal bisnis WITA (D7) dan nomor urut dari sequence `trf_number_seq` (migrasi `0010`, mulai 1000). Nomor lama tidak diubah.
 
 ## Aturan dari dokumen bisnis yang belum ada di kode
 
-- **H-14**: pengajuan minimal 14 hari sebelum keberangkatan. Tidak ada validasi tanggal relatif terhadap hari ini di kode. [dok]
-- **Simpan draft**: ada di flowchart, tetapi form langsung mengirim sebagai `SUBMITTED`. [dok]
+- **H-14**: diterapkan sebagai D8 (boleh, tetapi wajib alasan dan diberi tanda Urgent).
+- **Simpan draft**: diterapkan sebagai D9.
 - **Target proses internal ≤ 4 hari**: tidak diukur di sistem. [dok]
