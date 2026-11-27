@@ -47,7 +47,7 @@ Sumber: `apps/web/src/App.tsx`. [kode]
 
 ## Login dan sesi
 
-- Login memakai tabel `users` sendiri (bukan Supabase Auth) melalui Edge Function `app-session` yang **tidak ada di repo**. [DB?]
-- Token sesi disimpan di `localStorage` dan dikirim sebagai header `X-App-Session` ke Edge Functions baru. [kode] `apps/web/src/lib/appSession.ts`
-- Akun dengan `mustChangePassword = true` hanya boleh membuka `/change-password`. [kode]
+- Login memakai tabel `users` sendiri (bukan Supabase Auth). Sistem lama memakai Edge Function `app-session` dengan token di `localStorage`.
+- **Backend baru:** `POST /auth/login` di `apps/api/src/auth.ts`. Sesi disimpan di cookie `__Host-trf-session` (HttpOnly, Secure). Sesi berakhir setelah 30 menit tidak aktif atau 12 jam sejak login, dan dicabut saat akun dinonaktifkan. Login dibatasi 10 percobaan gagal per username dan 30 per IP dalam 15 menit.
+- Akun dengan `mustChangePassword = true` hanya boleh membuka `/change-password`. [kode] Di backend baru, API juga menolak semua endpoint lain dengan 403 kecuali `/auth/me` dan ganti password.
 - Akun baru dibuat oleh User Management atau oleh HR melalui Employee Management, dan wajib mengganti password saat login pertama. [kode]

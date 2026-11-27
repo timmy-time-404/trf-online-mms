@@ -11,9 +11,9 @@ Dikirim melalui Edge Function `send-whatsapp` yang **tidak ada di repo**. [DB?] 
 | GA selesai memproses | Karyawan | Dokumen tiket/voucher terlampir | `lib/notifyTravelDocumentsWA.ts` |
 | Early Recall | Karyawan | Template di `earlyRecallWaMessageTemplates.ts` | Helper `notifyEmployeeEarlyRecallWA` **tidak dipanggil** dari frontend, kemungkinan dari server [DB?] |
 
-Semua pengiriman **dipicu dari browser** tanpa `await` (fire-and-forget). Kalau tab ditutup atau request gagal, notifikasi hilang tanpa jejak.
+Sistem lama: semua pengiriman **dipicu dari browser** tanpa `await`, sehingga notifikasi hilang kalau tab ditutup.
 
-Tidak ada notifikasi ke **approver berikutnya**. Approver mengetahui ada pekerjaan dari badge di menu.
+**Backend baru:** pesan WhatsApp ditulis ke `notification_outbox` dalam transaksi yang sama dengan perubahan status, lalu dikirim worker di API (`apps/api/src/notifications/worker.ts`) dengan retry. Nomor di luar `WA_ALLOWLIST` dicatat `SKIPPED`. Dokumen GA dikirim sebagai link bertanda tangan yang terikat ke file dan berlaku 72 jam. Approver berikutnya mendapat notifikasi in-app (lihat bagian berikut), bukan WhatsApp.
 
 ## In-app
 
