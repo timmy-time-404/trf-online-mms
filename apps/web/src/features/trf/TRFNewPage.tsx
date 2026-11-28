@@ -1,5 +1,5 @@
 import LateSubmissionField from './components/LateSubmissionField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import SearchableEmployeeInfoSection from './components/SearchableEmployeeInfoSection';
@@ -15,24 +15,50 @@ import { Send, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateTravelPurposeEntries } from '@/lib/trfValidation';
 
+interface SavedForm {
+  purposeEntries: TravelPurposeEntry[]; accommodationEntries: AccommodationEntry[];
+  travelArrangements: TravelArrangement[]; lateSubmissionReason: string;
+}
+// sessionStorage survives a session timeout and re-login in the same tab, and is gone when
+// the tab closes, so a shared site PC does not keep someone's travel plans.
+const savedFormKey = (userId?: string) => `trf-new-form:${userId ?? ''}`;
+const readSavedForm = (userId?: string): SavedForm | null => {
+  try { return JSON.parse(sessionStorage.getItem(savedFormKey(userId)) ?? 'null') as SavedForm | null; }
+  catch { return null; }
+};
+
 const TRFNewPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { createTRF, fetchAllData, employees } = useTRFStore();
+  const [saved] = useState(() => readSavedForm(currentUser?.id));
 
   // ── State: multi-purpose entries ──────────────────────────
-  const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>([
+  const [purposeEntries, setPurposeEntries] = useState<TravelPurposeEntry[]>(saved?.purposeEntries ?? [
     createEmptyPurposeEntry(),
   ]);
 
   // ── State: multi-accommodation entries ────────────────────
-  const [accommodationEntries, setAccommodationEntries] = useState<AccommodationEntry[]>([]);
+  const [accommodationEntries, setAccommodationEntries] = useState<AccommodationEntry[]>(saved?.accommodationEntries ?? []);
 
   // ── State: travel arrangements (sudah multi dari sebelumnya) ─
-  const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>([]);
+  const [travelArrangements, setTravelArrangements] = useState<TravelArrangement[]>(saved?.travelArrangements ?? []);
 
   // ── State: employee ID ────────────────────────────────────
-  const [lateSubmissionReason,setLateSubmissionReason] = useState('');
+  const [lateSubmissionReason,setLateSubmissionReason] = useState(saved?.lateSubmissionReason ?? '');
+
+  // ── Keep the form if the session times out mid-entry ──────
+  const restoredToast = useRef(false);
+  useEffect(() => {
+    if (saved && !restoredToast.current) { restoredToast.current = true; toast.info('Isian TRF sebelumnya dipulihkan.'); }
+  }, [saved]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(savedFormKey(currentUser?.id), JSON.stringify(
+        { purposeEntries, accommodationEntries, travelArrangements, lateSubmissionReason } satisfies SavedForm));
+    } catch { /* storage blocked or full: the form still works, only without recovery */ }
+  }, [currentUser?.id, purposeEntries, accommodationEntries, travelArrangements, lateSubmissionReason]);
+  const discardSavedForm = () => { try { sessionStorage.removeItem(savedFormKey(currentUser?.id)); } catch { /* ignore */ } };
   const [employeeId, setEmployeeId] = useState('');
   const [department, setDepartment]  = useState('');
 
@@ -119,6 +145,7 @@ const TRFNewPage: React.FC = () => {
       const newTRF = await createTRF({...input,draft});
       if (!newTRF) throw new Error('Gagal membuat data');
 
+      discardSavedForm();
       await fetchAllData();
 
       toast.success(draft ? 'Draft tersimpan' : 'TRF terkirim');
@@ -180,7 +207,7 @@ const TRFNewPage: React.FC = () => {
 
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
-        <Button variant="outline" onClick={() => navigate('/trf')}>
+        <Button variant="outline" onClick={() => { discardSavedForm(); navigate('/trf'); }}>
           Cancel
         </Button>
         <Button variant="outline" disabled={isSubmitting || !employeeId} onClick={()=>void handleSubmit(true)}>
