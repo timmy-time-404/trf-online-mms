@@ -1,7 +1,7 @@
 import React, {
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
   ArrowRight,
@@ -27,6 +27,9 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 const LoginPage: React.FC = () => {
   useDocumentTitle('Login');
   const navigate = useNavigate();
+  const from = (useLocation().state as { from?: unknown } | null)?.from;
+  // Only same-app paths; '//' would leave the site.
+  const returnTo = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/';
   const login = useAuthStore(
     (state) => state.login,
   );
@@ -86,7 +89,7 @@ const LoginPage: React.FC = () => {
         `Welcome back, ${result.user.username}!`,
       );
 
-      navigate('/', {
+      navigate(returnTo, {
         replace: true,
       });
     } catch (error) {

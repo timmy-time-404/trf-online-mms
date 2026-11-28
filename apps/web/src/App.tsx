@@ -99,6 +99,8 @@ const ProtectedRoute: React.FC<
       <Navigate
         to="/login"
         replace
+        // Return here after login, so a page left open past the session timeout is not lost.
+        state={{ from: location.pathname }}
       />
     );
   }
