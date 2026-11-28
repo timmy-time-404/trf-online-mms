@@ -55,8 +55,8 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
     return (
       <div className="text-center py-12 bg-gray-50 rounded-xl">
         <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900">No TRF found</h3>
-        <p className="text-gray-500 mt-1">Create a new travel request to get started</p>
+        <h3 className="text-lg font-medium text-gray-900">Belum ada TRF</h3>
+        <p className="text-gray-500 mt-1">Buat travel request baru untuk memulai</p>
       </div>
     );
   }

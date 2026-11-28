@@ -158,7 +158,7 @@ const ProcessPage: React.FC = () => {
 
       await forceRefreshTRFs();
       
-      toast.success(`TRF ${selectedTRF.trfNumber} processed successfully`);
+      toast.success(`TRF ${selectedTRF.trfNumber} berhasil diproses.`);
       setProcessDialogOpen(false);
       setSelectedTRF(null);
     } catch (error) {
@@ -179,7 +179,7 @@ const ProcessPage: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Process TRFs</h1>
-        <p className="text-gray-500 mt-1">Issue vouchers and tickets for approved travel requests</p>
+        <p className="text-gray-500 mt-1">Terbitkan voucher dan tiket untuk travel request yang sudah disetujui</p>
       </div>
 
       <div className="flex gap-4">
@@ -190,7 +190,7 @@ const ProcessPage: React.FC = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-green-900">{trfsForProcessing.length}</p>
-              <p className="text-sm text-green-700">Ready to Process</p>
+              <p className="text-sm text-green-700">Siap diproses</p>
             </div>
           </CardContent>
         </Card>
@@ -200,8 +200,8 @@ const ProcessPage: React.FC = () => {
         <Card className="border shadow-sm">
           <CardContent className="p-12 text-center">
             <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">No TRFs to Process</h3>
-            <p className="text-gray-500 mt-1">All approved TRFs have been processed</p>
+            <h3 className="text-lg font-medium text-gray-900">Tidak ada TRF untuk diproses</h3>
+            <p className="text-gray-500 mt-1">Semua TRF yang disetujui sudah diproses</p>
           </CardContent>
         </Card>
       ) : (
@@ -352,7 +352,7 @@ const ProcessPage: React.FC = () => {
                 Ground Transportation Details
               </label>
               <Textarea
-                placeholder="e.g., Driver Budi will pickup at 08:00 AM"
+                placeholder="contoh: Driver Budi menjemput pukul 08.00"
                 value={groundInfo}
                 onChange={(e) => setGroundInfo(e.target.value)}
                 rows={2}
@@ -367,7 +367,7 @@ const ProcessPage: React.FC = () => {
                 Message to Employee
               </label>
               <Textarea
-                placeholder="Instructions for the employee regarding ticket collection, check-in, etc."
+                placeholder="Petunjuk untuk karyawan, misalnya pengambilan tiket dan check-in"
                 value={remarksToEmployee}
                 onChange={(e) => setRemarksToEmployee(e.target.value)}
                 rows={2}

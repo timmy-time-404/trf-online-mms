@@ -464,10 +464,10 @@ const TRFListPage: React.FC = () => {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete TRF"
-        description="Are you sure you want to delete this TRF? This action cannot be undone."
+        title="Hapus TRF"
+        description="Hapus TRF ini? Tindakan ini tidak dapat dibatalkan."
         onConfirm={confirmDelete}
-        confirmText="Delete"
+        confirmText="Hapus"
         cancelText="Cancel"
         variant="danger"
         loading={isDeleting}

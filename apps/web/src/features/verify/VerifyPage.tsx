@@ -143,8 +143,8 @@ const VerifyPage: React.FC = () => {
         <Card className="border shadow-sm">
           <CardContent className="p-12 text-center">
             <CheckCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-lg font-medium text-gray-900">No TRFs to Verify</h3>
-            <p className="mt-1 text-gray-500">All travel requests have been verified</p>
+            <h3 className="text-lg font-medium text-gray-900">Tidak ada TRF untuk diverifikasi</h3>
+            <p className="mt-1 text-gray-500">Semua travel request sudah diverifikasi</p>
           </CardContent>
         </Card>
       ) : (
@@ -267,7 +267,7 @@ const VerifyPage: React.FC = () => {
             <Textarea
               placeholder={verifyAction === 'YES'
                 ? "Add any comments (optional)..."
-                : "Explain why this TRF cannot be verified..."
+                : "Jelaskan alasan TRF ini belum bisa diverifikasi..."
               }
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}

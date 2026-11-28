@@ -211,8 +211,8 @@ const TravelPurposeSection: React.FC<TravelPurposeSectionProps> = ({
         {entries.length === 0 && (
           <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
             <Target className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">No travel purpose added yet.</p>
-            <p className="text-gray-400 text-xs mt-1">Click "Add Period" to get started.</p>
+            <p className="text-gray-500 text-sm">Belum ada tujuan perjalanan.</p>
+            <p className="text-gray-400 text-xs mt-1">Klik "Add Period" untuk menambahkan.</p>
           </div>
         )}
 

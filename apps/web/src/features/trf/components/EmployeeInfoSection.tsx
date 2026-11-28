@@ -113,7 +113,7 @@ const EmployeeInfoSection: React.FC<EmployeeInfoSectionProps> = ({
               disabled={disabled}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select an employee" />
+                <SelectValue placeholder="Pilih karyawan" />
               </SelectTrigger>
 
               <SelectContent>

@@ -124,7 +124,7 @@ const TRFNewPage: React.FC = () => {
       toast.success(draft ? 'Draft tersimpan' : 'TRF terkirim');
       navigate(`/trf/${newTRF.id}`);
     } catch {
-      toast.error('Failed to submit TRF');
+      toast.error('TRF gagal dikirim. Silakan coba kembali.');
     } finally {
       setIsSubmitting(false);
       setSubmitDialogOpen(false);
@@ -194,10 +194,10 @@ const TRFNewPage: React.FC = () => {
       <ConfirmDialog
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
-        title="Confirm Submission"
-        description="Are you sure you want to submit this TRF for approval?"
+        title="Kirim TRF"
+        description="Kirim TRF ini untuk diproses approval?"
         onConfirm={()=>handleSubmit(false)}
-        confirmText="Submit"
+        confirmText="Kirim"
         cancelText="Cancel"
         variant="warning"
         loading={isSubmitting}
