@@ -1895,6 +1895,8 @@ React.FC = () => {
                     type="button"
                     variant="outline"
                     size="icon"
+                    aria-label="Salin username"
+                    title="Salin username"
                     onClick={() =>
                       void copyCredential(
                         credentials.username,
@@ -1926,6 +1928,8 @@ React.FC = () => {
                     type="button"
                     variant="outline"
                     size="icon"
+                    aria-label="Salin password sementara"
+                    title="Salin password sementara"
                     onClick={() =>
                       void copyCredential(
                         credentials

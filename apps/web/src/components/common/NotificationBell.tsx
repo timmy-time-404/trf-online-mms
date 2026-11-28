@@ -58,7 +58,8 @@ const NotificationBell: React.FC = () => {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative text-gray-500">
+        <Button variant="ghost" size="icon" className="relative text-gray-500"
+          aria-label={unread > 0 ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'}>
           <Bell className="w-5 h-5" />
           {unread > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">

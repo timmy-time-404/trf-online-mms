@@ -162,6 +162,8 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                            aria-label={`Lihat TRF ${trf.trfNumber}`}
+                            title="Lihat TRF"
                           onClick={(e) => {
                             e.stopPropagation();
                             navigate(`/trf/${trf.id}`);
@@ -175,6 +177,8 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                            aria-label={`Edit TRF ${trf.trfNumber}`}
+                            title="Edit TRF"
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/trf/${trf.id}/edit`);
@@ -189,6 +193,8 @@ const TRFListTable: React.FC<TRFListTableProps> = ({
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            aria-label={`Hapus TRF ${trf.trfNumber}`}
+                            title="Hapus TRF"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDelete(trf.id);

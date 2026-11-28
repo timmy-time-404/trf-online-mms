@@ -429,6 +429,8 @@ const ArrangementItem: React.FC<ArrangementItemProps> = ({
             size="sm"
             onClick={() => removeArrangement(index)}
             className="text-red-500 hover:bg-red-50 hover:text-red-700"
+            aria-label={`Hapus perjalanan #${index + 1}`}
+            title="Hapus perjalanan"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
