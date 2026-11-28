@@ -123,7 +123,7 @@ const AccommodationCard: React.FC<EntryCardProps> = ({
         >
 
           <SelectTrigger className="w-full bg-white">
-            <SelectValue placeholder="Select accommodation arrangement" />
+            <SelectValue placeholder="Pilih pengaturan akomodasi" />
           </SelectTrigger>
 
           <SelectContent>

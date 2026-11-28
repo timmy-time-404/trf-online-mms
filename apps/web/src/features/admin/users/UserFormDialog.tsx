@@ -66,11 +66,11 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
     try {
       if (isEdit && user) {
         await updateUser(user.id, form);
-        toast.success("User updated successfully!");
+        toast.success("User berhasil diperbarui.");
       } else {
         const password = await createUser(form);
         setTemporaryPassword(password);
-        toast.success("User created successfully!");
+        toast.success("User berhasil dibuat.");
         return;
       }
       closeDialog(false);
@@ -78,7 +78,7 @@ export default function UserFormDialog({ open, onOpenChange, user }: Props) {
       // ✅ 4. HILANGKAN ANY DI CATCH BLOCK!
       console.error(error);
       // Pengecekan tipe error yang aman ala Enterprise
-      const errorMessage = error instanceof Error ? error.message : "Something went wrong!";
+      const errorMessage = error instanceof Error ? error.message : "Permintaan gagal. Silakan coba kembali.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);

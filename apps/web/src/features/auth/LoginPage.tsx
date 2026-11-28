@@ -83,7 +83,7 @@ const LoginPage: React.FC = () => {
       }
 
       toast.success(
-        `Welcome back, ${result.user.username}!`,
+        `Selamat datang, ${result.user.username}!`,
       );
 
       navigate('/', {

@@ -613,7 +613,7 @@ const ArrangementItem: React.FC<ArrangementItemProps> = ({
             <div className="space-y-2">
               <Label>Justification</Label>
               <Textarea
-                placeholder="Explain why special arrangement is needed..."
+                placeholder="Jelaskan alasan perlunya pengaturan khusus..."
                 value={arrangement.justification || ''}
                 onChange={(event) =>
                   updateArrangement(index, {

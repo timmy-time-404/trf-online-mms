@@ -122,10 +122,10 @@ const TRFDetailPage: React.FC = () => {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete TRF"
-        description={`Are you sure you want to delete ${trf.trfNumber}? This action cannot be undone.`}
+        title="Hapus TRF"
+        description={`Hapus ${trf.trfNumber}? Tindakan ini tidak dapat dibatalkan.`}
         onConfirm={confirmDelete}
-        confirmText="Delete"
+        confirmText="Hapus"
         cancelText="Cancel"
         variant="danger"
         loading={isDeleting}

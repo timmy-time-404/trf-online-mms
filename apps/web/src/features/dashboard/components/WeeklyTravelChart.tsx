@@ -43,7 +43,7 @@ const WeeklyTravelChart: React.FC = () => {
           </div>
           <div>
             <CardTitle className="text-lg">Weekly Travel</CardTitle>
-            <p className="text-sm text-gray-500">Travel requests this week</p>
+            <p className="text-sm text-gray-500">Travel request minggu ini</p>
           </div>
         </div>
       </CardHeader>
